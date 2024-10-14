@@ -12,6 +12,7 @@
             [agentlang.inference.embeddings.core :as ec]
             [agentlang.inference.service.model :as model]
             [agentlang.inference.service.tools :as tools]
+            [agentlang.inference.service.planner :as planner]
             [agentlang.inference.service.lib.agent :as agent]
             [agentlang.inference.service.lib.prompt :as prompt])
   (:import (clojure.lang ExceptionInfo)))
@@ -85,7 +86,7 @@
         {:errormsg (.getMessage e)}))))
 
 (defn- log-trigger-agent! [instance]
-  (log/info (str "Triggering " (:Type instance) " agent - " (u/pretty-str instance))))
+  (log/info (str "Triggering " (:Type instance) " agent - " (:Name instance))))
 
 (defn- verify-analyzer-extension [ext]
   (when ext
@@ -150,8 +151,9 @@
         (respond-with-agent agent-name delegates (or (get-in agent-instance [:Context :UserInstruction]) ins))
         (if (seq delegates)
           (let [n (:Name agent-instance)
-                rs (mapv #(let [ins (str (or (:UserInstruction %) "") "\n" response)]
-                            (format-as-agent-response % (@generic-agent-handler (assoc % :UserInstruction ins))))
+                rs (mapv #(let [ins (str (or (:UserInstruction %) "") "\n" response)
+                                ctx (assoc (:Context ins) :ParentResponse response)]
+                            (format-as-agent-response % (@generic-agent-handler (assoc % :UserInstruction ins :Context ctx))))
                          delegates)]
             [(apply str rs) model-info])
           result)))
@@ -274,7 +276,7 @@
     :else r))
 
 (def ^:private generic-planner-instructions
-  (str "Consider the following entity and event definitions:\n"
+  (str "Consider the following entity definitions in a subset of the Clojure programming language:\n"
        (u/pretty-str
         '(entity
           :Acme.Core/Customer
@@ -282,11 +284,6 @@
            :Name :String
            :Address {:type :String :optional true}
            :LoyaltyPoints {:type :Int :default 50}}))
-       "\n\n"
-       (u/pretty-str
-        '(event
-          :Acme.Core/LookupCustomerByEmail
-          {:Email :Email}))
        "\n\n"
        (u/pretty-str
         '(entity
@@ -298,18 +295,43 @@
           :Acme.Core/GoldenCustomer
           {:Email :Email}))
        "\n\nIf the instruction given to you is to construct a customer instance with name `joe` and email `joe@acme.com`,\n"
-       "you must return the pattern:\n"
+       "you must return the following clojure expression:\n"
        (u/pretty-str
-        [{:Acme.Core/Customer {:Email "joe@acme.com" :Name "joe"} :as :Customer}])
-       "\nThere's no need to fill in attributes marked `:optional true`, `:read-only true` or those with a `:default` value, unless explicitly instructed.\n"
+        '(def customer (make :Acme.Core/Customer {:Email "joe@acme.com" :Name "joe"})))
+       "\nThere's no need to fill in attributes marked `:optional true`, :read-only true` or those with a `:default`, unless explicitly instructed.\n"
        "You can also ignore attributes with types `:Now` and `:Identity` - these will be automatically filled-in by the system.\n"
-       "For example, if the instruction is to create customer `joe` with email `joe@acme.com` and loyalty points 6700, then you must return\n"
+       "For example, if the instruction is to create customer `joe` with email `joe@acme.com` and loyalty points 6700, then you should return\n"
        (u/pretty-str
-        [{:Acme.Core/Customer {:Email "joe@acme.com" :Name "joe", :LoyaltyPoints 6700} :as :Customer}])
-       "\nIf the instruction is to lookup a customer, then you can create an event pattern:\n"
+        '(def customer (make :Acme.Core/Customer {:Email "joe@acme.com" :Name "joe", :LoyaltyPoints 6700})))
+       "\nMaking an instance of a customer will save it to a peristent store or database. To query or lookup instances of an entity, "
+       "you can generate the following expressions:\n"
        (u/pretty-str
-        [{:Acme.Core/LookupCustomerByEmail {:Email "joe@acme.com"} :as :Customer}])
-       "\nYou can also generate patterns that are evaluated against conditions, using the `:match` clause. For example,\n"
+        '(def customer (lookup-one :Acme.Core/Customer {:Email "joe@acme.com"})))
+       "\nThe preceding expression will lookup a customer with email `joe@acme.com`. Here's another example lookup, that will return "
+       "all customers whose loyalty-points are greater than 1000:\n"
+       (u/pretty-str
+        '(def customers (lookup-many :Acme.Core/Customer {:LoyaltyPoints [> 1000]})))
+       "\nBasically to fetch a single instance, call the `lookup-one` function and to fetch multiple instances, use `lookup-many`. "
+       "To fetch all instances of an entity, call `lookup-many` as:\n"
+       (u/pretty-str
+        '(def all-customers (lookup-many :Acme.Core/Customer {})))
+       "\nTo do something for each instance in a query, use the for-each expression. For example, the following example will create "
+       "a PlatinumCustomer instance for each customer from the preceding lookup:\n"
+       (u/pretty-str
+        '(for-each
+          customers
+          (make :Acme.Core/PlatinumCustomer {:Email (:Email %)})))
+       "\nThe special variable `%` will be bound to each element in the sequence, i.e `customers` in this example.\n"
+       "The other two operations you can do on entities are `update` and `delete`. The following example shows how to change "
+       "a customer's name and address. The customer is looked-up by email:\n"
+       (u/pretty-str
+        '(def changed-customer (update :Acme.Core/Customer {:Email "joe@acme.com"} {:Name "Joe Jae" :Address "151/& MZT"})))
+       "\nThe following code-snippet shows how to delete a customer instance by email:\n"
+       (u/pretty-str
+        '(def deleted-customer (delete :Acme.Core/Customer {:Email "joe@acme.com"})))
+       "\nNote that you should call `update` or `delete` only if explicitly asked to do so, in all normal cases entities should be "
+       "created using `make`."
+       "\nYou can also generate patterns that are evaluated against conditions, using the `cond` expression. For example,\n"
        "if the instruction is to create a customer named `joe` with email `joe@acme.com` and then apply the following \n"
        "business rules:\n"
        "1. If the loyalty-points is 50, return the customer instance.\n"
@@ -317,46 +339,51 @@
        "3. Otherwise, mark the customer as platinum\n"
        "Given the above instruction, you must return the following dataflow patterns:\n"
        (u/pretty-str
-        [{:Acme.Core/Customer {:Name "joe" :Email "joe@acme.com"} :as :Customer}
-         [:match
-          [:= :Customer.LoyaltyPoints 50] [:Customer]
-          [:and [:> :Customer.LoyaltyPoints 50] [:< :Customer.LoyaltyPoints 1000]]
-          [{:Acme.Core/GoldenCustomer {:Email :Customer.Email}}]
-          [{:Acme.Core/PlatinumCustomer {:Email :Customer.Email}}]]])
-       "\n\nConsider the syntax of the `:match` pattern - there are conditions and consequences. `[:= :Customer.LoyaltyPoints 50]` "
-       "is an example of a condition. `[:Customer]` is its consequence. There is also an `else` part for `:match`, which is a "
-       "pattern that will be evaluated if all conditions return false. In this example "
-       "`[{:Acme.Core/PlatinumCustomer {:Email :Customer.Email}}]` is the else-pattern.\n"
-       ;; "In addition to entities, you may also create patterns to invoke AI agents. Such invocations will look like:\n"
-       ;; (u/pretty-str
-       ;;  {:Acme.Core/InvokeAnAgent
-       ;;   {:UserInstruction "hello, there"}
-       ;;   :as :ResponseFromAgent})
-       ;; "\n\nResponse from an agent is usually some text and can be handled in a `:match` patterns as:\n"
-       ;; (u/pretty-str
-       ;;  [:match :ResponseFromAgent
-       ;;   "hi" "happy"
-       ;;   "hello" "happy"
-       ;;   "sad"])
-       ;; "\n\nThat was a simple example on invoking ai agents from dataflow patterns.\n"
-       "Now that you understand how to translate business workflows (or dataflows) into entity and `:match` patterns, "
-       "consider the entity definitions and user-instructions that follows to generate fresh dataflow patterns. "
-       "An important note: do not return any plain text in your response, only return the vector of dataflow patterns.\n"
-       "If your input contains patterns of instances like `{:Acme.Core/Employee {:Name \"sam\" :Salary 1000 :Email \"sam@came.com\"} :as :E1}`, keep those "
-       "at the top of the generated dataflow so that reference to `:E1` can be used later. An example of such usage is: \n"
+        '(do (def customer (make :Acme.Core/Customer {:Name "joe" :Email "joe@acme.com"}))
+             (cond
+               (= (:LoyaltyPoints customer) 50) customer
+               (and (> (:LoyaltyPoints customer) 50)
+                    (< (:LoyaltyPoints customer) 1000))
+               (make :Acme.Core/GoldenCustomer {:Email (:Email customer)})
+               :else (make :Acme.Core/PlatinumCustomer {:Email (:Email customer)}))))
+       "\n\nTwo entities can form relationships between them. For example, consider the following entity that represents a person:\n"
        (u/pretty-str
-        {:Acme.Core/EmailMessage
-         {:Email :E1.Email
-          :Message '(str "hello " :E1.Name ", welcome aboard!")}
-         :as :AnEmailMessage})
-       ;; "\nIf the user instruction contains an `:Input` instance, please add that also to the top of the dataflow."
-       "\nNote the function call expression is preceded by a single-quote and references uses a simple dot-notation. "
-       "There's no parenthesis needed for references.\n"
-       "A note about aliases - aliases are names defiled as `:as :SomeName` and attached to a pattern. "
-       "If you create a reference like `:Customer.Email`, make sure the alias `:Customer` is attached to a previous instance pattern. "
-       "Always attach aliases to instance patterns outside of a `:match`. But never attach aliases to instance patterns inside a `:match`."
+        '(entity
+          :Family.Core/Person
+          {:Email {:type :Email :guid true}
+           :Name :String
+           :Age :String}))
+       "\nA possible relationship between two persons is:\n"
+       (u/pretty-str
+        '(relationship
+          :Family.Core/Spouse
+          {:meta {:between [:Person :Person :as [:Husband :Wife]]}}))
+       "\nGiven the email of a wife, her husband can be queried as:\n"
+       (u/pretty-str
+        '(do (def spouse (lookup-one :Family.Core/Spouse {:Wife "mary@family.org"}))
+             (def husband (lookup-one :Family.Core/Person {:Email (:Husband spouse)}))))
+       "\n\nIn addition to entities, you may also have events in a model, as the one shown below:\n"
+       (u/pretty-str
+        '(event
+          :Acme.Core/InvokeSummaryAgent
+          {:UserInstruction :String}))
+       "\nYou can call `make` on an event, and it will trigger some actions:\n"
+       (u/pretty-str
+        '(def summary-result (make :Acme.Core/InvokeSummaryAgent {:UserInstruction "a long essay on my trip to the USA...."})))
+       "\nNote that an event that invokes an agent will return a string. So you can use the result as it is in the rest of "
+       "the program, i.e use `summary-result` as an atomic value and not a composite - so a reference like `summary-result.text` will be invalid, "
+       "just say `summary-result`, as shown below:\n"
+       (u/pretty-str
+        '(cond
+           (= summary-result "trip to USA") "YES"
+           :else "NO"))
+       "\nAlso keep in mind that you can call only `make` on events, `update`, `delete`, `lookup-one` and `lookup-many` are reserved for entities.\n"
+       "Note that you are generating code in a subset of Clojure. In your response, you should not use "
+       "any feature of the language that's not present in the above examples.\n"
+       "Now consider the entity definitions and user-instructions that follows to generate fresh dataflow patterns. "
+       "An important note: do not return any plain text in your response, only return valid clojure expressions. "
        "\nAnother important thing you should keep in mind: your response must not include any objects from the previous "
-       "examples. Your response should only make use of the entities and other definitions provided by the user below.\n\n"))
+       "examples. Your response should only make use of the entities and other definitions provided by the user below.\n"))
 
 (defn- agent-tools-as-definitions [instance]
   (str
@@ -368,6 +395,16 @@
               (keyword (:name f))))
           (model/lookup-agent-tools instance)))))
 
+(defn- normalize-planner-expressions [s]
+  (if-let [exprs (if (string? s)
+                   (u/safe-read-string s)
+                   s)]
+    (cond
+      (planner/maybe-expressions? exprs) exprs
+      (planner/maybe-an-expression? exprs) `(do ~exprs)
+      :else exprs)
+    s))
+
 (defn- instance-results? [xs]
   (every? cn/an-instance? xs))
 
@@ -377,6 +414,23 @@
       false
       true)
     false))
+
+(defn- block-expressions [exprs]
+  (when (planner/maybe-expressions? exprs)
+    (rest exprs)))
+
+(defn- splice-parent-expressions [instance result]
+  (let [orig-exprs (if (string? result)
+                     (read-string result)
+                     result)]
+    (if-let [parent-response (:ParentResponse (:Context instance))]
+      (if-let [pexprs (block-expressions
+                       (if (string? parent-response)
+                         (u/safe-read-string parent-response)
+                         parent-response))]
+        `(~'do ~@pexprs ~@(block-expressions orig-exprs))
+        orig-exprs)
+      orig-exprs)))
 
 (defn handle-planner-agent [instance]
   (log-trigger-agent! instance)
@@ -389,25 +443,28 @@
                          (apply concat (mapv tools/all-tools-for-component (:ToolComponents instance)))
                          (mapv maybe-add-tool-params (model/lookup-agent-tools instance))))
         has-tools (seq tools)
-        [result model-name] (handle-chat-agent
-                             (if has-tools
-                               (assoc instance :tools tools)
-                               instance))
-        _ (log/debug (str "Planner " (:Name instance) " raw result: " result))
+        [orig-result model-name] (handle-chat-agent
+                                  (if has-tools
+                                    (assoc instance :tools tools)
+                                    instance))
+        _ (log/debug (str "Planner " (:Name instance) " raw result: " orig-result))
+        r0 (normalize-planner-expressions orig-result)
+        result (splice-parent-expressions instance r0)
+        _ (log/debug (str "Planner " (:Name instance) " final result: " result))
         patterns (if has-tools
                    (mapv tools/tool-call-to-pattern result)
-                   (if (string? result)
-                     (read-string result)
-                     result))]
+                   (planner/expressions-to-patterns
+                    (if (string? result)
+                      (read-string result)
+                      result)))]
     (if (seq patterns)
-      (do (log/debug (str "Patterns generated by " (:Name instance) ": "
-                          (u/pretty-str patterns)))
+      (do (log/debug (str "Patterns generated by " (:Name instance) ": " (u/pretty-str patterns)))
           [(format-planner-result
             (if (dataflow-patterns? patterns)
               (u/safe-ok-result (e/eval-patterns :Agentlang.Core patterns))
               patterns))
            model-name])
-      [{:result :noop} model-name])))
+      [result model-name])))
 
 (defn handle-ocr-agent [instance]
   (p/call-with-provider

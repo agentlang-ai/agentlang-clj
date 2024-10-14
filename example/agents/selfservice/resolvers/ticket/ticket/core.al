@@ -24,6 +24,11 @@
  {:Org :String
   :Email :Email})
 
+(defn- print-instance [inst]
+  (println "** " (cn/instance-type-kw inst) " **")
+  (u/pprint (cn/instance-attributes inst))
+  inst)
+
 (defn- maybe-parse-paragraphs [content]
   (if (vector? content)
     (let [f (first content)]
@@ -69,14 +74,24 @@
   (let [basic-auth (ticket-basic-auth connection)]
     {:headers {"Authorization" basic-auth "Accept" "application/json"}}))
 
+(def test-mode (System/getenv "SELFSERVICE_TEST_MODE"))
+
+(def ^:private default-tickets [(cn/make-instance
+                                 :Ticket.Core/Ticket
+                                 {:Id "10000"
+                                  :Title "Request to join org"
+                                  :Content "Please add moe@acme.com to the github org acme"})])
+
 (defn ticket-query [connection _]
-  (let [url (str (:root-url connection) "/rest/api/3/issue/")
-        headers (make-headers connection)
-        {status :status body :body} (http/do-get (str url "picker") headers)
-        basic-auth (get-in headers [:headers "Authorization"])]
-    (if (= 200 status)
-      (fetch-individual-tickets url basic-auth (json/decode body))
-      (log/warn (str "lookup tickets failed with status: " status)))))
+  (if test-mode
+    default-tickets
+    (let [url (str (:root-url connection) "/rest/api/3/issue/")
+          headers (make-headers connection)
+          {status :status body :body} (http/do-get (str url "picker") headers)
+          basic-auth (get-in headers [:headers "Authorization"])]
+      (if (= 200 status)
+        (fetch-individual-tickets url basic-auth (json/decode body))
+        (log/warn (str "lookup tickets failed with status: " status))))))
 
 (defn- make-comment-body [text]
   {"content"
@@ -86,18 +101,21 @@
    "version" 1})
 
 (defn ticket-comment-create [connection instance]
-  (let [url (str (:root-url connection) "/rest/api/3/issue/" (:TicketId instance) "/comment")
-        headers (make-headers connection)
-        body {:body (make-comment-body (:Body instance))}
-        {status :status :as response} (http/do-post url headers body)]
-    (if (or (= 201 status) (= 200 status))
-      instance
-      (log/warn (str "create ticket-comment returned status: " status)))))
+  (if test-mode
+    (print-instance instance)
+    (let [url (str (:root-url connection) "/rest/api/3/issue/" (:TicketId instance) "/comment")
+          headers (make-headers connection)
+          body {:body (make-comment-body (:Body instance))}
+          {status :status :as response} (http/do-post url headers body)]
+      (if (or (= 201 status) (= 200 status))
+        instance
+        (log/warn (str "create ticket-comment returned status: " status))))))
 
 (def tickets-connection-info
-  {:root-url (u/getenv "TICKETS_ROOT_URL")
-   :user (u/getenv "TICKETS_USER")
-   :token (u/getenv "TICKETS_TOKEN")})
+  (when-not test-mode
+    {:root-url (u/getenv "TICKETS_ROOT_URL")
+     :user (u/getenv "TICKETS_USER")
+     :token (u/getenv "TICKETS_TOKEN")}))
 
 (resolver
  :TicketResolver
@@ -107,24 +125,26 @@
   :paths [:Ticket.Core/Ticket :Ticket.Core/TicketComment]})
 
 (defn- github-member-post [api-token inst]
-  (let [result (http/do-post
-                (str "https://api.github.com/orgs/" (:Org inst) "/invitations")
-                {:headers
-                 {"Accept" "application/vnd.github+json"
-                  "Authorization" (str "Bearer " api-token)
-                  "X-GitHub-Api-Version" "2022-11-28"}}
-                {:email (:Email inst) :role "direct_member"})
-        status (:status result)]
-    (if (<= 200 status 300)
-      inst
-      (u/throw-ex (str "failed to add user " (:Email inst)
-                       " to github org " (:Org inst)
-                       ", with status " status " and reason " (:body result))))))
+  (if test-mode
+    (print-instance inst)
+    (let [result (http/do-post
+                  (str "https://api.github.com/orgs/" (:Org inst) "/invitations")
+                  {:headers
+                   {"Accept" "application/vnd.github+json"
+                    "Authorization" (str "Bearer " api-token)
+                    "X-GitHub-Api-Version" "2022-11-28"}}
+                  {:email (:Email inst) :role "direct_member"})
+          status (:status result)]
+      (if (<= 200 status 300)
+        inst
+        (u/throw-ex (str "failed to add user " (:Email inst)
+                         " to github org " (:Org inst)
+                         ", with status " status " and reason " (:body result)))))))
 
 (resolver
  :GithubResolver
  {:with-methods
-  {:create (partial github-member-post (u/getenv "GITHUB_API_TOKEN"))}
+  {:create (partial github-member-post (when-not test-mode (u/getenv "GITHUB_API_TOKEN")))}
   :paths [:Ticket.Core/GithubMember]})
 
 (defn as-json [result]
@@ -167,7 +187,7 @@
    {:Manager n}))
 
 (def default-manager (make-ticket-manager "admin@acme.com"))
-(def default-slack-channel (make-slack-channel (System/getenv "SLACK_CHANNEL_ID")))
+(def default-slack-channel (make-slack-channel (if test-mode "approval-requests" (System/getenv "SLACK_CHANNEL_ID"))))
 
 (def manager-db {"10000" (make-ticket-manager "mgr01@acme.com")})
 (def slack-channel-db {"mgr01@acme.com" default-slack-channel})

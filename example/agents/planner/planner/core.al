@@ -14,6 +14,17 @@
   :Created :Now
   :Department {:oneof ["sales" "accounting"]}})
 
+(relationship
+ :EmployeeManager
+ {:meta {:between [:Employee :Employee :as [:Manager :Reportee]]}})
+
+(entity
+ :EmailMessage
+ {:To :Email
+  :From :Email
+  :Subject :String
+  :Body :String})
+
 {:Agentlang.Core/LLM
  {:Type :openai
   :Name :llm01
@@ -26,7 +37,6 @@
 {:Agentlang.Core/Agent
  {:Name :planner-agent
   :Type :planner
-  ;;:ToolComponents ["Planner.Core"]
   :Tools [:Planner.Core/Customer :Planner.Core/Employee]
   :UserInstruction "You are an agent that use tools to create entity instances from text descritpions."
   :LLM :llm01}}
@@ -54,3 +64,16 @@
 ;; {"Planner.Core/InvokePlanner":
 ;;   {"UserInstruction": "Add a new employee named Mat to the sales department. His email is mat@acme.com"}}
 
+{:Agentlang.Core/Agent
+ {:Name :employee-agent
+  :Type :planner
+  :LLM :llm01
+  :Tools [:Planner.Core/Employee :Planner.Core/EmailMessage]
+  :UserInstruction (str "You are an agent who manages employee records. Based on the user instruction that follows, either create, "
+                        "update, delete or lookup employee instances.\n")
+  :Input :InvokeEmployeeAgent}}
+
+;; Usage:
+;; POST api/Planner.Core/InvokeEmployeeAgent
+;; {"Planner.Core/InvokeEmployeeAgent":
+;;   {"UserInstruction": "lookup all employees and for each employee send an email to manager@abc.com intrroducing themselves"}}
