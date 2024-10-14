@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0-alpha4] - 2024-10-14
+
+- Improved reliability and scope of planner code generation
+
 ## [0.6.0-alpha3] - 2024-10-04
 
 - Support input type for agents
