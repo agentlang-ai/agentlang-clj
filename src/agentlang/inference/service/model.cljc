@@ -167,7 +167,7 @@
          tools (preproc-agent-tools-spec (:Tools attrs))
          delegates (preproc-agent-delegates (:Delegates attrs))
          tp (:Type attrs)
-         llm (:LLM attrs)]
+         llm (or (:LLM attrs) {:Type "openai"})]
      (assoc pat :Agentlang.Core/Agent
             (-> attrs
                 (cond->

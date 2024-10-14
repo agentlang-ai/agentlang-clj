@@ -39,7 +39,6 @@ The following code snippet shows a simple agent that can interact with a human u
 
 {:Agentlang.Core/Agent
  {:Name :ExampleAgent
-  :LLM {:Type "openai"}
   :Input :Chat/Session
   :UserInstruction "You are an AI bot who tell jokes"}}
 ```
