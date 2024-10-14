@@ -54,6 +54,9 @@
                     (some #{component-name} (:components spec)))
                   @models)))
 
+(defn get-model-version [component]
+  (model-version (model-for-component component)))
+
 (defn internal-component-names
   "Returns vector of internal component names."
   []
@@ -129,7 +132,7 @@
 (defn- upsert-component! [component spec]
   (u/call-and-set
    components
-   #(assoc @components component spec)))
+   #(assoc-in @components [component (get-model-version component)] spec)))
 
 (declare intern-attribute intern-event)
 
@@ -152,7 +155,9 @@
   component)
 
 (defn remove-component [component]
-  (let [r (u/call-and-set components #(dissoc @components component))]
+  (let [r (u/call-and-set components #(update-in @components
+                                                 [component]
+                                                 :dissoc  (get-model-version component)))]
     (raw/remove-component component)))
 
 (defn component-names
@@ -168,7 +173,7 @@
     false))
 
 (defn component-definition [component]
-  (find @components component))
+  (get (find @components component) (get-model-version component)))
 
 (defn component-specification [component]
   (second (component-definition component)))
@@ -250,7 +255,7 @@
   Returns the name of the entry. If the component is non-existing, raise an exception."
   ([typname typdef typtag meta]
    (let [[component n :as k] (li/split-path typname)
-         intern-k [component typtag n]]
+         intern-k [component (get-model-version component) typtag n]]
      (when-not (component-exists? component)
        (log/info (str "auto-creating component - " component))
        (create-component component nil))
@@ -1015,7 +1020,7 @@
   [tp component]
   (when-let [recs (seq (filter
                         (fn [[_ v]] (= tp (type-tag-key v)))
-                        (:records (get @components component))))]
+                        (:records (get (get @components component) (get-model-version component)))))]
     (set (mapv (partial full-name component) (keys recs)))))
 
 (declare contains-relationship? relationship?)
@@ -1064,7 +1069,7 @@
     components
     #(let [ms @components
            ename (normalize-type-name (event-name event))
-           path [component :events ename]
+           path [component (get-model-version component) :events ename]
            newpats [(maybe-aot-compile-dataflow
                      [event
                       {:head head
@@ -1840,7 +1845,7 @@
                :attributes new-attrs
                :records new-recs
                :events new-evts)))
-          final-comps (assoc comps c (dissoc new-comp-scm n))]
+          final-comps (assoc-in comps [c (get-model-version c)] (dissoc new-comp-scm n))]
       (and (u/safe-set components final-comps)
            (raw/remove-definition tag recname)
            recname))))
@@ -2218,7 +2223,7 @@
      components
      #(let [ms @components
             [component n] (li/split-path rule-name)
-            path [component :rules n]]
+            path [component (get-model-version component) :rules n]]
         (register-rule-for-entities! rule-name (mapv first (rule-cc spec)))
         (assoc-in ms path spec))))
   rule-name)
@@ -2228,7 +2233,7 @@
    components
    #(let [ms @components
           [component n] (li/split-path rule-name)
-          path [component :rules n]]
+          path [component (get-model-version component) :rules n]]
       (unregister-rule-for-entities! rule-name)
       (su/dissoc-in ms path)))
   rule-name)
@@ -2298,7 +2303,7 @@
    components
    #(let [ms @components
           [component n] (li/split-path construct-name)
-          path [component tag n]]
+          path [component (get-model-version component) tag n]]
       (assoc-in ms path spec)))
   construct-name)
 
