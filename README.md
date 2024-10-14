@@ -37,13 +37,9 @@ The following code snippet shows a simple agent that can interact with a human u
 ```clojure
 (component :Chat)
 
-{:Agentlang.Core/LLM
- {:Type :openai
-  :Name :ExampleLLM}}
-
 {:Agentlang.Core/Agent
  {:Name :ExampleAgent
-  :LLM :ExampleLLM
+  :LLM {:Type "openai"}
   :Input :Chat/Session
   :UserInstruction "You are an AI bot who tell jokes"}}
 ```
