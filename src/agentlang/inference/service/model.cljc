@@ -158,6 +158,13 @@
       (vector? delegs) (mapv preproc-agent-delegates delegs)
       :else delegs)))
 
+(defn- preproc-agent-docs [docs]
+  (mapv (fn [spec]
+          (if-let [agent (:Agent spec)]
+            (assoc spec :Agent (u/keyword-as-string agent))
+            spec))
+        docs))
+
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
  (fn [pat]
@@ -167,7 +174,8 @@
          tools (preproc-agent-tools-spec (:Tools attrs))
          delegates (preproc-agent-delegates (:Delegates attrs))
          tp (:Type attrs)
-         llm (or (:LLM attrs) {:Type "openai"})]
+         llm (or (:LLM attrs) {:Type "openai"})
+         docs (:Documents attrs)]
      (assoc pat :Agentlang.Core/Agent
             (-> attrs
                 (cond->
@@ -175,6 +183,7 @@
                     input (assoc :Input input)
                     tools (assoc :Tools tools)
                     delegates (assoc :Delegates delegates)
+                    docs (assoc :Documents (preproc-agent-docs docs))
                     tp (assoc :Type (u/keyword-as-string tp))
                     llm (assoc :LLM (u/keyword-as-string llm))))))))
 
