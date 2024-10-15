@@ -380,6 +380,7 @@
        "\nAlso keep in mind that you can call only `make` on events, `update`, `delete`, `lookup-one` and `lookup-many` are reserved for entities.\n"
        "Note that you are generating code in a subset of Clojure. In your response, you should not use "
        "any feature of the language that's not present in the above examples.\n"
+       "A `def` must always bind to the result of `make`, `update`, `delete`, `lookup-one` and `lookup-many` and nothing else.\n"
        "Now consider the entity definitions and user-instructions that follows to generate fresh dataflow patterns. "
        "An important note: do not return any plain text in your response, only return valid clojure expressions. "
        "\nAnother important thing you should keep in mind: your response must not include any objects from the previous "
