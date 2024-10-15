@@ -55,7 +55,7 @@
                   @models)))
 
 (defn get-model-version [component]
-  (model-version (model-for-component component)))
+  (or (model-version (model-for-component component)) "0.0.1"))
 
 (defn internal-component-names
   "Returns vector of internal component names."
@@ -132,7 +132,7 @@
 (defn- upsert-component! [component spec]
   (u/call-and-set
    components
-   #(assoc-in @components [component (get-model-version component)] spec)))
+   #(assoc-in @components [component (str (get-model-version component))] spec)))
 
 (declare intern-attribute intern-event)
 
@@ -155,9 +155,7 @@
   component)
 
 (defn remove-component [component]
-  (let [r (u/call-and-set components #(update-in @components
-                                                 [component]
-                                                 :dissoc  (get-model-version component)))]
+  (let [r (u/call-and-set components #(dissoc @components component))]
     (raw/remove-component component)))
 
 (defn component-names
@@ -173,7 +171,8 @@
     false))
 
 (defn component-definition [component]
-  (get (find @components component) (get-model-version component)))
+  (when-let [scm (get-in @components [component (get-model-version component)])]
+    [component scm]))
 
 (defn component-specification [component]
   (second (component-definition component)))
@@ -229,8 +228,11 @@
 (defn fetch-meta [path]
   (let [p (if (string? path)
             (keyword path)
-            path)]
-    (if-let [scm (get-in @components (conj-meta-key (li/split-path p)))]
+            path)
+        c (first (li/split-path p))
+        e (last (li/split-path p))]
+    
+    (if-let [scm (get-in @components [c (get-model-version c) e mt/meta-key])]
       (assoc
        scm
        mt/meta-of-key
@@ -242,12 +244,18 @@
 (def meta-of mt/meta-of-key)
 
 (defn- intern-meta [components rec-name meta]
-  (assoc-in components (conj-meta-key rec-name) meta))
+  (let [p rec-name
+        c (first (li/split-path p))
+        e (last (li/split-path p))]
+    (assoc-in components [c (get-model-version c) e mt/meta-key] meta)))
 
 (defn- remove-meta! [rec-name]
-  (u/call-and-set
-   components
-   #(su/dissoc-in @components (conj-meta-key rec-name))))
+  (let [p rec-name
+        c (first (li/split-path p))
+        e (last (li/split-path p))]
+    (u/call-and-set
+     components
+     #(su/dissoc-in @components [c (get-model-version c) e mt/meta-key]))))
 
 (defn- component-intern
   "Add or replace a component entry.
@@ -273,7 +281,7 @@
 
 (defn- component-remove [typname typtag]
   (let [[component n :as k] (li/split-path typname)
-        intern-k [component typtag n]]
+        intern-k [component (get-model-version component) typtag n]]
     (u/call-and-set
      components
      #(su/dissoc-in @components intern-k))
@@ -284,7 +292,7 @@
    (get-in @components path))
   ([typetag recname]
    (let [[c n] (li/split-path recname)]
-     (component-find [c typetag n]))))
+     (component-find [c (get-model-version c) typetag n]))))
 
 (defn intern-attribute
   "Add or replace an attribute in a component.
@@ -326,9 +334,9 @@
   ([component aref]
    (let [[recname attrname] (li/split-ref aref)]
      (if attrname
-       (when-let [rec (component-find [component :records recname])]
+       (when-let [rec (component-find [component (get-model-version component) :records recname])]
          (find-attribute-schema-internal (get-in rec [:schema attrname])))
-       (when-let [scm (component-find [component :attributes aref])]
+       (when-let [scm (component-find [component (get-model-version component) :attributes aref])]
          (if-let [parent-type (:type scm)]
            (merge (apply find-attribute-schema-internal (li/split-path parent-type)) scm)
            scm)))))
@@ -343,9 +351,15 @@
    (dissoc (find-attribute-schema-internal path) :meta)))
 
 (defn all-attributes [component]
-  (component-find [component :attributes]))
+  (component-find [component (get-model-version component) :attributes]))
 
-(def find-record-schema (partial component-find :records))
+
+(defn find-record-schema
+  ([component aref]
+   (component-find [component (get-model-version component) :records aref]))
+  ([path]
+   (let [[component aref] (li/split-path path)]
+     (find-record-schema component aref))))
 
 (defn- find-record-schema-by-type [typ path]
   (when-let [scm (find-record-schema path)]
@@ -2244,10 +2258,10 @@
 
 (defn fetch-rule [rule-name]
   (let [[c n] (li/split-path rule-name)]
-    (component-find [c :rules n])))
+    (component-find [c (get-model-version c) :rules n])))
 
 (defn fetch-rules [component-name]
-  (component-find [component-name :rules]))
+  (component-find [component-name (get-model-version component-name) :rules]))
 
 (def ^:private rule-for-delete-event? rule-on-delete)
 (def ^:private rule-for-upsert-event? (complement rule-for-delete-event?))
@@ -2347,7 +2361,7 @@
        (component-remove res-name :resolvers)))
 
 (defn find-resolvers [component-name]
-  (get-in @components [component-name :resolvers]))
+  (get-in @components [component-name (get-model-version component-name) :resolvers]))
 
 (defn attribute-type-as-string [attr-name]
   (let [scm (find-attribute-schema attr-name)]
