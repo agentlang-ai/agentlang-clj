@@ -1840,7 +1840,8 @@
   (when-let [[tag {scm :schema}] (find-schema recname)]
     (let [comps @components
           [c n] (li/split-path recname)
-          comp-scm (get comps c)
+          c-version (get-model-version c)
+          comp-scm (get-in comps [c c-version])
           attrs (:attributes comp-scm)
           new-comp-scm
           (if (= tag :attribute)
@@ -1859,7 +1860,7 @@
                :attributes new-attrs
                :records new-recs
                :events new-evts)))
-          final-comps (assoc-in comps [c (get-model-version c)] (dissoc new-comp-scm n))]
+          final-comps (assoc-in comps [c c-version] (dissoc new-comp-scm n))]
       (and (u/safe-set components final-comps)
            (raw/remove-definition tag recname)
            recname))))
