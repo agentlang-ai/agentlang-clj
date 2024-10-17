@@ -37,7 +37,7 @@
     agentlang-patterns))
 
 (defn- maybe-feature-instruction [agent-instance]
-  (let [s (when (= "classifier" (:Type agent-instance))
+  (let [s (when (= "classifier" (:Type agent-instance)) ;; TODO: move this to a new handle-classifier fn in logic.clj
             (when-let [delegates (seq (map #(str "\"agent: " (:Name %) "\"")
                                            (model/find-agent-post-delegates agent-instance)))]
               (str "Classify a user query into one of the sub-agent categories - "
