@@ -433,3 +433,11 @@
     (when-let [sess (lookup-agent-chat-session agent)]
       (let [msgs (vec (filter #(= :system (:role %)) (:Messages sess)))]
         (update-agent-chat-session sess msgs)))))
+
+(defn- agent-of-type? [typ agent-instance]
+  (= typ (:Type agent-instance)))
+
+(def ocr-agent? (partial agent-of-type? "ocr"))
+(def classifier-agent? (partial agent-of-type? "classifier"))
+(def planner-agent? (partial agent-of-type? "planner"))
+(def eval-agent? (partial agent-of-type? "eval"))

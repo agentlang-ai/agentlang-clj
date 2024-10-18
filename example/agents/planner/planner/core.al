@@ -25,14 +25,7 @@
   :Subject :String
   :Body :String})
 
-{:Agentlang.Core/LLM
- {:Type :openai
-  :Name :llm01
-  :Config {:ApiKey (agentlang.util/getenv "OPENAI_API_KEY")
-           :EmbeddingApiEndpoint "https://api.openai.com/v1/embeddings"
-           :EmbeddingModel "text-embedding-3-small"
-           :CompletionApiEndpoint "https://api.openai.com/v1/chat/completions"
-           :CompletionModel "gpt-3.5-turbo"}}}
+{:Agentlang.Core/LLM {:Name :llm01}}
 
 {:Agentlang.Core/Agent
  {:Name :planner-agent

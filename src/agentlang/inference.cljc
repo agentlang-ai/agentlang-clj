@@ -37,17 +37,9 @@
     agentlang-patterns))
 
 (defn- maybe-feature-instruction [agent-instance]
-  (let [s (when (= "classifier" (:Type agent-instance)) ;; TODO: move this to a new handle-classifier fn in logic.clj
-            (when-let [delegates (seq (map #(str "\"agent: " (:Name %) "\"")
-                                           (model/find-agent-post-delegates agent-instance)))]
-              (str "Classify a user query into one of the sub-agent categories - "
-                   (s/join "," delegates) ". "
-                   "Analyse the user query and return only one of those strings.")))]
-    (if-let [features (seq (:Features agent-instance))]
-      (let [fts (mapv model/get-feature-prompt features)
-            s (if (seq s) (str s "\n") "")]
-        (str s (s/join "\n" fts)))
-      s)))
+  (when-let [features (seq (:Features agent-instance))]
+    (let [fts (mapv model/get-feature-prompt features)]
+      (s/join "\n" fts))))
 
 (defn input-instance [agent ctx]
   (when-let [input-type (:Input agent)]
