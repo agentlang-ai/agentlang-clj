@@ -8,7 +8,7 @@ function msg {
     echo "$@" 1>&2
 }
 
-export CURRENT_AGENTLANG_VERSION="0.6.0-alpha4"
+export CURRENT_AGENTLANG_VERSION="0.6.0"
 
 if [ -e model.agentlang ]; then
     agentlang_version_in_model=`grep ":agentlang-version" model.agentlang | sed -E  's/(.*) {1}(.*)/\2/' | xargs`
