@@ -7,5 +7,5 @@
                        :user #$ [PGVECTOR_DB_USERNAME "postgres"]
                        :password #$ [PGVECTOR_DB_PASSWORD "postgres"]}}
  :agent-documents
- {"technical-support-agent" ["file://./docs/abc.md" "file://./docs/xyz.md"]
-  "price-enquiry-agent" ["file://./docs/abc_prices.txt" "file://./docs/xyz_prices.txt"]}}
+ {"technical-support" ["file://./docs/abc.md" "file://./docs/xyz.md"]
+  "price-enquiry" ["file://./docs/abc_prices.txt" "file://./docs/xyz_prices.txt"]}}

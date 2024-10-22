@@ -129,13 +129,6 @@
     response
     result))
 
-(def ^:private agent-prefix "agent:")
-(def ^:private agent-prefix-len (count agent-prefix))
-
-(defn- agent-filter-response [s]
-  (when-let [idx (s/index-of s agent-prefix)]
-    (s/trim (subs s (+ idx agent-prefix-len)))))
-
 (defn- respond-with-agent [agent-name agents user-instruction]
   (if-let [agent (first (filter #(= agent-name (:Name %)) agents))]
     (:Response (@generic-agent-handler (assoc agent :UserInstruction user-instruction)))
@@ -147,7 +140,7 @@
           delegates (model/find-agent-post-delegates agent-instance)
           ins (:UserInstruction agent-instance)]
       (log/debug (str "Response from agent " (:Name agent-instance) " - " response))
-      (if-let [agent-name (agent-filter-response response)]
+      (if-let [agent-name (when (model/classifier-agent? agent-instance) response)]
         (respond-with-agent agent-name delegates (or (get-in agent-instance [:Context :UserInstruction]) ins))
         (if (seq delegates)
           (let [n (:Name agent-instance)
@@ -160,7 +153,7 @@
     result))
 
 (defn- update-delegate-user-instruction [delegate agent-instance]
-  (if (= "ocr" (:Type delegate))
+  (if (model/ocr-agent? agent-instance)
     (assoc delegate :Context (:Context agent-instance))
     (assoc delegate
            :Context (:Context agent-instance)
@@ -173,7 +166,6 @@
     (let [d (first delegates)
           [response model-info]
           (:Response (@generic-agent-handler (update-delegate-user-instruction d agent-instance)))]
-      (log/debug (str "Response from pre-processor agent " (:Name d) "using llm " model-info " - " response))
       response)))
 
 (defn- maybe-add-docs [docs user-ins]
@@ -200,9 +192,21 @@
    #(let [ins (:UserInstruction instance)
           docs (maybe-lookup-agent-docs instance)
           preprocessed-instruction (call-preprocess-agents instance)
-          final-instruction (maybe-add-docs docs (or preprocessed-instruction ins))
+          ins (if (or (model/planner-agent? instance) (model/eval-agent? instance))
+                (str ins (if preprocessed-instruction (str "\n" preprocessed-instruction) ""))
+                (or preprocessed-instruction ins))
+          final-instruction (maybe-add-docs docs ins)
           instance (assoc instance :UserInstruction final-instruction)]
       (compose-agents instance (provider/make-completion instance)))))
+
+(defn handle-classifier-agent [instance]
+  (let [s (if-let [delegates (seq (mapv :Name (model/find-agent-post-delegates instance)))]
+            (str "Classify the following user query into one of the categories - "
+                 (s/join ", " delegates) "\n"
+                 "The user query is: \"" (:UserInstruction instance) "\"\n"
+                 "Return only the category name and nothing else.\n")
+            (:UserInstruction instance))]
+    (handle-chat-agent (assoc instance :UserInstruction s))))
 
 (defn- start-chat [agent-instance]
   ;; TODO: integrate messaging resolver
@@ -380,10 +384,12 @@
        "\nAlso keep in mind that you can call only `make` on events, `update`, `delete`, `lookup-one` and `lookup-many` are reserved for entities.\n"
        "Note that you are generating code in a subset of Clojure. In your response, you should not use "
        "any feature of the language that's not present in the above examples.\n"
+       "A `def` must always bind to the result of `make`, `update`, `delete`, `lookup-one` and `lookup-many` and nothing else.\n"
        "Now consider the entity definitions and user-instructions that follows to generate fresh dataflow patterns. "
        "An important note: do not return any plain text in your response, only return valid clojure expressions. "
        "\nAnother important thing you should keep in mind: your response must not include any objects from the previous "
-       "examples. Your response should only make use of the entities and other definitions provided by the user below.\n"))
+       "examples. Your response should only make use of the entities and other definitions provided by the user below.\n"
+       "Also make sure the expressions you return are all enclosed in a `(do ...)`.\n"))
 
 (defn- agent-tools-as-definitions [instance]
   (str
@@ -395,9 +401,14 @@
               (keyword (:name f))))
           (model/lookup-agent-tools instance)))))
 
+(defn- trim-till-first-expr [s]
+  (if-let [i (s/index-of s "(")]
+    (subs s i (inc (s/last-index-of s ")")))
+    s))
+
 (defn- normalize-planner-expressions [s]
   (if-let [exprs (if (string? s)
-                   (u/safe-read-string s)
+                   (u/safe-read-string (trim-till-first-expr s))
                    s)]
     (cond
       (planner/maybe-expressions? exprs) exprs
