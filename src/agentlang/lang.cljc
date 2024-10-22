@@ -60,8 +60,6 @@
   "Create and activate a new component with the given name."
   ([n spec]
    (let [ns-name (li/validate-name n)]
-     (when (cn/component-exists? ns-name)
-       (cn/remove-component ns-name))
      (let [r (cn/create-component
               ns-name
               (when spec

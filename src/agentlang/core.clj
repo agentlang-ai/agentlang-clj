@@ -279,6 +279,11 @@
                                                     (run-service
                                                       (ur/read-model-and-config options)
                                                       (agentlang-nrepl-handler (first %) options))))
+                  :migrate               #(ur/call-after-load-model-migrate
+                                           (first %) (fn []
+                                                       (run-service
+                                                        (ur/read-model-and-config options)
+                                                        (agentlang-nrepl-handler (first %) options))))
                   :compile           #(println (build/compile-model (first %)))
                   :build             #(println (build/standalone-package (first %)))
                   :install           #(println (build/install-model nil (first %)))

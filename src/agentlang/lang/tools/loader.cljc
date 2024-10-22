@@ -128,18 +128,23 @@
           (try
             (loop [exp (rdf), raw-exps [], exps []]
               (if (= exp :done)
-                (do (raw/maybe-intern-component raw-exps) exps)
+                (do
+                 
+                  (raw/maybe-intern-component raw-exps) 
+                    
+                    exps)
                 (let [exp (fqn exp)]
                   (recur (rdf) (conj raw-exps exp) (conj exps (parser exp))))))
             (finally
-              (u/safe-close reader)))))
+              (u/safe-close reader)))
+          ))
        ([file-name-or-input-stream]
         (read-expressions
          file-name-or-input-stream
          (fetch-declared-names file-name-or-input-stream))))
 
      (defn load-script
-  "Load, complile and intern the component from a script file."
+       "Load, complile and intern the component from a script file."
        ([^String component-root-path file-name-or-input-stream]
         (log/info (str "Component root path: " component-root-path))
         (log/info (str "File name: " file-name-or-input-stream))
@@ -156,8 +161,6 @@
                   file-name-or-input-stream))
               names (fetch-declared-names file-ident)
               component-name (:component names)]
-          (when (and component-name (cn/component-exists? component-name))
-            (cn/remove-component component-name))
           (let [exprs (binding [*ns* *ns*]
                         (read-expressions
                          (if input-reader?

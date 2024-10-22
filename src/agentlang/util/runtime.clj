@@ -92,6 +92,7 @@
 
 (defn maybe-read-model [args]
   (when-let [n (and args (model-name-from-args args))]
+    
     (loader/read-model n)))
 
 (defn log-app-init-result! [result]
@@ -293,6 +294,7 @@
   (let [basic-config (load-config options)]
     [basic-config (assoc options config-data-key basic-config)]))
 
+
 (defn call-after-load-model
   ([model-name f ignore-load-error]
    (gs/in-script-mode!)
@@ -303,6 +305,19 @@
      (f)))
   ([model-name f]
    (call-after-load-model model-name f false)))
+
+(defn call-after-load-model-migrate
+  ([model-name f ignore-load-error]
+   (gs/in-script-mode!)
+   (when (try
+           (build/load-model model-name) 
+           (build/load-model-migration model-name)
+           (catch Exception ex
+             (if ignore-load-error true (throw ex))))
+     (f)))
+  ([model-name f]
+   (call-after-load-model-migrate model-name f false)))
+
 
 (defn force-call-after-load-model [model-name f]
   (try

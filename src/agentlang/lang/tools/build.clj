@@ -444,6 +444,13 @@
       (:name model)
       (log/error (str "failed to load components from " model-name)))))
 
+(defn load-model-migration [model-name]
+  (log/info (str "loading model " model-name))
+  (let [{model :model model-root :root} (loader/load-all-model-info ["old"] model-name nil)]
+    (if (loader/load-components-from-model model model-root)
+      (:name model)
+      (log/error (str "failed to load components from " model-name)))))
+
 (defn- config-file-path [model-name]
   (str (project-dir model-name) config-edn))
 
