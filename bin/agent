@@ -24,7 +24,7 @@ fi
 echo "Agentlang ${AGENTLANG_VERSION}"
 
 # Must be sha256sum
-export AGENTLANG_CHECKSUM='a1872bee461c6788546232676c8595b761df63ad9fe1e8947dbbd872c24b924d'
+export AGENTLANG_CHECKSUM='88ae50e49e21dacde3cc77a0d9fb7f29e02d858ad4e89e3e2106e14d60feb9cb'
 
 if [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "msys" ]]; then
     delimiter=";"
