@@ -279,128 +279,6 @@
     (seqable? r) (vec r)
     :else r))
 
-(def ^:private generic-planner-instructions
-  (str "Consider the following entity definitions in a subset of the Clojure programming language:\n"
-       (u/pretty-str
-        '(entity
-          :Acme.Core/Customer
-          {:Email {:type :Email :guid true}
-           :Name :String
-           :Address {:type :String :optional true}
-           :LoyaltyPoints {:type :Int :default 50}}))
-       "\n\n"
-       (u/pretty-str
-        '(entity
-          :Acme.Core/PlatinumCustomer
-          {:Email :Email}))
-       "\n\n"
-       (u/pretty-str
-        '(entity
-          :Acme.Core/GoldenCustomer
-          {:Email :Email}))
-       "\n\nIf the instruction given to you is to construct a customer instance with name `joe` and email `joe@acme.com`,\n"
-       "you must return the following clojure expression:\n"
-       (u/pretty-str
-        '(def customer (make :Acme.Core/Customer {:Email "joe@acme.com" :Name "joe"})))
-       "\nThere's no need to fill in attributes marked `:optional true`, :read-only true` or those with a `:default`, unless explicitly instructed.\n"
-       "You can also ignore attributes with types `:Now` and `:Identity` - these will be automatically filled-in by the system.\n"
-       "For example, if the instruction is to create customer `joe` with email `joe@acme.com` and loyalty points 6700, then you should return\n"
-       (u/pretty-str
-        '(def customer (make :Acme.Core/Customer {:Email "joe@acme.com" :Name "joe", :LoyaltyPoints 6700})))
-       "\nMaking an instance of a customer will save it to a peristent store or database. To query or lookup instances of an entity, "
-       "you can generate the following expressions:\n"
-       (u/pretty-str
-        '(def customer (lookup-one :Acme.Core/Customer {:Email "joe@acme.com"})))
-       "\nThe preceding expression will lookup a customer with email `joe@acme.com`. Here's another example lookup, that will return "
-       "all customers whose loyalty-points are greater than 1000:\n"
-       (u/pretty-str
-        '(def customers (lookup-many :Acme.Core/Customer {:LoyaltyPoints [> 1000]})))
-       "\nBasically to fetch a single instance, call the `lookup-one` function and to fetch multiple instances, use `lookup-many`. "
-       "To fetch all instances of an entity, call `lookup-many` as:\n"
-       (u/pretty-str
-        '(def all-customers (lookup-many :Acme.Core/Customer {})))
-       "\nTo do something for each instance in a query, use the for-each expression. For example, the following example will create "
-       "a PlatinumCustomer instance for each customer from the preceding lookup:\n"
-       (u/pretty-str
-        '(for-each
-          customers
-          (make :Acme.Core/PlatinumCustomer {:Email (:Email %)})))
-       "\nThe special variable `%` will be bound to each element in the sequence, i.e `customers` in this example.\n"
-       "The other two operations you can do on entities are `update` and `delete`. The following example shows how to change "
-       "a customer's name and address. The customer is looked-up by email:\n"
-       (u/pretty-str
-        '(def changed-customer (update :Acme.Core/Customer {:Email "joe@acme.com"} {:Name "Joe Jae" :Address "151/& MZT"})))
-       "\nThe following code-snippet shows how to delete a customer instance by email:\n"
-       (u/pretty-str
-        '(def deleted-customer (delete :Acme.Core/Customer {:Email "joe@acme.com"})))
-       "\nNote that you should call `update` or `delete` only if explicitly asked to do so, in all normal cases entities should be "
-       "created using `make`."
-       "\nYou can also generate patterns that are evaluated against conditions, using the `cond` expression. For example,\n"
-       "if the instruction is to create a customer named `joe` with email `joe@acme.com` and then apply the following \n"
-       "business rules:\n"
-       "1. If the loyalty-points is 50, return the customer instance.\n"
-       "2. If the loyalty-points is greater than 50 and less than 1000, mark the customer as golden.\n"
-       "3. Otherwise, mark the customer as platinum\n"
-       "Given the above instruction, you must return the following dataflow patterns:\n"
-       (u/pretty-str
-        '(do (def customer (make :Acme.Core/Customer {:Name "joe" :Email "joe@acme.com"}))
-             (cond
-               (= (:LoyaltyPoints customer) 50) customer
-               (and (> (:LoyaltyPoints customer) 50)
-                    (< (:LoyaltyPoints customer) 1000))
-               (make :Acme.Core/GoldenCustomer {:Email (:Email customer)})
-               :else (make :Acme.Core/PlatinumCustomer {:Email (:Email customer)}))))
-       "\n\nTwo entities can form relationships between them. For example, consider the following entity that represents a person:\n"
-       (u/pretty-str
-        '(entity
-          :Family.Core/Person
-          {:Email {:type :Email :guid true}
-           :Name :String
-           :Age :String}))
-       "\nA possible relationship between two persons is:\n"
-       (u/pretty-str
-        '(relationship
-          :Family.Core/Spouse
-          {:meta {:between [:Person :Person :as [:Husband :Wife]]}}))
-       "\nGiven the email of a wife, her husband can be queried as:\n"
-       (u/pretty-str
-        '(do (def spouse (lookup-one :Family.Core/Spouse {:Wife "mary@family.org"}))
-             (def husband (lookup-one :Family.Core/Person {:Email (:Husband spouse)}))))
-       "\n\nIn addition to entities, you may also have events in a model, as the one shown below:\n"
-       (u/pretty-str
-        '(event
-          :Acme.Core/InvokeSummaryAgent
-          {:UserInstruction :String}))
-       "\nYou can call `make` on an event, and it will trigger some actions:\n"
-       (u/pretty-str
-        '(def summary-result (make :Acme.Core/InvokeSummaryAgent {:UserInstruction "a long essay on my trip to the USA...."})))
-       "\nNote that an event that invokes an agent will return a string. So you can use the result as it is in the rest of "
-       "the program, i.e use `summary-result` as an atomic value and not a composite - so a reference like `summary-result.text` will be invalid, "
-       "just say `summary-result`, as shown below:\n"
-       (u/pretty-str
-        '(cond
-           (= summary-result "trip to USA") "YES"
-           :else "NO"))
-       "\nAlso keep in mind that you can call only `make` on events, `update`, `delete`, `lookup-one` and `lookup-many` are reserved for entities.\n"
-       "Note that you are generating code in a subset of Clojure. In your response, you should not use "
-       "any feature of the language that's not present in the above examples.\n"
-       "A `def` must always bind to the result of `make`, `update`, `delete`, `lookup-one` and `lookup-many` and nothing else.\n"
-       "Now consider the entity definitions and user-instructions that follows to generate fresh dataflow patterns. "
-       "An important note: do not return any plain text in your response, only return valid clojure expressions. "
-       "\nAnother important thing you should keep in mind: your response must not include any objects from the previous "
-       "examples. Your response should only make use of the entities and other definitions provided by the user below.\n"
-       "Also make sure the expressions you return are all enclosed in a `(do ...)`.\n"))
-
-(defn- agent-tools-as-definitions [instance]
-  (str
-   (when-let [cns (:ToolComponents instance)]
-     (tools/raw-components cns))
-   (tools/as-raw-tools
-    (mapv (fn [tool]
-            (let [f ((keyword (:type tool)) tool)]
-              (keyword (:name f))))
-          (model/lookup-agent-tools instance)))))
-
 (defn- trim-till-first-expr [s]
   (if-let [i (s/index-of s "(")]
     (subs s i (inc (s/last-index-of s ")")))
@@ -445,12 +323,7 @@
 
 (defn handle-planner-agent [instance]
   (log-trigger-agent! instance)
-  (let [instance (assoc instance :UserInstruction
-                        (str generic-planner-instructions
-                             "Entity definitions from user:\n\n" (agent-tools-as-definitions instance)
-                             "Instruction from user:\n\n" (:UserInstruction instance)))
-        _ (log/debug (str "Updated instruction for agent " (:Name instance) ": " (:UserInstruction instance)))
-        tools [] #_(vec (concat
+  (let [tools [] #_(vec (concat
                          (apply concat (mapv tools/all-tools-for-component (:ToolComponents instance)))
                          (mapv maybe-add-tool-params (model/lookup-agent-tools instance))))
         has-tools (seq tools)

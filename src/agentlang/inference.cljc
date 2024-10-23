@@ -47,16 +47,14 @@
       (when (seq attrs)
         {(u/string-as-keyword input-type) attrs}))))
 
-(defn run-inference-for-event [event instructions agent-instance]
+(defn run-inference-for-event [event agent-instance]
   (when-not agent-instance (u/throw-ex (str "Agent not initialized for " event)))
   (log/debug (str "Processing response for inference " (cn/instance-type event) " - " (u/pretty-str agent-instance)))
+  (model/maybe-init-agent-chat-session agent-instance)
   (let [agent-instance
         (ar/handle-generic-agent (assoc agent-instance :UserInstruction
                                         (s/trim
-                                         (str (or (:UserInstruction agent-instance) "")
-                                              (or (maybe-feature-instruction agent-instance) "")
-                                              "\n"
-                                              (or instructions "")
+                                         (str (or (maybe-feature-instruction agent-instance) "")
                                               "\n"
                                               (or (get-in agent-instance [:Context :UserInstruction]) "")))))
         ;; (when-let [ctx (:Context agent-instance)]

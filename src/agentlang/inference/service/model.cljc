@@ -15,7 +15,8 @@
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
             [agentlang.evaluator :as e]
-            [agentlang.lang.internal :as li]))
+            [agentlang.lang.internal :as li]
+            [agentlang.inference.service.planner :as planner]))
 
 (component :Agentlang.Core)
 
@@ -111,7 +112,8 @@
 
 (record
  :Agentlang.Core/Inference
- {:UserInstruction :String})
+ {:UserInstruction :String
+  :ChatId {:type :String :optional true}})
 
 (entity
  :Agentlang.Core/Agent
@@ -119,7 +121,6 @@
   :Type {:type :String :default "chat"}
   :Features {:check feature-list? :optional true}
   :AppUuid {:type :UUID :default u/get-app-uuid}
-  :ChatUuid {:type :UUID :default u/uuid-string}
   :UserInstruction {:type :String :optional true}
   :ToolComponents {:check tool-components-list? :optional true}
   :Input {:type :String :optional true}
@@ -170,29 +171,33 @@
  (fn [pat]
    (let [attrs (li/record-attributes pat)
          nm (:Name attrs)
-         input (preproc-agent-input-spec  (:Input attrs))
+         input (preproc-agent-input-spec (:Input attrs))
          tools (preproc-agent-tools-spec (:Tools attrs))
          delegates (preproc-agent-delegates (:Delegates attrs))
          tp (:Type attrs)
          llm (or (:LLM attrs) {:Type "openai"})
-         docs (:Documents attrs)]
+         docs (:Documents attrs)
+         new-attrs
+         (-> attrs
+             (cond->
+                 nm (assoc :Name (u/keyword-as-string nm))
+                 input (assoc :Input input)
+                 tools (assoc :Tools tools)
+                 delegates (assoc :Delegates delegates)
+                 docs (assoc :Documents (preproc-agent-docs docs))
+                 tp (assoc :Type (u/keyword-as-string tp))
+                 llm (assoc :LLM (u/keyword-as-string llm))))]
      (assoc pat :Agentlang.Core/Agent
-            (-> attrs
-                (cond->
-                    nm (assoc :Name (u/keyword-as-string nm))
-                    input (assoc :Input input)
-                    tools (assoc :Tools tools)
-                    delegates (assoc :Delegates delegates)
-                    docs (assoc :Documents (preproc-agent-docs docs))
-                    tp (assoc :Type (u/keyword-as-string tp))
-                    llm (assoc :LLM (u/keyword-as-string llm))))))))
+            (if (= "planner" (:Type new-attrs))
+              (planner/with-instructions new-attrs)
+              new-attrs)))))
 
 (defn maybe-define-inference-event [event-name]
   (if (cn/find-schema event-name)
     (if (cn/event? event-name)
       event-name
       (u/throw-ex (str "not an event - " event-name)))
-    (event {event-name {:UserInstruction :Agentlang.Kernel.Lang/String}})))
+    (event {event-name {:meta {:inherits :Agentlang.Core/Inference}}})))
 
 (defn maybe-input-as-inference [agent]
   (when-let [input (:Input agent)]
@@ -248,7 +253,7 @@
 
 (entity
  :Agentlang.Core/ChatSession
- {:Id {:type :UUID :guid true :default u/uuid-string}
+ {:Id {:type :String :guid true :default u/uuid-string}
   :Messages {:check agent-messages?}})
 
 (relationship
@@ -266,6 +271,13 @@
  {:Agentlang.Core/ChatSession? {}
   :-> [[:Agentlang.Core/AgentChatSession?
         :Agentlang.Core/LookupAgentChatSessions.Agent]]})
+
+(dataflow
+ :Agentlang.Core/CreateAgentChatSession
+ {:Agentlang.Core/ChatSession
+  {:Id :Agentlang.Core/CreateAgentChatSession.ChatId
+   :Messages :Agentlang.Core/CreateAgentChatSession.Messages}
+  :-> [[:Agentlang.Core/AgentChatSession :Agentlang.Core/CreateAgentChatSession.Agent]]})
 
 (dataflow
  :Agentlang.Core/ResetAgentChatSessions
@@ -410,11 +422,30 @@
      :Uri doc-uri
      :Title doc-title}}))
 
+(defn- context-chat-id [agent-instance]
+  (get-in agent-instance [:Context :ChatId]))
+
 (defn lookup-agent-chat-session [agent-instance]
+  (when-let [chat-sessions (seq (eval-event
+                                 {:Agentlang.Core/LookupAgentChatSessions
+                                  {:Agent agent-instance}}))]
+    (if-let [chat-id (context-chat-id agent-instance)]
+      (first (filter #(= (:Id %) chat-id) chat-sessions))
+      (first (filter #(= (:Id %) (:Name agent-instance)) chat-sessions)))))
+
+(defn create-agent-chat-session [agent-instance]
   (eval-event
-   {:Agentlang.Core/LookupAgentChatSessions
-    {:Agent agent-instance}}
-   first))
+   {:Agentlang.Core/CreateAgentChatSession
+    {:ChatId (or (context-chat-id agent-instance) (:Name agent-instance))
+     :Messages [{:role :system :content (:UserInstruction agent-instance)}]
+     :Agent agent-instance}}
+   identity true))
+
+(defn maybe-init-agent-chat-session [agent-instance]
+  (or (when (:CacheChatSession agent-instance)
+        (when-not (lookup-agent-chat-session agent-instance)
+          (create-agent-chat-session agent-instance)))
+      agent-instance))
 
 (defn update-agent-chat-session [chat-session messages]
   (eval-event
