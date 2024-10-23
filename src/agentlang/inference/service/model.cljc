@@ -128,6 +128,14 @@
   :Response {:type :Any :read-only true}
   :CacheChatSession {:type :Boolean :default true}})
 
+(defn- agent-of-type? [typ agent-instance]
+  (= typ (:Type agent-instance)))
+
+(def ocr-agent? (partial agent-of-type? "ocr"))
+(def classifier-agent? (partial agent-of-type? "classifier"))
+(def planner-agent? (partial agent-of-type? "planner"))
+(def eval-agent? (partial agent-of-type? "eval"))
+
 (defn- preproc-agent-tools-spec [tools]
   (when tools
     (mapv (fn [x]
@@ -166,6 +174,17 @@
             spec))
         docs))
 
+(defn- classifier-with-instructions [agent-instance]
+  (if-let [s (when-let [delegates (seq (mapv :To (:Delegates agent-instance)))]
+               (str "Classify the following user query into one of the categories - "
+                    (s/join ", " delegates)
+                    (when-let [ins (:UserInstruction agent-instance)]
+                      (str "\n"
+                           "The user query is: \"" ins "\"\n"
+                           "Return only the category name and nothing else.\n"))))]
+    (assoc agent-instance :UserInstruction s)
+    agent-instance))
+
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
  (fn [pat]
@@ -188,9 +207,10 @@
                  tp (assoc :Type (u/keyword-as-string tp))
                  llm (assoc :LLM (u/keyword-as-string llm))))]
      (assoc pat :Agentlang.Core/Agent
-            (if (= "planner" (:Type new-attrs))
-              (planner/with-instructions new-attrs)
-              new-attrs)))))
+            (cond
+              (planner-agent? new-attrs) (planner/with-instructions new-attrs)
+              (classifier-agent? new-attrs) (classifier-with-instructions new-attrs)
+              :else new-attrs)))))
 
 (defn maybe-define-inference-event [event-name]
   (if (cn/find-schema event-name)
@@ -425,26 +445,32 @@
 (defn- context-chat-id [agent-instance]
   (get-in agent-instance [:Context :ChatId]))
 
+(defn- as-chat-id [agent-instance]
+  (s/replace (s/replace (:Name agent-instance) "/" "_") "." "_"))
+
 (defn lookup-agent-chat-session [agent-instance]
   (when-let [chat-sessions (seq (eval-event
                                  {:Agentlang.Core/LookupAgentChatSessions
                                   {:Agent agent-instance}}))]
     (if-let [chat-id (context-chat-id agent-instance)]
       (first (filter #(= (:Id %) chat-id) chat-sessions))
-      (first (filter #(= (:Id %) (:Name agent-instance)) chat-sessions)))))
+      (let [n (as-chat-id agent-instance)]
+        (first (filter #(= (:Id %) n) chat-sessions))))))
 
-(defn create-agent-chat-session [agent-instance]
-  (eval-event
-   {:Agentlang.Core/CreateAgentChatSession
-    {:ChatId (or (context-chat-id agent-instance) (:Name agent-instance))
-     :Messages [{:role :system :content (:UserInstruction agent-instance)}]
-     :Agent agent-instance}}
-   identity true))
+(defn create-agent-chat-session [agent-instance alt-instruction]
+  (let [ins (or (:UserInstruction agent-instance) alt-instruction)]
+    (when ins
+      (eval-event
+       {:Agentlang.Core/CreateAgentChatSession
+        {:ChatId (or (context-chat-id agent-instance) (as-chat-id agent-instance))
+         :Messages [{:role :system :content ins}]
+         :Agent agent-instance}}
+       identity true))))
 
-(defn maybe-init-agent-chat-session [agent-instance]
+(defn maybe-init-agent-chat-session [agent-instance alt-instruction]
   (or (when (:CacheChatSession agent-instance)
         (when-not (lookup-agent-chat-session agent-instance)
-          (create-agent-chat-session agent-instance)))
+          (create-agent-chat-session agent-instance alt-instruction)))
       agent-instance))
 
 (defn update-agent-chat-session [chat-session messages]
@@ -464,11 +490,3 @@
     (when-let [sess (lookup-agent-chat-session agent)]
       (let [msgs (vec (filter #(= :system (:role %)) (:Messages sess)))]
         (update-agent-chat-session sess msgs)))))
-
-(defn- agent-of-type? [typ agent-instance]
-  (= typ (:Type agent-instance)))
-
-(def ocr-agent? (partial agent-of-type? "ocr"))
-(def classifier-agent? (partial agent-of-type? "classifier"))
-(def planner-agent? (partial agent-of-type? "planner"))
-(def eval-agent? (partial agent-of-type? "eval"))

@@ -200,12 +200,7 @@
       (compose-agents instance (provider/make-completion instance)))))
 
 (defn handle-classifier-agent [instance]
-  (let [s (if-let [delegates (seq (mapv :Name (model/find-agent-post-delegates instance)))]
-            (str "Classify the following user query into one of the categories - "
-                 (s/join ", " delegates) "\n"
-                 "The user query is: \"" (:UserInstruction instance) "\"\n"
-                 "Return only the category name and nothing else.\n")
-            (:UserInstruction instance))]
+  (let [s (str (:UserInstruction instance) "\nReturn only the category name and nothing else.\n")]
     (handle-chat-agent (assoc instance :UserInstruction s))))
 
 (defn- start-chat [agent-instance]
