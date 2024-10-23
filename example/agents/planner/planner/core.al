@@ -70,3 +70,21 @@
 ;; POST api/Planner.Core/InvokeEmployeeAgent
 ;; {"Planner.Core/InvokeEmployeeAgent":
 ;;   {"UserInstruction": "lookup all employees and for each employee send an email to manager@abc.com intrroducing themselves"}}
+
+(event
+ :CreateLead
+ {:Email :Email
+  :Name :String
+  :Created :Now})
+
+{:Agentlang.Core/Agent
+ {:Name :lead-handler
+  :Type :planner
+  :LLM :llm01
+  :Tools [:Planner.Core/Customer]
+  :UserInstruction (str "Create a new standard customer from incoming lead information.")
+  :Input :CreateLead}}
+
+;; Usage:
+;; POST api/Planner.Core/CreateLead
+;; {"Planner.Core/CreateLead": {"Email": "rk@acme.com", "Name": "Ray K"}}
