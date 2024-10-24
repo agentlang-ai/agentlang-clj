@@ -167,6 +167,12 @@
     f
     true))
 
+(def ^:private runtime-inited (atom nil))
+
+(defn- runtime-inited-with [value]
+  ;;(reset! runtime-inited value)
+  value)
+
 (defn init-runtime [model config]
   (let [store (store-from-config config)
         ev ((if (repl-mode? config)
@@ -207,17 +213,18 @@
 
 (defn prepare-runtime
   ([args [[model model-root] config]]
-   (let [config (finalize-config model config)
-         store (e/store-from-config (:store config))
-         config (assoc config :store-handle store)
-         components (or
-                     (if model
-                       (load-model model model-root nil config)
-                       (load-components args (:component-root config) config))
-                     (cn/component-names))]
-     (when (and (seq components) (every? keyword? components))
-       (log-seq! "Components" components))
-     [(init-runtime model config) config]))
+   (or @runtime-inited
+       (let [config (finalize-config model config)
+             store (e/store-from-config (:store config))
+             config (assoc config :store-handle store)
+             components (or
+                         (if model
+                           (load-model model model-root nil config)
+                           (load-components args (:component-root config) config))
+                         (cn/component-names))]
+         (when (and (seq components) (every? keyword? components))
+           (log-seq! "Components" components))
+         (runtime-inited-with [(init-runtime model config) config]))))
   ([model-info] (prepare-runtime nil model-info)))
 
 (defn prepare-repl-runtime [[[model model-root] config]]

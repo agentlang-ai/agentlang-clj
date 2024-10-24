@@ -185,6 +185,11 @@
     (assoc agent-instance :UserInstruction s)
     agent-instance))
 
+(defn- verify-name [n]
+  (when (or (s/index-of n "/") (s/index-of n "."))
+    (u/throw-ex (str "Invalid name " n ", cannot contain `/` or `.`")))
+  n)
+
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
  (fn [pat]
@@ -199,7 +204,7 @@
          new-attrs
          (-> attrs
              (cond->
-                 nm (assoc :Name (u/keyword-as-string nm))
+                 nm (assoc :Name (verify-name (u/keyword-as-string nm)))
                  input (assoc :Input input)
                  tools (assoc :Tools tools)
                  delegates (assoc :Delegates delegates)
@@ -398,6 +403,16 @@
   ([event callback] (eval-event event callback false))
   ([event] (eval-event event identity)))
 
+(defn lookup-agent-by-name [agent-name]
+  (eval-event
+   {:Agentlang.Core/Lookup_Agent
+    {:Name (u/keyword-as-string agent-name)}}
+   first))
+
+(defn agent-input-type [agent-instance]
+  (when-let [input (:Input agent-instance)]
+    (u/string-as-keyword input)))
+
 (defn- find-agent-delegates [preproc agent-instance]
   (eval-event
    {:Agentlang.Core/FindAgentDelegates
@@ -445,16 +460,13 @@
 (defn- context-chat-id [agent-instance]
   (get-in agent-instance [:Context :ChatId]))
 
-(defn- as-chat-id [agent-instance]
-  (s/replace (s/replace (:Name agent-instance) "/" "_") "." "_"))
-
 (defn lookup-agent-chat-session [agent-instance]
   (when-let [chat-sessions (seq (eval-event
                                  {:Agentlang.Core/LookupAgentChatSessions
                                   {:Agent agent-instance}}))]
     (if-let [chat-id (context-chat-id agent-instance)]
       (first (filter #(= (:Id %) chat-id) chat-sessions))
-      (let [n (as-chat-id agent-instance)]
+      (let [n (:Name agent-instance)]
         (first (filter #(= (:Id %) n) chat-sessions))))))
 
 (defn create-agent-chat-session [agent-instance alt-instruction]
@@ -462,7 +474,7 @@
     (when ins
       (eval-event
        {:Agentlang.Core/CreateAgentChatSession
-        {:ChatId (or (context-chat-id agent-instance) (as-chat-id agent-instance))
+        {:ChatId (or (context-chat-id agent-instance) (:Name agent-instance))
          :Messages [{:role :system :content ins}]
          :Agent agent-instance}}
        identity true))))
@@ -482,10 +494,7 @@
 
 (defn reset-agent-chat-session [agent]
   (if (string? agent)
-    (when-let [agent-instance (eval-event
-                      {:Agentlang.Core/Lookup_Agent
-                       {:Name agent}}
-                      first)]
+    (when-let [agent-instance (lookup-agent-by-name agent)]
       (reset-agent-chat-session agent-instance))
     (when-let [sess (lookup-agent-chat-session agent)]
       (let [msgs (vec (filter #(= :system (:role %)) (:Messages sess)))]
