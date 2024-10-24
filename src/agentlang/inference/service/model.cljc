@@ -16,6 +16,7 @@
             [agentlang.util.seq :as us]
             [agentlang.evaluator :as e]
             [agentlang.lang.internal :as li]
+            [agentlang.global-state :as gs]
             [agentlang.inference.service.planner :as planner]))
 
 (component :Agentlang.Core)
@@ -403,11 +404,32 @@
   ([event callback] (eval-event event callback false))
   ([event] (eval-event event identity)))
 
+(defn- maybe-agent-pattern [p]
+  (when (and (map? p)
+             (= :Agentlang.Core/Agent (li/record-name p)))
+    p))
+
 (defn lookup-agent-by-name [agent-name]
-  (eval-event
-   {:Agentlang.Core/Lookup_Agent
-    {:Name (u/keyword-as-string agent-name)}}
-   first))
+  #?(:clj
+     (eval-event
+      {:Agentlang.Core/Lookup_Agent
+       {:Name (u/keyword-as-string agent-name)}}
+      first)
+     :cljs
+     (let [valid-pats (us/nonils
+                       (map (fn [p]
+                              (cond
+                                (and (vector? p) (= :try (first p))) (maybe-agent-pattern (second p))
+                                (map? p) (maybe-agent-pattern p)
+                                :else nil))
+                            @gs/standalone-patterns))
+           n (u/keyword-as-string agent-name)]
+       (when-let [agent-pat (first
+                             (filter (fn [p]
+                                       (and (= :Agentlang.Core/Agent (li/record-name p))
+                                            (= n (:Name (li/record-attributes p)))))
+                                     valid-pats))]
+         (cn/make-instance agent-pat)))))
 
 (defn agent-input-type [agent-instance]
   (when-let [input (:Input agent-instance)]
