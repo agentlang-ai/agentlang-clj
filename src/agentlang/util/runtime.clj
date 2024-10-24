@@ -170,7 +170,7 @@
 (def ^:private runtime-inited (atom nil))
 
 (defn- runtime-inited-with [value]
-  ;;(reset! runtime-inited value)
+  (reset! runtime-inited value)
   value)
 
 (defn init-runtime [model config]
@@ -212,7 +212,7 @@
          (:authentication app-config)))
 
 (defn prepare-runtime
-  ([args [[model model-root] config]]
+  ([args [[model model-root] config :as abc]]
    (or @runtime-inited
        (let [config (finalize-config model config)
              store (e/store-from-config (:store config))
@@ -228,7 +228,8 @@
   ([model-info] (prepare-runtime nil model-info)))
 
 (defn prepare-repl-runtime [[[model model-root] config]]
-  (prepare-runtime [[model model-root] (assoc config repl-mode-key true)]))
+  ;; TODO: Fix duplicate invocation of `prepare-runtime` and set repl-mode-key to `true`.
+  (prepare-runtime [[model model-root] (assoc config repl-mode-key false)]))
 
 (defn find-model-to-read [args config]
   (or (seq (su/nonils args))
