@@ -74,6 +74,15 @@ http://localhost:8080/api/Chat/Session
 
 If all goes well, the agent will reply with a joke about itself!
 
+## Contributing
+
+If you are excited about cutting-edge AI and programming language technology, please consider becoming a contributor to the Agentlang project.
+
+There are two ways you can contribute:
+
+  1. Try out the language, report bugs and proposals in the project's [issue tracker](https://github.com/agentlang-ai/agentlang/issues).
+  2. Actively participate in the development of Agentlang and submit your patches as [pull requests](https://github.com/agentlang-ai/agentlang/pulls).
+
 ## License
 
 Copyright 2024 Fractl Inc.

@@ -47,18 +47,25 @@
       (when (seq attrs)
         {(u/string-as-keyword input-type) attrs}))))
 
-(defn run-inference-for-event [event instructions agent-instance]
+(defn- agent-context-as-string [ctx]
+  (let [avals (mapv (fn [[k v]] (str (name k) ": " v))
+                    (dissoc (cn/instance-attributes ctx) :EventContext))]
+    (if (seq avals)
+      (s/join ", " avals)
+      "")))
+
+(defn run-inference-for-event [event agent-instance]
   (when-not agent-instance (u/throw-ex (str "Agent not initialized for " event)))
   (log/debug (str "Processing response for inference " (cn/instance-type event) " - " (u/pretty-str agent-instance)))
-  (let [agent-instance
-        (ar/handle-generic-agent (assoc agent-instance :UserInstruction
-                                        (s/trim
-                                         (str (or (:UserInstruction agent-instance) "")
-                                              (or (maybe-feature-instruction agent-instance) "")
-                                              "\n"
-                                              (or instructions "")
-                                              "\n"
-                                              (or (get-in agent-instance [:Context :UserInstruction]) "")))))
+  (let [updated-instruction (s/trim
+                             (str (or (maybe-feature-instruction agent-instance) "")
+                                  "\n"
+                                  (if (model/planner-agent? agent-instance)
+                                    (agent-context-as-string (:Context agent-instance))
+                                    (or (get-in agent-instance [:Context :UserInstruction]) ""))))
+        _ (model/maybe-init-agent-chat-session agent-instance updated-instruction)
+        agent-instance (ar/handle-generic-agent (assoc agent-instance :UserInstruction updated-instruction))
+
         ;; (when-let [ctx (:Context agent-instance)]
         ;;   (str "\n" (or (:UserInstruction ctx) "")
         ;;        (when-let [input-inst (input-instance agent-instance ctx)]
