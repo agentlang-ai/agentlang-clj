@@ -38,7 +38,7 @@ The following code snippet shows a simple agent that can interact with a human u
 (component :Chat)
 
 {:Agentlang.Core/Agent
- {:Name :Chat/ExampleAgent
+ {:Name :example-agent
   :Input :Chat/Session
   :UserInstruction "You are an AI bot who tell jokes"}}
 ```

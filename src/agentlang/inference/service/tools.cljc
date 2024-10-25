@@ -2,12 +2,12 @@
   (:require [clojure.string :as s]
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
-            [agentlang.util.logger :as log]
             [agentlang.component :as cn]
             [agentlang.datafmt.json :as json]
             [agentlang.lang.raw :as raw]
             [agentlang.lang.internal :as li]
-            [agentlang.lang.kernel :as k]))
+            [agentlang.lang.kernel :as k]
+            #?(:clj [agentlang.util.logger :as log])))
 
 (defn- record-name-as-function-name [rec-name]
   (let [rec-name (li/make-path rec-name)]
@@ -93,8 +93,10 @@
                         {:type "object"
                          :properties (into {} (mapv (comp vec (partial take 2)) props))
                          :required (vec (mapv first (filter last props)))}}})
-                    (do (log/warn (str "cannot generate tool, no schema found for - " rec-name))
-                        nil))]
+                    (do
+                      #?(:clj (log/warn (str "cannot generate tool, no schema found for - " rec-name))
+                         :cljs (println (str "cannot generate tool, no schema found for - " rec-name)))
+                      nil))]
          (swap! tool-cache assoc rec-name tool-spec)
          tool-spec)))
   ([find-schema rec-name] (record-to-tool find-schema rec-name nil)))
