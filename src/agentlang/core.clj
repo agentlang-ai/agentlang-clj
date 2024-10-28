@@ -275,15 +275,15 @@
             identity
             (map #(apply (partial run-plain-option args) %)
                  {:run               #(ur/call-after-load-model
-                                        (first %) (fn []
-                                                    (run-service
-                                                      (ur/read-model-and-config options)
-                                                      (agentlang-nrepl-handler (first %) options))))
-                  :migrate               #(ur/call-after-load-model-migrate
-                                           (first %) (fn []
-                                                       (run-service
-                                                        (ur/read-model-and-config options)
-                                                        (agentlang-nrepl-handler (first %) options))))
+                                       (first %) (fn []
+                                                   (run-service
+                                                    (ur/read-model-and-config options)
+                                                    (agentlang-nrepl-handler (first %) options))))
+                  :migrate           #(ur/call-after-load-model-migrate
+                                       (first %) (fn []
+                                                   (run-service
+                                                    (ur/read-model-and-config options)
+                                                    (agentlang-nrepl-handler (first %) options))))
                   :compile           #(println (build/compile-model (first %)))
                   :build             #(println (build/standalone-package (first %)))
                   :install           #(println (build/install-model nil (first %)))
@@ -292,11 +292,11 @@
                   :repl              (ur/run-repl-func options
                                                        (fn [model-name opts]
                                                          (println (ur/force-call-after-load-model
-                                                                    model-name
-                                                                    (fn []
-                                                                      (let [model-info (ur/read-model-and-config opts)
-                                                                            [[ev store] _] (ur/prepare-repl-runtime model-info)]
-                                                                        (repl/run model-name store ev)))))))
+                                                                   model-name
+                                                                   (fn []
+                                                                     (let [model-info (ur/read-model-and-config opts)
+                                                                           [[ev store] _] (ur/prepare-repl-runtime model-info)]
+                                                                       (repl/run model-name store ev)))))))
                   :nrepl             (ur/run-repl-func options
                                                        (fn [model-name opts]
                                                          (let [nrepl-config (get-in opts [:-*-config-data-*- :nrepl] {})
@@ -304,16 +304,16 @@
                                                                port (or (:port nrepl-config) 7888)
                                                                server-opts (cond-> {:port    port
                                                                                     :handler (agentlang-nrepl-handler model-name opts)}
-                                                                                   bind (assoc :bind bind))]
+                                                                             bind (assoc :bind bind))]
                                                            (apply nrepl.server/start-server (mapcat identity server-opts))
                                                            (println (str "nREPL server running on port " port
                                                                          (when bind (str " and bound to " bind)))))))
                   :publish           #(println (publish-library %))
                   :deploy            #(println (d/deploy (:deploy basic-config) (first %)))
                   :db:migrate        #(ur/call-after-load-model
-                                        (first %)
-                                        (fn []
-                                          (db-migrate
-                                            (keyword (first %))
-                                            (second (ur/read-model-and-config options)))))}))
+                                       (first %)
+                                       (fn []
+                                         (db-migrate
+                                          (keyword (first %))
+                                          (second (ur/read-model-and-config options)))))}))
           (run-script args options)))))

@@ -31,8 +31,7 @@
     :-*-containers-*-
     :Agentlang.Kernel.UserApp
     :Agentlang.Kernel.Repl
-    :Agentlang.Core
-    })
+    :Agentlang.Core})
 
 (def non-instance-user-attr-keys
   #{type-tag-key id-attr type-key dirty-key})
@@ -67,7 +66,7 @@
   [components]
   (vec (set/difference (set components) (set (internal-component-names)))))
 
-(def ^:private components
+(def components
   "Table that maps component names to their definitions."
   #?(:clj  (ref {})
      :cljs (atom {})))
@@ -231,7 +230,7 @@
             path)
         c (first (li/split-path p))
         e (last (li/split-path p))]
-    
+
     (if-let [scm (get-in @components [c (get-model-version c) e mt/meta-key])]
       (assoc
        scm
@@ -331,15 +330,17 @@
    - :ComponentName/RecordName.AttributeName
   If the lookup succeeds, return the attribute schema as a map.
   Return `nil` on lookup failure."
-  ([component aref]
+  ([component version aref]
    (let [[recname attrname] (li/split-ref aref)]
      (if attrname
-       (when-let [rec (component-find [component (get-model-version component) :records recname])]
+       (when-let [rec (component-find [component (or version (get-model-version component)) :records recname])]
          (find-attribute-schema-internal (get-in rec [:schema attrname])))
        (when-let [scm (component-find [component (get-model-version component) :attributes aref])]
          (if-let [parent-type (:type scm)]
            (merge (apply find-attribute-schema-internal (li/split-path parent-type)) scm)
            scm)))))
+  ([component aref]
+   (find-attribute-schema-internal component nil aref))
   ([path]
    (let [[component aref] (li/split-path path)]
      (find-attribute-schema-internal component aref))))
@@ -350,34 +351,58 @@
   ([path]
    (dissoc (find-attribute-schema-internal path) :meta)))
 
+(defn find-attribute-schema-version
+  [version path]
+  (let [[component aref] (li/split-path path)]
+    (find-attribute-schema-internal component version aref)))
+
 (defn all-attributes [component]
   (component-find [component (get-model-version component) :attributes]))
 
-
 (defn find-record-schema
+  ([component version aref]
+   (component-find [component (or version (get-model-version component)) :records aref]))
   ([component aref]
-   (component-find [component (get-model-version component) :records aref]))
+   (find-record-schema component nil aref))
   ([path]
    (let [[component aref] (li/split-path path)]
      (find-record-schema component aref))))
 
-(defn- find-record-schema-by-type [typ path]
-  (when-let [scm (find-record-schema path)]
+(defn find-record-schema-version
+  [version path]
+  (let [[component aref] (li/split-path path)]
+    (find-record-schema component version aref)))
+
+(defn- find-record-schema-by-type-version [typ version path]
+  (when-let [scm (find-record-schema-version version path)]
     (when (= (type-tag-key scm) typ)
       scm)))
+
+(defn- find-record-schema-by-type [typ path]
+  (find-record-schema-by-type-version typ nil path))
 
 (def find-entity-schema (partial find-record-schema-by-type :entity))
 (def find-event-schema (partial find-record-schema-by-type :event))
 
-(defn find-schema [path]
-  (u/first-applied [find-entity-schema :entity
-                    find-event-schema :event
-                    find-record-schema :record
-                    find-attribute-schema :attribute]
-                   [path]))
+(defn find-schema
+  ([path version]
+   (let [fn-find-entity-schema (partial find-record-schema-by-type-version :entity version)
+         fn-find-event-schema (partial find-record-schema-by-type-version :event version)
+         fn-find-record-schema (partial find-record-schema-version version)
+         fn-find-attribute-schema (partial find-attribute-schema-version version)]
+     (u/first-applied [fn-find-entity-schema :entity
+                       fn-find-event-schema :event
+                       fn-find-record-schema :record
+                       fn-find-attribute-schema :attribute]
+                      [path])))
+  ([path]
+   (find-schema path nil)))
 
-(defn fetch-schema [rec-name]
-  (:schema (second (find-schema rec-name))))
+(defn fetch-schema
+  ([rec-name version]
+   (:schema (second (find-schema rec-name version))))
+  ([rec-name]
+   (fetch-schema rec-name nil)))
 
 (defn fetch-entity-schema [entity-name]
   (:schema (find-entity-schema entity-name)))
@@ -483,8 +508,8 @@
   "Make a copy of the given instance and set the new attributes."
   [inst newattrs]
   (u/make-record-instance (instance-type-tag inst)
-                        (instance-type inst)
-                        newattrs))
+                          (instance-type inst)
+                          newattrs))
 
 (defn attribute-names
   "Return names of attributes from schema as a set."
@@ -806,7 +831,7 @@
   (if-let [typname (li/extract-attribute-name (get (:schema schema) attr-name))]
     (if-let [ascm (find-attribute-schema typname)]
       (valid-attribute-value attr-name attr-val ascm)
-     (raise-error :schema-not-found [attr-name]))
+      (raise-error :schema-not-found [attr-name]))
     (raise-error :attribute-not-in-schema [attr-name])))
 
 (def inferred-event-schema {:inferred true})
@@ -816,10 +841,13 @@
     (inferred-event-schema? scm)
     (:inferred schema)))
 
-(defn ensure-schema [recname]
-  (if-let [rec (find-record-schema recname)]
-    (:schema rec)
-    (raise-error :schema-not-found [recname])))
+(defn ensure-schema 
+  ([recname version]
+   (if-let [rec (find-record-schema-version version recname)]
+     (:schema rec)
+     (raise-error :schema-not-found [recname])))
+  ([recname]
+   (ensure-schema recname nil)))
 
 (defn ensure-entity-schema [recname]
   (if-let [scm (fetch-entity-schema recname)]
@@ -924,9 +952,9 @@
    All attribute values will be validated using the associated value predicates.
    full-record-name must be in the form - :ComponentName/RecordName.
    Return the new record on success, return an :error record on failure."
-  ([record-name attributes validate?]
+  ([record-name version attributes validate?]
    (let [record-name (li/split-path record-name)
-         schema (ensure-schema record-name)
+         schema (ensure-schema record-name version)
          attrs-with-insts (maps-to-insts attributes validate?)
          attrs (if validate?
                  (validate-record-attributes record-name attrs-with-insts schema)
@@ -934,6 +962,8 @@
      (if (error? attrs)
        attrs
        (u/make-record-instance (type-tag-of record-name) record-name attrs))))
+  ([record-name attributes validate?]
+   (make-instance record-name nil attributes validate?))
   ([record-name attributes]
    (make-instance record-name attributes true))
   ([m]
@@ -1345,7 +1375,7 @@
 
 (defn make-future [future-obj timeout-ms]
   (make-instance :Agentlang.Kernel.Lang/Future {:Result future-obj
-                                             :TimeoutMillis timeout-ms}))
+                                                :TimeoutMillis timeout-ms}))
 
 (def future-object? (partial instance-of? :Agentlang.Kernel.Lang/Future))
 
@@ -1826,9 +1856,9 @@
    [:Create :Update :Delete :Lookup :LookupAll]))
 
 (defn- all-prepost-events [recname]
-   (mapv
-    #(apply prepost-event-name %)
-    (li/prepost-event-heads recname)))
+  (mapv
+   #(apply prepost-event-name %)
+   (li/prepost-event-heads recname)))
 
 (defn- only-internal-attrs [scm]
   (when-not (inferred-event-schema? scm)

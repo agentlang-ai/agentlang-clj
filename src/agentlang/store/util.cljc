@@ -33,13 +33,17 @@
       (or (cn/model-version (cn/model-for-component component-name))
           "0.0.1")))))
 
-(defn entity-table-name [entity-name]
-  (let [[component-name r] (li/split-path entity-name)
-        v (schema-version component-name)
-        en (str (db-ident r) "_" v)]
-    (if (cn/entity-schema-predefined? entity-name)
-      en
-      (str (db-schema-for-component component-name) "__" en))))
+(defn entity-table-name
+  ([entity-name version]
+   (let [[component-name r] (li/split-path entity-name)
+         v (when version (escape-graphic-chars version))
+         v (or v (schema-version component-name))
+         en (str (db-ident r) "_" v)]
+     (if (cn/entity-schema-predefined? entity-name)
+       en
+       (str (db-schema-for-component component-name) "__" en))))
+  ([entity-name]
+   (entity-table-name entity-name nil)))
 
 (defn component-meta-table-name
   ([component-name model-version]
@@ -170,7 +174,7 @@
      :else v)])
 
 (defn result-as-instance
-  ([entity-name entity-schema normalize-colname result]
+  ([entity-name entity-version entity-schema normalize-colname result]
    (let [attr-names (cn/attribute-names entity-schema)
          rp (or normalize-colname remove-prefix)]
      (loop [result-keys (keys result), obj {}]
@@ -188,21 +192,26 @@
                  (u/throw-ex (str "cannot map " rk " to an attribute in " entity-name))))))
          (cn/make-instance
           entity-name
+          entity-version
           (into {} (mapv (partial
                           normalize-attribute entity-schema
                           (cn/keyword-type-attributes entity-schema attr-names))
                          obj))
           false)))))
+  ([entity-name entity-schema normalize-colname result]
+   (result-as-instance entity-name nil entity-schema normalize-colname result))
   ([entity-name entity-schema result]
    (result-as-instance entity-name entity-schema nil result))
   ([entity-name result]
    (result-as-instance entity-name (cn/fetch-schema entity-name) nil result)))
 
 (defn results-as-instances
+  ([entity-name entity-version normalize-colname results]
+   (mapv (partial result-as-instance entity-name (cn/fetch-schema entity-name entity-version) normalize-colname) results))
   ([entity-name normalize-colname results]
-   (mapv (partial result-as-instance entity-name (cn/fetch-schema entity-name) normalize-colname) results))
+   (results-as-instances entity-name nil normalize-colname results))
   ([entity-name results]
-   (results-as-instances entity-name nil results)))
+   (results-as-instances entity-name nil nil results)))
 
 (def compiled-query :compiled-query)
 (def raw-query :raw-query)

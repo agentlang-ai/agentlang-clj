@@ -310,7 +310,7 @@
   ([model-name f ignore-load-error]
    (gs/in-script-mode!)
    (when (try
-           (build/load-model model-name) 
+           (build/load-model model-name)
            (build/load-model-migration model-name)
            (catch Exception ex
              (if ignore-load-error true (throw ex))))

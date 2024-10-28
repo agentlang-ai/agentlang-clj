@@ -192,7 +192,7 @@
 
 (declare compile-pattern)
 
-(defn- compile-relational-entity-query [ctx entity-name query]
+(defn- compile-relational-entity-query [ctx entity-name query] 
   (let [q (i/expand-query
            entity-name
            (mapv query-param-process query))
@@ -399,6 +399,8 @@
      (when-not (cn/find-entity-schema n)
        (u/throw-ex (str "cannot query undefined entity - " n)))
      (let [q (k pat)
+           version (get-in q [:meta :version])
+           q (dissoc q :meta)
            w (when (seq (:where q))
                (w/postwalk process-complex-query (:where q)))
            j (seq (:join pat))
@@ -407,6 +409,7 @@
                 (vec lj))
            fp (assoc q :from n :where w
                      :join j :left-join lj
+                     :version version
                      :with-attributes (if (or j lj)
                                         (ensure-with-attributes
                                          (li/normalize-name k)
@@ -501,10 +504,10 @@
 
 (declare compile-query-command)
 
-(defn- compile-map [ctx pat]
+(defn- compile-map [ctx pat] 
   (cond
     (complex-query-pattern? pat)
-    (let [[k v] [(first (keys pat)) (first (vals pat))]]
+    (let [[k v] [(first (keys pat)) (first (vals pat))]] 
       (if (pi/proper-path? v)
         (compile-map ctx {(li/normalize-name k) {li/path-query-tag v}})
         (compile-query-command ctx (query-map->command pat))))

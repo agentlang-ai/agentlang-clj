@@ -33,10 +33,10 @@
 
 (def id-type (sql/attribute-to-sql-type :Agentlang.Kernel.Lang/UUID))
 
-(defn compile-query [query-pattern]
+(defn compile-query [query-pattern] 
   (let [ename (:from query-pattern)]
     (sql/format-sql
-     (stu/entity-table-name ename)
+     (stu/entity-table-name ename (:version query-pattern))
      (cn/view? ename)
      (if (> (count (keys query-pattern)) 2)
        (dissoc query-pattern :from)
