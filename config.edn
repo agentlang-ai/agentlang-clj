@@ -1,1 +1,14 @@
-{:service {:port 8000}}
+{:service {:port 8000}
+ :llms {:llm01 {:Type :openai
+                :Config {:ApiKey #$ OPENAI_API_KEY
+                         :CompletionApiEndpoint "https://api.openai.com/v1/chat/completions"
+                         :CompletionModel "gpt-3.5-turbo"}}}
+ :connections {:my-sfdc-connection {:Type :sfdc
+                                    :Parameters {:ClientId "12344444" :ClientSecret "xyz"}
+                                    :SetParams ["auth-token" "refresh-token"]}
+               :my-github-connection {:Type :github
+                                      :Parameters {:ClientId "git00001" :ClientSecret "7878djkjfkfk"}
+                                      :SetParams ["auth-token"]
+                                      :NotificationChannel "email:manager@acme.com"}
+                :my-slack-connection {:Type :slack
+                                      :Parameters {:ChannelId "00001001" :ApiKey "4343434343434"}}}}

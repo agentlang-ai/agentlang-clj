@@ -20,6 +20,7 @@
     [agentlang.lang.tools.build :as build]
     [agentlang.auth :as auth]
     [agentlang.rbac.core :as rbac]
+    [agentlang.connections.client :as cc]
     [agentlang.inference.embeddings.core :as ec]
     [agentlang.inference.service.core :as isc]
     [fractl-config-secrets-reader.core :as sr]))
@@ -136,7 +137,9 @@
                         {:Agentlang.Core/LLM
                          (merge {:Name llm-name} llm-attrs)})}})))]
       (when (not= :ok (:status r))
-        (u/throw-ex (str "failed to initialize LLM - " llm-name))))))
+        (u/throw-ex (str "failed to initialize LLM - " llm-name)))))
+  (doseq [[conn-name conn-attrs] (:connections config)]
+    (cc/configure-new-connection conn-name conn-attrs)))
 
 (defn run-appinit-tasks! [evaluator init-data]
   (e/save-model-config-instances)
