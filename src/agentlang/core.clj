@@ -32,7 +32,8 @@
             [agentlang.swagger.docindex :as docindex]
             [agentlang.graphql.generator :as gg]
             [agentlang.util.runtime :as ur]
-            [agentlang.lang.tools.nrepl.core :as nrepl])
+            [agentlang.lang.tools.nrepl.core :as nrepl]
+            [agentlang.evaluator :as ev])
   (:import [java.util Properties]
            [java.io File]
            [org.apache.commons.exec CommandLine Executor DefaultExecutor])
@@ -48,6 +49,13 @@
        (log/info (str "Server config - " server-cfg))
        (h/run-server evaluator server-cfg nrepl-handler))))
   ([model-info nrepl-handler] (run-service nil model-info nrepl-handler)))
+
+(defn run-migrations
+  [model-info _]
+  (let [[[_ _] config] (ur/prepare-runtime nil model-info)]
+    (when-let [server-cfg (ur/make-server-config config)]
+      (ev/eval-all-dataflows {:Agentlang.Kernel.Lang/Migrations {}})
+      (log/info (str "Migrations config - " server-cfg)))))
 
 (defn generate-swagger-doc [model-name args]
   (let [model-path (first args)]
@@ -281,7 +289,7 @@
                                                     (agentlang-nrepl-handler (first %) options))))
                   :migrate           #(ur/call-after-load-model-migrate
                                        (first %) (fn []
-                                                   (run-service
+                                                   (run-migrations 
                                                     (ur/read-model-and-config options)
                                                     (agentlang-nrepl-handler (first %) options))))
                   :compile           #(println (build/compile-model (first %)))

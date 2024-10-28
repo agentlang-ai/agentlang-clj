@@ -96,6 +96,7 @@
 (event
  :Agentlang.Kernel.Lang/AppInit
  {:Data :Agentlang.Kernel.Lang/Map})
+(event :Agentlang.Kernel.Lang/Migrations {})
 (event :Agentlang.Kernel.Lang/InitConfig {})
 (record
  :Agentlang.Kernel.Lang/InitConfigResult
