@@ -137,7 +137,7 @@
                         {:Agentlang.Core/LLM
                          (merge {:Name llm-name} llm-attrs)})}})))]
       (when (not= :ok (:status r))
-        (u/throw-ex (str "failed to initialize LLM - " llm-name)))))
+        (log/error (str "failed to initialize LLM - " llm-name)))))
   (doseq [[conn-name conn-attrs] (:connections config)]
     (cc/configure-new-connection conn-name conn-attrs)))
 

@@ -1,5 +1,6 @@
 (ns agentlang.connections.client
   (:require [agentlang.util :as u]
+            [agentlang.util.logger :as log]
             [agentlang.util.http :as http]
             [agentlang.global-state :as gs]))
 
@@ -16,12 +17,12 @@
                       nil {:ConnectionManager.Core/Create_ConnectionConfig
                            {:Instance inst}} :json))]
     (when (not= "ok" (:status r))
-      (u/throw-ex (str "failed to configure connection - " conn-name)))
+      (log/error (str "failed to configure connection - " conn-name)))
     inst))
 
 (def cached-connection (atom nil))
 
-(defn connection-manager-client-create-connection [conn-name]
+(defn create-connection [conn-name]
   (or @cached-connection
       (let [r (first
                (http/POST (str (connections-api-host) "/api/ConnectionManager.Core/Connection")
@@ -34,7 +35,7 @@
             conn)
           (u/throw-ex (str "failed to get connection - " conn-name))))))
 
-(defn connection-manager-client-mark-connection-for-refresh [conn]
+(defn mark-connection-for-refresh [conn]
   (let [connid (:ConnectionId conn)]
     (when (get @cached-connection connid)
       (let [r (http/do-request :delete (str (connections-api-host) "/api/ConnectionManager.Core/ActiveConnection/" connid))]
