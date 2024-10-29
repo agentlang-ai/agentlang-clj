@@ -184,7 +184,6 @@
           (u/throw-ex (str "failed to get access token with error: " (:status resp)))))))
 
 (def ^:private user-state-delim "._.")
-(def ^:private user-state-delim-len (count user-state-delim))
 
 (defn- make-authorize-url [{domain :domain
                             auth-server :auth-server
@@ -260,16 +259,24 @@
 
 (defmethod auth/authenticate-session tag [{cookie :cookie
                                            client-url :client-url
+                                           cookie-domain :cookie-domain
                                            :as auth-config}]
-  (let [user-state (when client-url (b64/encode-string client-url))
+  (let [user-state (str (b64/encode-string client-url) user-state-delim
+                        (b64/encode-string cookie-domain))
         auth-config (assoc auth-config :user-state user-state)]
     (if-let [sid (auth/cookie-to-session-id auth-config cookie)]
       (do
         (log/debug (str "auth/authenticate-session with cookie " sid))
         (if (sess/lookup-session-cookie-user-data sid)
-          {:status :redirect-found :location client-url}
-          {:status :redirect-found :location (first (make-authorize-url auth-config))}))
-      {:status :redirect-found :location (first (make-authorize-url auth-config))})))
+          {:status :redirect-found
+           :location client-url
+           :cookie-domain cookie-domain}
+          {:status :redirect-found
+           :location (first (make-authorize-url auth-config))
+           :cookie-domain cookie-domain}))
+      {:status :redirect-found
+       :location (first (make-authorize-url auth-config))
+       :cookie-domain cookie-domain})))
 
 (defn- cleanup-roles [roles default-role]
   (let [roles (if (vector? roles)
@@ -279,9 +286,16 @@
       roles
       default-role)))
 
-(defn- client-url-from-state [state]
-  (when-let [i (s/last-index-of state user-state-delim)]
-    (b64/decode-to-string (subs state (+ i user-state-delim-len)))))
+(defn- get-nth-state [state n]
+  (let [st (get (s/split state (re-pattern user-state-delim)) n)]
+    (when (seq st)
+      (b64/decode-to-string st))))
+
+(defn client-url-from-state [state]
+  (get-nth-state state 1))
+
+(defn cookie-domain-from-state [state]
+  (get-nth-state state 2))
 
 (defmethod auth/handle-auth-callback tag [{client-url :client-url args :args :as auth-config}]
   (let [request (:request args)
@@ -292,6 +306,7 @@
         result {:authentication-result (us/snake-to-kebab-keys tokens)}
         auth-status (auth/verify-token auth-config [[session-id result] nil])
         client-url (or (client-url-from-state (:state params)) client-url)
+        cookie-domain (cookie-domain-from-state (:state params))
         user (:username auth-status)]
     (log/debug (str "auth/handle-auth-callback returning session-cookie " session-id " to " client-url))
     (when-not (sess/ensure-local-user
@@ -307,7 +322,8 @@
               session-id (assoc result :username user)))
       {:status :redirect-found
        :location client-url
-       :set-cookie (str "sid=" session-id)}
+       :set-cookie (str "sid=" session-id)
+       :cookie-domain cookie-domain}
       {:error "failed to create session"})))
 
 (defmethod auth/session-user tag [{req :request cookie :cookie :as auth-config}]
