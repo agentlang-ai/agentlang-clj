@@ -1,5 +1,6 @@
 (ns agentlang.lang.kernel
-  (:require [agentlang.util :as u]
+  (:require [clojure.string :as s]
+            [agentlang.util :as u]
             [agentlang.lang.internal :as li]
             [agentlang.lang.datetime :as dt]
             [agentlang.component :as cn]))
@@ -58,12 +59,19 @@
      li/name?
      (li/split-path k))))
 
-(def ^:private email-pattern
-  #"[a-zA-Z0-9!#$%&'*+/=?^_`{|}~\-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~\-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?")
+(def ^:private email-pattern #"@")
 
 (defn email? [x]
   (and (string? x)
-       (re-matches email-pattern x)))
+       ;; Technically most printable characters, including international characters,
+       ;; are allowed in an email address. So we just check if there's a max-64 character local-part
+       ;; and a max-255 character domain part separated by an `@` character. (There seems to be an
+       ;; erratum to rfc3696 that limits the total length to 254 characters, but we just stick to the
+       ;; maximum length allowed by the rfc).
+       (let [parts (s/split x email-pattern)]
+         (and (= 2 (count parts))
+              (<= 1 (count (first parts)) 64)
+              (<= 1 (count (second parts)) 255)))))
 
 (def numeric-types
   [:Agentlang.Kernel.Lang/Int
