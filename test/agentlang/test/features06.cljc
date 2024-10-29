@@ -108,7 +108,7 @@
     (let [rs (mapv ls/introspect (lr/fetch-all-patterns :Msb))]
       (is (= pats (mapv ls/raw rs))))))
 
-(deftest await
+(deftest await-construct
   (let [a (atom nil), done (atom nil)]
     (defn reset-done! [] (reset! done true))
     (defn reset-a! [inst]
