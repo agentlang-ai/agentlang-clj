@@ -54,7 +54,9 @@
  {:User {:type :String, :guid true}, :LoggedIn :Boolean})
 (entity
  :Agentlang.Kernel.Identity/SessionCookie
- {:Id {:type :String, :guid true}, :UserData :Any, :CreatedTimeMillis :Int64})
+ {:Id {:type :String, :guid true},
+  :UserData :Any,
+  :CreatedTimeMillis :Int64})
 (event
  :Agentlang.Kernel.Identity/UpdateUser
  {:UserDetails :Agentlang.Kernel.Identity/UserExtra})
@@ -72,6 +74,7 @@
 (event
  :Agentlang.Kernel.Identity/UserLogin
  {:Username :String, :Password :Password})
+(event :Agentlang.Kernel.Identity/OnUserLogin {:Username :String})
 (event :Agentlang.Kernel.Identity/FindUser {:Email :Email})
 (dataflow
  :Agentlang.Kernel.Identity/FindUser
@@ -97,4 +100,4 @@
  [:delete :Agentlang.Kernel.Rbac/RoleAssignment :purge])
 (def
  Agentlang_Kernel_Identity___COMPONENT_ID__
- "bffea2fc-6bd6-424e-bc79-0961a3efe65a")
+ "64a4783f-e243-4201-9fbe-7780033c4286")

@@ -238,7 +238,9 @@
           (catch Exception ex
             (log/error ex)))]
     (if (= (:status result) 200)
-      (fetch-tokens config (json/decode (:body result)))
+      (let [r (fetch-tokens config (json/decode (:body result)))]
+        (auth/on-user-login (:Username event))
+        r)
       (log/warn (str "login failed: " result)))))
 
 (defmethod auth/upsert-user tag [req]

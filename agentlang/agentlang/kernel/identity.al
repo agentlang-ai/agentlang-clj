@@ -85,6 +85,10 @@
   :Password :Password})
 
 (event
+ :OnUserLogin
+ {:Username :String})
+
+(event
  :FindUser
  {:Email :Email})
 

@@ -1,4 +1,7 @@
-(ns agentlang.auth.core)
+(ns agentlang.auth.core
+  (:require [agentlang.evaluator :as ev]
+            [agentlang.component :as cn]
+            [agentlang.util.logger :as log]))
 
 (def service-tag :service)
 
@@ -62,3 +65,16 @@
 
 (def okta? (partial service? :okta))
 (def cognito? (partial service? :cognito))
+
+(defn on-user-login [user-name]
+  #?(:clj
+     (try
+       (let [r (ev/eval-all-dataflows
+                (cn/make-instance
+                 :Agentlang.Kernel.Identity/OnUserLogin
+                 {:Username user-name}))]
+         (log/debug (str "on-user-login result: " r))
+         r)
+       (catch Exception ex
+         (log/error (str "on-user-login event failed: " (.getMessage ex)))
+         (log/debug ex)))))
