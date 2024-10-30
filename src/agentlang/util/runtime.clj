@@ -173,6 +173,8 @@
   (reset! runtime-inited value)
   value)
 
+(defn get-runtime-init-result [] @runtime-inited)
+
 (defn init-runtime [model config]
   (let [store (store-from-config config)
         ev ((if (repl-mode? config)
@@ -301,14 +303,19 @@
   (let [basic-config (load-config options)]
     [basic-config (assoc options config-data-key basic-config)]))
 
+(def ^:private loaded-models (u/make-cell #{}))
+
 (defn call-after-load-model
   ([model-name f ignore-load-error]
    (gs/in-script-mode!)
-   (when (try
-           (build/load-model model-name)
-           (catch Exception ex
-             (if ignore-load-error true (throw ex))))
-     (f)))
+   (if (some #{model-name} @loaded-models)
+     (f)
+     (when (try
+             (when (build/load-model model-name)
+               (u/safe-set loaded-models (conj @loaded-models model-name)))
+             (catch Exception ex
+               (if ignore-load-error true (throw ex))))
+       (f))))
   ([model-name f]
    (call-after-load-model model-name f false)))
 

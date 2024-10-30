@@ -95,6 +95,9 @@
     pat))
 
 
+(defn- component-name-as-ns [cn]
+  (symbol (s/lower-case (subs (str cn) 1))))
+
 #?(:clj
    (do
      (def ^:dynamic *parse-expressions* true)
@@ -104,8 +107,10 @@
 
      (defn evaluate-expression [exp]
        (when (and (seqable? exp) (= 'component (first exp)))
+         (eval `(ns ~(component-name-as-ns (second exp))))
+         (use-lang)
          (doseq [dep (:refer (first (nthrest exp 2)))]
-           (let [dep-ns (symbol (s/lower-case (subs (str dep) 1)))]
+           (let [dep-ns (component-name-as-ns dep)]
              (use [dep-ns]))))
        (eval exp))
 
@@ -349,4 +354,3 @@
        (let [continuation (fn [_]
                             (load-components-from-model model (partial callback :comp)))]
          (load-model-dependencies model (partial callback :deps continuation))))))
-
