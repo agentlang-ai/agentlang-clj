@@ -25,7 +25,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-				    "raw": "{\"Test.Sample.Library.Identity/User\": {\"UserName\": \"New Book Publisher\", \"Designation\": \"incharge\", \"Password\": \"publishingnewbooks\", \"Email\": \"book@publisher.io\"}}",
+				    "raw": "{\"Library.Identity/User\": {\"UserName\": \"New Book Publisher\", \"Designation\": \"incharge\", \"Password\": \"publishingnewbooks\", \"Email\": \"book@publisher.io\"}}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -33,7 +33,7 @@
 					}
 				},
 				"url": {
-					"raw": "http://localhost:8000/api/Test.Sample.Library.Identity/User",
+					"raw": "http://localhost:8000/api/Library.Identity/User",
 					"protocol": "http",
 					"host": [
 						"localhost"
@@ -41,7 +41,7 @@
 					"port": "8000",
 					"path": [
 						"api",
-						"Test.Sample.Library.Identity",
+					        "Library.Identity",
 						"User"
 					]
 				}
@@ -68,7 +68,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\"Test.Sample.Library.Catalog/Book\": {\"Name\": \"The Godfather\", \"ISBN\": \"123\", \"Publisher\": \"book@publisher.io\"}}",
+					"raw": "{\"Library.Catalog/Book\": {\"Name\": \"The Godfather\", \"ISBN\": \"123\", \"Publisher\": \"book@publisher.io\"}}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -76,7 +76,7 @@
 					}
 				},
 				"url": {
-					"raw": "http://localhost:8000/api/Test.Sample.Library.Catalog/Book",
+					"raw": "http://localhost:8000/api/Library.Catalog/Book",
 					"protocol": "http",
 					"host": [
 						"localhost"
@@ -84,7 +84,7 @@
 					"port": "8000",
 					"path": [
 						"api",
-						"Test.Sample.Library.Catalog",
+						"Library.Catalog",
 						"Book"
 					]
 				}
@@ -111,7 +111,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-				    "raw": "{\"Test.Sample.Library.Identity/Member\": {\"Name\": \"Leo Tolstoy\",\"UserName\": \"lt\",\"Password\": \"tolstoy123\", \"Email\": \"leo@tolstoy.io\", \"DOB\": \"1828-09-09\",\"Designation\": \"life\"}}",
+				    "raw": "{\"Library.Identity/Member\": {\"Name\": \"Leo Tolstoy\",\"UserName\": \"lt\",\"Password\": \"tolstoy123\", \"Email\": \"leo@tolstoy.io\", \"DOB\": \"1828-09-09\",\"Designation\": \"life\"}}",
 				    "options": {
 						"raw": {
 							"language": "json"
@@ -119,7 +119,7 @@
 					}
 				},
 				"url": {
-					"raw": "http://localhost:8000/api/Test.Sample.Library.Identity/Member",
+					"raw": "http://localhost:8000/api/Library.Identity/Member",
 					"protocol": "http",
 					"host": [
 						"localhost"
@@ -127,7 +127,7 @@
 					"port": "8000",
 					"path": [
 						"api",
-						"Test.Sample.Library.Identity",
+						"Library.Identity",
 						"Member"
 					]
 				}
@@ -154,7 +154,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\"Test.Sample.Library.Ledger/CheckoutBook\": {\"Book\": \"123\",\"Member\": \"leo@tolstoy.io\",\"Designation\": \"life\", \"Backend\": \"Postmark\",\"Receiver\": \"test@test.io\",\"Subject\": \"Book Checked out\", \"Text\": \"You have checked out Crime and Punishment. Please return it after 2 weeks.\",\"To\": \"+9779841XXXXXX\"}}",
+					"raw": "{\"Library.Ledger/CheckoutBook\": {\"Book\": \"123\",\"Member\": \"leo@tolstoy.io\",\"Designation\": \"life\", \"Backend\": \"Postmark\",\"Receiver\": \"test@test.io\",\"Subject\": \"Book Checked out\", \"Text\": \"You have checked out Crime and Punishment. Please return it after 2 weeks.\",\"To\": \"+9779841XXXXXX\"}}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -162,7 +162,7 @@
 					}
 				},
 				"url": {
-					"raw": "http://localhost:8000/api/Test.Sample.Library.Ledger/CheckoutBook",
+					"raw": "http://localhost:8000/api/Library.Ledger/CheckoutBook",
 					"protocol": "http",
 					"host": [
 						"localhost"
@@ -170,7 +170,7 @@
 					"port": "8000",
 					"path": [
 						"api",
-						"Test.Sample.Library.Ledger",
+						"Library.Ledger",
 						"CheckoutBook"
 					]
 				}
