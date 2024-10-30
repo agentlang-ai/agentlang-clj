@@ -1,9 +1,6 @@
 (component
  :Library.Ledger
- {:clj-import '[(:use [agentlang.lang.string]
-                      [agentlang.lang.b64])
-                (:require [agentlang.component :as cn])]
-  :refer [:Library.Identity :Library.Catalog]})
+ {:refer [:Library.Identity :Library.Catalog]})
 
 (entity {:CheckoutLog
          {:Member       {:ref     :Library.Identity/Member.Email

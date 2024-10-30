@@ -1,13 +1,10 @@
 (component
  :Library.Catalog
- {:clj-import '[(:use [agentlang.lang.string]
-                      [agentlang.lang.b64])
-                (:require [agentlang.component :as cn])]
+ {:clj-import '[(:require [agentlang.lang.string :as str])]
   :refer [:Library.Identity]})
 
-(def valid-name? (partial string-in-range? 3 120))
-(def app-name? valid-name?)
-(def app-artifact? (partial string-in-range? 1 10485760)) ; max size - 10MB
+(defn app-name? [s]
+  (str/string-in-range? 3 120 s))
 
 (entity {:Book
          {:Name {:check library.catalog/app-name?}

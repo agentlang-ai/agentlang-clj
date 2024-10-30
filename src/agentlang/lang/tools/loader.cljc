@@ -105,13 +105,28 @@
      (defn use-lang []
        (use '[agentlang.lang]))
 
+     (defn do-clj-imports [imports]
+       (when (seq imports)
+         (let [imports (if (= 'quote (first imports))
+                         (first (rest imports))
+                         imports)]
+           (doseq [import-spec imports]
+             (apply
+              (case (first import-spec)
+                :require require
+                :use use
+                (u/throw-ex (str "invalid import directive - " (first import-spec))))
+              (rest import-spec))))))
+
      (defn evaluate-expression [exp]
        (when (and (seqable? exp) (= 'component (first exp)))
          (eval `(ns ~(component-name-as-ns (second exp))))
          (use-lang)
-         (doseq [dep (:refer (first (nthrest exp 2)))]
-           (let [dep-ns (component-name-as-ns dep)]
-             (use [dep-ns]))))
+         (let [spec (first (nthrest exp 2))]
+           (do-clj-imports (:clj-import spec))
+           (doseq [dep (:refer spec)]
+             (let [dep-ns (component-name-as-ns dep)]
+               (use [dep-ns])))))
        (eval exp))
 
      (defn read-expressions

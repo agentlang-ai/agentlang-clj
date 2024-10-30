@@ -1,13 +1,13 @@
 (component
  :Library.Identity
- {:clj-import '[(:require [clojure.string :as s])
-                (:use [agentlang.lang.string])]})
+ {:clj-import '[(:require [agentlang.lang.string :as str])]})
 
-(def user-name? (partial string-in-range? 2 50))
+(defn user-name? [s]
+  (str/string-in-range? 2 50 s))
 
 (defn password? [s]
   (or (agentlang.util.hash/crypto-hash? s)
-      (string-in-range? 3 20 s)))
+      (str/string-in-range? 3 20 s)))
 
 (entity {:User
          {:UserName    {:type   :String
