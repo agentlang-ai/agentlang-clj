@@ -151,10 +151,12 @@
                (lookup-by-alias env alias)
                (lookup-instance env record-name))
         inst-id (cn/id-attr inst)
-        path [record-name inst-id]]
-    (if (seq refs)
-      [path (get-in (cn/instance-attributes inst) refs)]
-      [path inst])))
+        path (when inst-id [record-name inst-id])]
+    (if path
+      (if (seq refs)
+        [path (get-in (cn/instance-attributes inst) refs)]
+        [path inst])
+      [nil (when (map? inst) (get-in inst refs))])))
 
 (defn lookup-instances-by-attributes
   ([env rec-name query-attrs as-str]
