@@ -4,7 +4,7 @@
             [agentlang.component :as cn]
             [agentlang.util :as u]
             [agentlang.lang
-             :refer [component event entity relationship dataflow]]
+             :refer [component event entity relationship dataflow record]]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
 
@@ -42,3 +42,16 @@
     (is (= [1.2 3.4] (:FloatArr r)))
     (is (= [1 2 3 4] (:IntArr r)))
     (is (= ["a" "b" "c"] (:StrArr r)))))
+
+(deftest issue-1490-destruct-nested
+  (defcomponent :I1490
+    (defn nested-result []
+      {:Name "David"})
+    (dataflow
+     :I1490/Test1
+     [:match true
+      true [[:eval (quote (agentlang.test.fixes04/nested-result))
+             :as :R]
+            :R.Name]
+      :as :K]))
+  (is (= "David" (tu/result {:I1490/Test1 {}}))))
