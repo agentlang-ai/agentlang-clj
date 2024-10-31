@@ -14,11 +14,13 @@
     [agentlang.evaluator.intercept :as ei]
     [agentlang.store :as store]
     [agentlang.global-state :as gs]
+    [agentlang.lang :as ln]
     [agentlang.lang.rbac :as lr]
     [agentlang.lang.tools.loader :as loader]
     [agentlang.lang.tools.build :as build]
     [agentlang.auth :as auth]
     [agentlang.rbac.core :as rbac]
+    [agentlang.connections.client :as cc]
     [agentlang.inference.embeddings.core :as ec]
     [agentlang.inference.service.core :as isc]
     [fractl-config-secrets-reader.core :as sr]))
@@ -125,8 +127,23 @@
                   {:Data (or data {})}}))]
     (log-app-init-result! result)))
 
+(defn- run-configuration-patterns! [evaluator config]
+  (doseq [[llm-name llm-attrs] (:llms config)]
+    (let [r (first (evaluator
+                    (cn/make-instance
+                     {:Agentlang.Core/Create_LLM
+                      {:Instance
+                       (ln/preprocess-standalone-pattern
+                        {:Agentlang.Core/LLM
+                         (merge {:Name llm-name} llm-attrs)})}})))]
+      (when (not= :ok (:status r))
+        (log/error (str "failed to initialize LLM - " llm-name)))))
+  (doseq [[conn-name conn-attrs] (:connections config)]
+    (cc/configure-new-connection conn-name conn-attrs)))
+
 (defn run-appinit-tasks! [evaluator init-data]
   (e/save-model-config-instances)
+  (run-configuration-patterns! evaluator (gs/get-app-config))
   (run-standalone-patterns! evaluator)
   (trigger-appinit-event! evaluator init-data))
 
