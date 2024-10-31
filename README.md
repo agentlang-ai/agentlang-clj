@@ -3,26 +3,20 @@
 [![AgentLang cljs CI](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-cljs.yml/badge.svg)](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-cljs.yml)
 
 # The AgentLang Programming Language
-AgentLang is a very high-level, declarative, open-source programming language for solving complex tasks with the help of interacting AI agents.
-An AI agent can be enhanced with tools, knowledge bases and chat prompts. Agents can also form complex graphs of inter-relationships,
-which allows them to collaborate together in solving difficult problems.
+AgentLang is a very high-level, declarative, open-source programming language for solving complex tasks with the help of interacting AI agents. Agentlang makes it easy to enhance agents with tools, knowledge bases and chat prompts. Agents can also form complex graphs of inter-relationships that allows them to collaborate together in solving difficult problems.
 
-While most AI programming frameworks limit themselves to LLM based text-processing and generation tasks, AgentLang is designed
-as a complete tool for real-world application development. As a language, AgentLang is data-oriented and declarative, with
-an abstraction that is closer to natural languages than traditional programming languages. This makes AgentLang a much better
-fit for LLM-powered code generation. Users can rapidly build business application in AgentLang from high-level
+While most AI programming frameworks limit themselves to LLM based text-generation tasks, AgentLang is designed as a complete tool for real-world application development. As a language, AgentLang is data-oriented and declarative, with an abstraction that is closer to natural languages than traditional programming languages. This makes AgentLang a much better fit for LLM-powered code generation. Users can rapidly build business application in AgentLang from high-level
 specifications - typically more than 10x faster than traditional programming languages.
 
 ## AgentLang is open
 The AgentLang language specification, its compiler and runtime are open source.
 
-The code you build in AgentLang can be run anywhere using the open source compiler and runtime, thereby avoiding the vendor
-lock-in of other AI programming platforms.
+The code you build in AgentLang can be run anywhere using the open source compiler and runtime, thereby avoiding the vendor lock-in of other AI programming platforms.
 
 ## AgentLang is innovative
 AgentLang introduces a number of innovative concepts to programming:
 
-1. **First-class AI Agents** - interacting AI Agents is a built-in language concept - developers can choose from one of the built-in agent-types, or easily add their own new types.
+1. **First-class AI Agents** - interacting AI Agents is a built-in language concept - developers can choose from one of the built-in agent-types, or easily add their own agent-types.
 2. **Graph-based Hierarchical Data Model** - compose the high-level data model of an application as a hierarchical graph of business entities with relationships. Such [entities and relationships](https://docs.agentlang.io/docs/concepts/data-model) are first-class constructs in AgentLang.
 3. **Zero-trust Programming** - tightly control operations on business entities through [declarative access-control](https://docs.agentlang.io/docs/concepts/zero-trust-programming) encoded directly in the model itself.
 4. **Declarative Dataflow** - express business logic as [purely-declarative patterns of data](https://docs.agentlang.io/docs/concepts/declarative-dataflow).
@@ -43,9 +37,7 @@ The following code snippet shows a simple agent that can interact with a human u
   :UserInstruction "You are an AI bot who tell jokes"}}
 ```
 
-Save this code to a file named `chat.al` and it's ready to be run as a highly-scalable service with ready-to-use
-HTTP APIs to interact with the agent. But before you can actually run it, you need to install AgentLang.
-The next section will help you with that.
+Save this code to a file named `chat.al` and it's ready to be run as a highly-scalable service with auto-generated HTTP APIs for interacting with the agent. But before you can actually run it, you need to install AgentLang. The next section will help you with that.
 
 ## Download and Install
 
@@ -55,7 +47,6 @@ The next section will help you with that.
 2. Linux, Mac OSX or a Unix emulator in Windows
 3. Download and install the [AgentLang CLI tool](https://github.com/agentlang-ai/agentlang.cli)
 4. Set the `OPENAI_API_KEY` environment variable to a valid API key from OpenAI
-
 
 Now you can run the chat-agent as,
 
@@ -78,7 +69,7 @@ If all goes well, the agent will reply with a joke about itself!
 
 If you are excited about cutting-edge AI and programming language technology, please consider becoming a contributor to the Agentlang project.
 
-There are two ways you can contribute:
+There are two main ways you can contribute:
 
   1. Try out the language, report bugs and proposals in the project's [issue tracker](https://github.com/agentlang-ai/agentlang/issues).
   2. Actively participate in the development of Agentlang and submit your patches as [pull requests](https://github.com/agentlang-ai/agentlang/pulls).
