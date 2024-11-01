@@ -192,10 +192,28 @@
 
 (declare compile-pattern)
 
-(defn- compile-relational-entity-query [ctx entity-name query] 
-  (let [q (i/expand-query
+(defn- remove-meta-query [query]
+  (cond
+    (map? query) (dissoc query :meta :meta?)
+    (coll? query) (into [] (filter #(not= (first %) :meta) query))
+    :else query))
+
+(defn- get-version-query [query]
+  (cond
+    (map? query) (get-in query [:meta :version])
+    (coll? query)
+    (get-in
+     (first (filter #(= (first %) :meta) query))
+     [1 :version])
+    :else nil))
+
+(defn- compile-relational-entity-query [ctx entity-name query]
+  (let [version (get-version-query query)
+        query (remove-meta-query query)
+        q (i/expand-query
            entity-name
            (mapv query-param-process query))
+        q (assoc q :version version)
         final-cq ((fetch-compile-query-fn ctx) q)]
     (stu/package-query q final-cq)))
 
@@ -222,6 +240,11 @@
   (let [new-attrs (mapv (fn [[k v]] [(li/normalize-name k) v]) attrs)]
     (into {} new-attrs)))
 
+(defn- normalize-meta-query-pat-attr [pat-attrs]
+  (if (:meta pat-attrs)
+    (dissoc (assoc pat-attrs :meta? (:meta pat-attrs)) :meta)
+    pat-attrs))
+
 (defn- parse-attributes
   "Classify attributes in the pattern as follows:
     1. computable - values can be computed at compile-time, e.g literals.
@@ -238,7 +261,8 @@
     {:attrs (assoc pat-attrs :query (compile-query
                                      ctx pat-name
                                      (normalize-attrs-for-full-query pat-attrs)))}
-    (let [{computed :computed refs :refs
+    (let [pat-attrs (normalize-meta-query-pat-attr pat-attrs)
+          {computed :computed refs :refs
            compound :compound query :query
            :as cls-attrs} (i/classify-attributes ctx pat-attrs schema)
           fs (mapv #(partial build-dependency-graph %) [refs compound query])
@@ -313,7 +337,7 @@
   It is assumed that the opcodes for setting the individual attributes were emitted
   prior to this."
   [ctx pat-name pat-attrs schema args]
-  (when-let [xs (cv/invalid-attributes pat-attrs schema)]
+  (when-let [xs (cv/invalid-attributes (dissoc pat-attrs :meta :meta?) schema)]
     (if (= (first xs) cn/id-attr)
       (if (= (get schema cn/type-tag-key) :record)
         (u/throw-ex (str "Invalid attribute " cn/id-attr " for type record: " pat-name))
@@ -400,7 +424,7 @@
        (u/throw-ex (str "cannot query undefined entity - " n)))
      (let [q (k pat)
            version (get-in q [:meta :version])
-           q (dissoc q :meta)
+           q (dissoc q :meta :meta?)
            w (when (seq (:where q))
                (w/postwalk process-complex-query (:where q)))
            j (seq (:join pat))
@@ -1003,7 +1027,7 @@
 
 (defn- maybe-dissoc-meta [pat]
   (if (map? pat)
-    (dissoc pat :meta)
+    (dissoc pat :meta :meta?)
     pat))
 
 (defn compile-pattern [ctx pat]
