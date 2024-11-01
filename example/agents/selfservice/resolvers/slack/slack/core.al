@@ -7,6 +7,7 @@
                           [agentlang.util.logger :as log]
                           [agentlang.datafmt.json :as json]
                           [agentlang.evaluator :as ev]
+                          [agentlang.connections.client :as cc]
                           [agentlang.lang.internal :as li])]})
 
 (entity
@@ -14,16 +15,22 @@
  {:channel {:type :String :guid true}
   ;;:default (System/getenv "SLACK_CHANNEL_ID")}
   :text :String
+  :response {:type :String :default ""}
   :mrkdwn {:type :Boolean :default true}
   :thread {:type :String :optional true}})
 
 (def test-mode (System/getenv "SELFSERVICE_TEST_MODE"))
 
-(def slack-api-key (System/getenv "SLACK_API_KEY"))
+(defn slack-connection []
+  (cc/get-connection :selfservice-slack-connection))
 
-(def slack-base-url "https://slack.com/api")
+(defn slack-api-key []
+  (or (:api-key (slack-connection)) (System/getenv "SLACK_API_KEY")))
 
-(defn get-url [endpoint] (str slack-base-url endpoint))
+(defn slack-base-url []
+  (or (:base-url (slack-connection)) "https://slack.com/api"))
+
+(defn get-url [endpoint] (str (slack-base-url) endpoint))
 
 (defn- handle-response [response result]
   (let [status (:status response)
@@ -35,8 +42,9 @@
           (throw (ex-info "Request failed. " output-decoded))))
       (throw (ex-info "Request failed. " {:status status :body body})))))
 
-(def ^:private http-opts {:headers {"Authorization" (str "Bearer " slack-api-key)
-                                  "Content-Type" "application/json"}})
+(defn- http-opts []
+  {:headers {"Authorization" (str "Bearer " (slack-api-key))
+             "Content-Type" "application/json"}})
 
 (defn- extract-approval [response]
   (let [status (:status response)
@@ -50,7 +58,7 @@
 
 (defn wait-for-reply [{channel :channel ts :thread}]
   (let [url (get-url (str "/conversations.replies?ts=" ts "&channel=" channel))
-        f (fn [] (Thread/sleep (* 10 1000)) (http/do-get url http-opts))
+        f (fn [] (Thread/sleep (* 10 1000)) (http/do-get url (http-opts)))
         r
         (loop [response (f), retries 50]
           (if (zero? retries)
@@ -64,9 +72,9 @@
 (defn- create-chat [api-name instance]
   (let [data (dissoc instance :-*-type-*- :type-*-tag-*- :thread)
         url (get-url (str "/" api-name))
-        response (http/do-post url http-opts data)
+        response (http/do-post url (http-opts) data)
         new-instance (handle-response response instance)]
-    (assoc new-instance :text (wait-for-reply new-instance))))
+    (assoc new-instance :response (wait-for-reply new-instance))))
 
 (defn- print-instance [inst]
   (println "** " (cn/instance-type-kw inst) " **")

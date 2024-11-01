@@ -244,7 +244,8 @@
            :else "NO"))
        "\nAlso keep in mind that you can call only `make` on events, `update`, `delete`, `lookup-one` and `lookup-many` are reserved for entities.\n"
        "Note that you are generating code in a subset of Clojure. In your response, you should not use "
-       "any feature of the language that's not present in the above examples.\n"
+       "any feature of the language that's not present in the above examples. "
+       "This means, for conditionals you should always return a `cond` expression, and must not return an `if`.\n"
        "A `def` must always bind to the result of `make`, `update`, `delete`, `lookup-one` and `lookup-many` and nothing else.\n"
        "Now consider the entity definitions and user-instructions that follows to generate fresh dataflow patterns. "
        "An important note: do not return any plain text in your response, only return valid clojure expressions. "
