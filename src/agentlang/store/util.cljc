@@ -207,7 +207,7 @@
 
 (defn results-as-instances
   ([entity-name entity-version normalize-colname results]
-   (mapv (partial result-as-instance entity-name (cn/fetch-schema entity-name entity-version) normalize-colname) results))
+   (mapv (partial result-as-instance entity-name entity-version (cn/fetch-schema entity-name entity-version) normalize-colname) results))
   ([entity-name normalize-colname results]
    (results-as-instances entity-name nil normalize-colname results))
   ([entity-name results]

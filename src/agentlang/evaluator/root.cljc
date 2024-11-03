@@ -865,7 +865,8 @@
         (env/push-obj env entity-name insts))
 
        (seq insts)
-       (let [id-attr-name (cn/identity-attribute-name entity-name)
+       (let [version (get-in queries [:raw-query :version])
+             id-attr-name (cn/identity-attribute-name entity-name version)
              ids (mapv id-attr-name insts)]
          (i/ok
           insts

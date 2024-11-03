@@ -417,14 +417,14 @@
   to the query-instances opcode generator"
   ([ctx pat callback]
    (let [k (first (keys (cleanup-join pat)))
+         q (k pat)
+         version (get-in q [:meta :version])
          n (if ctx
              (ctx/dynamic-type ctx (query-entity-name k))
              (query-entity-name k))]
-     (when-not (cn/find-entity-schema n)
+     (when-not (cn/find-entity-schema n version)
        (u/throw-ex (str "cannot query undefined entity - " n)))
-     (let [q (k pat)
-           version (get-in q [:meta :version])
-           q (dissoc q :meta :meta?)
+     (let [q (dissoc q :meta :meta?)
            w (when (seq (:where q))
                (w/postwalk process-complex-query (:where q)))
            j (seq (:join pat))
@@ -1124,8 +1124,9 @@
 (defn- preproc-contains-spec [pat pat-alias relpat nodepat idpat]
   (let [pk (li/record-name pat)
         recname (li/normalize-name pk)
+        recversion (li/record-version pat pk)
         relname (li/normalize-name relpat)]
-    (when-not (first (filter #(= relname (first %)) (cn/containing-parents recname)))
+    (when-not (first (filter #(= relname (first %)) (cn/containing-parents recname recversion)))
       (u/throw-ex (str "not a valid contains relationship for " recname " - " relname)))
     (if (= :_ idpat)
       (preproc-contains-spec-by-path recname pat pat-alias relpat nodepat)
@@ -1148,7 +1149,7 @@
             pat (assoc pat pk attrs)
             rec-s (li/name-str recname)
             rel-s (li/name-str relname)
-            pid-n (cn/path-identity-attribute-name recname)
+            pid-n (cn/path-identity-attribute-name recname recversion)
             maybe-can-fix-path (and (not idpat) (not (and is-rel-q is-pat-q)))
             pat-with-fixed-path
             (when maybe-can-fix-path
@@ -1156,7 +1157,7 @@
                 (assoc pat pk
                        (assoc attrs li/path-attr
                               `(agentlang.compiler/maybe-append-path-identity-pattern
-                                ~v ~(cn/path-identity-attribute-name recname))))))
+                                ~v ~(cn/path-identity-attribute-name recname recversion))))))
             pats [[:eval
                    (if idpat
                      `(agentlang.component/full-path-from-references ~pp-alias ~rel-s ~idpat ~rec-s)
@@ -1164,12 +1165,12 @@
                    :as v]
                   (assoc (or pat-with-fixed-path pat) :as pat-alias)]
             post-pats (when (and maybe-can-fix-path (not pat-with-fixed-path))
-                        (let [ident (cn/identity-attribute-name recname)]
+                        (let [ident (cn/identity-attribute-name recname recversion)]
                           [{recname
                             {(li/name-as-query-pattern ident)
                              (li/make-ref pat-alias ident)
                              li/path-attr `(agentlang.compiler/maybe-append-path-identity-pattern
-                                            ~v ~(cn/path-identity-attribute-name recname))}
+                                            ~v ~(cn/path-identity-attribute-name recname recversion))}
                             :as pat-alias}]))]
         {:patterns (vec (concat (flatten-preproc-patterns pp) pats post-pats))
          :alias pat-alias}))))

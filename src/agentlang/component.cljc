@@ -224,21 +224,26 @@
 (defn fetch-attribute-meta [path]
   (:meta (find-attribute-schema-internal path)))
 
-(defn fetch-meta [path]
-  (let [p (if (string? path)
-            (keyword path)
-            path)
-        c (first (li/split-path p))
-        e (last (li/split-path p))]
+(defn fetch-meta
+  ([path recversion]
+   (let [p (if (string? path)
+             (keyword path)
+             path)
+         c (first (li/split-path p))
+         e (last (li/split-path p))]
 
-    (if-let [scm (get-in @components [c (get-model-version c) e mt/meta-key])]
-      (assoc
-       scm
-       mt/meta-of-key
-       (if (keyword? p)
-         p
-         (li/make-path p)))
-      (fetch-attribute-meta p))))
+     (if-let [scm (get-in @components [c (or recversion (get-model-version c))
+                                       e mt/meta-key])]
+       (assoc
+        scm
+        mt/meta-of-key
+        (if (keyword? p)
+          p
+          (li/make-path p)))
+       (fetch-attribute-meta p))))
+
+  ([path]
+   (fetch-meta path nil)))
 
 (def meta-of mt/meta-of-key)
 
@@ -267,7 +272,7 @@
        (log/info (str "auto-creating component - " component))
        (create-component component nil))
      (when-let [pp (mt/apply-policy-parsers k meta)]
-       (log/debug (str "custom parse policies for " typname " - " pp)))
+       (log/debug (str "custom parse policies for " typname " - " pp))) 
      (u/call-and-set
       components
       #(assoc-in (if meta
@@ -291,7 +296,10 @@
    (get-in @components path))
   ([typetag recname]
    (let [[c n] (li/split-path recname)]
-     (component-find [c (get-model-version c) typetag n]))))
+     (component-find [c (get-model-version c) typetag n])))
+  ([typetag recname recversion]
+   (let [[c n] (li/split-path recname)]
+     (component-find [c (or recversion (get-model-version c)) typetag n]))))
 
 (defn intern-attribute
   "Add or replace an attribute in a component.
@@ -381,7 +389,10 @@
 (defn- find-record-schema-by-type [typ path]
   (find-record-schema-by-type-version typ nil path))
 
-(def find-entity-schema (partial find-record-schema-by-type :entity))
+(defn find-entity-schema 
+  ([path version] (find-record-schema-by-type-version :entity version path))
+  ([path] (find-entity-schema path nil)))
+
 (def find-event-schema (partial find-record-schema-by-type :event))
 
 (defn find-schema
@@ -404,8 +415,11 @@
   ([rec-name]
    (fetch-schema rec-name nil)))
 
-(defn fetch-entity-schema [entity-name]
-  (:schema (find-entity-schema entity-name)))
+(defn fetch-entity-schema
+  ([entity-name version]
+   (:schema (find-entity-schema entity-name version)))
+  ([entity-name]
+   (fetch-entity-schema entity-name nil)))
 
 (defn fetch-event-schema [event-name]
   (dissoc
@@ -580,23 +594,34 @@
   "Return the names of all immutable attributes in the schema."
   (make-attributes-filter :immutable))
 
-(defn- maybe-fetch-entity-schema [type-name-or-scm]
-  (if (map? type-name-or-scm)
-    type-name-or-scm
-    (fetch-entity-schema type-name-or-scm)))
+(defn- maybe-fetch-entity-schema
+  ([type-name-or-scm version]
+   (if (map? type-name-or-scm)
+     type-name-or-scm
+     (fetch-entity-schema type-name-or-scm version)))
+  ([type-name-or-scm]
+   (maybe-fetch-entity-schema type-name-or-scm nil)))
 
 (def path-id-attrs (make-attributes-filter li/path-identity))
 
-(defn path-identity-attribute-name [type-name-or-scm]
-  (first (path-id-attrs (maybe-fetch-entity-schema type-name-or-scm))))
+(defn path-identity-attribute-name 
+  ([type-name-or-scm version]
+   (first (path-id-attrs (maybe-fetch-entity-schema type-name-or-scm version))))
+  ([type-name-or-scm]
+   (path-identity-attribute-name type-name-or-scm nil)))
 
 (defn identity-attribute-names
   "Return the name of any one of the identity attributes of the given entity."
-  [type-name-or-scm]
-  (identity-attributes (maybe-fetch-entity-schema type-name-or-scm)))
+  ([type-name-or-scm version]
+   (identity-attributes (maybe-fetch-entity-schema type-name-or-scm version)))
+  ([type-name-or-scm]
+   (identity-attributes (maybe-fetch-entity-schema type-name-or-scm nil))))
 
-(defn identity-attribute-name [type-name-or-scm]
-  (first (identity-attribute-names (maybe-fetch-entity-schema type-name-or-scm))))
+(defn identity-attribute-name
+  ([type-name-or-scm version]
+   (first (identity-attribute-names (maybe-fetch-entity-schema type-name-or-scm version) version)))
+  ([type-name-or-scm]
+   (identity-attribute-name type-name-or-scm nil)))
 
 (defn contained-identity [type-name-or-scm]
   (let [scm (maybe-fetch-entity-schema type-name-or-scm)]
@@ -1672,8 +1697,11 @@
          id (when (and c r) (identity-attribute-name [c r]))]
      (append-id path (or id id-attr)))))
 
-(defn find-relationships [recname]
-  (or (component-find :entity-relationship recname) #{}))
+(defn find-relationships 
+  ([recname recversion]
+   (or (component-find :entity-relationship recname recversion) #{}))
+  ([recname]
+   (find-relationships recname nil)))
 
 (defn find-contained-relationship [recname]
   (let [recname (li/keyword-name recname)]
@@ -1745,25 +1773,33 @@
       (if (= entity-name e1) a1 a2)
       (identity-attribute-name entity-name))))
 
-(defn- contain-rels [as-parent recname]
-  (let [recname (li/make-path recname)
-        accessors [first second]
-        [this that] (if as-parent (reverse accessors) accessors)]
-    (when-let [rels (seq (find-relationships recname))]
-      (seq
-       (su/nonils
-        (mapv #(let [meta (fetch-meta %)
-                     contains (mt/contains meta)]
-                 (when (= recname (this contains))
-                   [% :contains (that contains)]))
-              rels))))))
+(defn- contain-rels
+  ([as-parent recname recversion]
+   (let [recname (li/make-path recname)
+         accessors [first second]
+         [this that] (if as-parent (reverse accessors) accessors)]
+     (when-let [rels (seq (find-relationships recname recversion))]
+       (seq
+        (su/nonils
+         (mapv #(let [meta (fetch-meta % recversion)
+                      contains (mt/contains meta)]
+                  (when (= recname (this contains))
+                    [% :contains (that contains)]))
+               rels))))))
+  ([as-parent recname]
+   (contain-rels as-parent recname nil)))
 
 (def relinfo-name first)
 (defn relinfo-to [[_ _ to]] to)
 (def relinfo-type second)
 
 (def contained-children (partial contain-rels false))
-(def containing-parents (partial contain-rels true))
+
+(defn containing-parents
+  ([recname]
+   (contain-rels true recname))
+  ([recname recversion]
+  (contain-rels true recname recversion)))
 
 (defn parent-identity-attribute-type [parent-recname]
   (when-let [a (or (path-identity-attribute-name parent-recname)
