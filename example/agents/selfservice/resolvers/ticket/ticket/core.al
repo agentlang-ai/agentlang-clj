@@ -8,6 +8,11 @@
                           [agentlang.component :as cn]
                           [agentlang.connections.client :as cc]
                           [agentlang.lang.b64 :as b64])]})
+(entity
+ :JiraConnectionConfig
+ {:rooturl :String
+  :user :String
+  :token :String})
 
 (entity
  :Ticket
@@ -87,8 +92,9 @@
   (if test-mode
     default-tickets
     (let [connection (get-connection)
-          url (str (:root-url connection) "/rest/api/3/issue/")
-          headers (make-headers connection)
+          cparam (cc/connection-parameter connection)
+          url (str (:rooturl cparam) "/rest/api/3/issue/")
+          headers (make-headers cparam)
           {status :status body :body} (http/do-get (str url "picker") headers)
           basic-auth (get-in headers [:headers "Authorization"])]
       (if (= 200 status)
@@ -106,8 +112,9 @@
   (if test-mode
     (print-instance instance)
     (let [connection (get-connection)
-          url (str (:root-url connection) "/rest/api/3/issue/" (:TicketId instance) "/comment")
-          headers (make-headers connection)
+          cparam (cc/connection-parameter connection)
+          url (str (:rooturl cparam) "/rest/api/3/issue/" (:TicketId instance) "/comment")
+          headers (make-headers cparam)
           body {:body (make-comment-body (:Body instance))}
           {status :status :as response} (http/do-post url headers body)]
       (if (or (= 201 status) (= 200 status))
@@ -117,7 +124,7 @@
 (defn get-tickets-connection []
   (when-not test-mode
     (or (cc/get-connection :selfservice-jira-connection)
-        {:root-url (u/getenv "TICKETS_ROOT_URL")
+        {:rooturl (u/getenv "TICKETS_ROOT_URL")
          :user (u/getenv "TICKETS_USER")
          :token (u/getenv "TICKETS_TOKEN")})))
 
@@ -147,7 +154,7 @@
                          ", with status " status " and reason " (:body result)))))))
 
 (defn- get-github-token []
-  (or (:token (cc/get-connection :selfservice-github-connection))
+  (or (cc/connection-parameter (cc/get-connection :selfservice-github-connection))
       (u/getenv "GITHUB_API_TOKEN")))
 
 (resolver

@@ -25,35 +25,46 @@
 
 (def cached-connections (atom nil))
 
+(defn get-connection [conn-name]
+  (let [k (u/string-as-keyword conn-name)]
+    (or (get @cached-connections k)
+        (let [r (first
+                 (http/do-get
+                  (str (connections-api-host) "/api/ConnectionManager.Core/Connection/" (:ConnectionId (name conn-name)))))]
+          (if (= "ok" (:status r))
+            (let [conn (first (:result r))]
+              (swap! cached-connections assoc k conn)
+              conn))))))
+
 (defn create-connection
-  ([conn-type conn-name]
+  ([conn-config-name conn-name]
    (let [k (u/string-as-keyword conn-name)]
-     (or (get @cached-connections k)
+     (or (get-connection conn-name)
          (let [r (first
                   (http/POST (str (connections-api-host) "/api/ConnectionManager.Core/Connection")
                              nil {:ConnectionManager.Core/Connection
                                   {:ConnectionId (name conn-name)
-                                   :ConnectionConfigName (name conn-type)}} :json))]
+                                   :ConnectionConfigName (name conn-config-name)}} :json))]
            (if (= "ok" (:status r))
              (let [conn (first (:result r))]
-               (when-not (:Connection conn)
+               (when-not (:Parameter conn)
                  (u/throw-ex (str "failed to create connection for - " conn-name)))
                (swap! cached-connections assoc k conn)
                conn)
              (u/throw-ex (str "failed to get connection - " conn-name)))))))
-  ([conn-type] (create-connection conn-type conn-type)))
+  ([conn-config-name] (create-connection conn-config-name conn-config-name)))
 
-(defn get-connection
-  ([conn-type conn-name]
-   (try
-     (:Connection (create-connection conn-type conn-name))
-     (catch Exception ex
-       (do (log/error ex) nil))))
-  ([conn-type] (get-connection conn-type conn-type)))
+(def connection-parameter :Parameter)
 
-(defn mark-connection-for-refresh [conn]
+(def cache-connection! create-connection)
+
+(defn close-connection [conn]
   (let [connid (:ConnectionId conn)]
     (when (get @cached-connections (u/string-as-keyword connid))
-      (let [r (http/do-request :delete (str (connections-api-host) "/api/ConnectionManager.Core/ActiveConnection/" connid))]
+      (let [r (http/do-request :delete (str (connections-api-host) "/api/ConnectionManager.Core/Connection/" connid))]
         (swap! cached-connections dissoc connid)
         (= "ok" (get (first (:body r)) "status"))))))
+
+(defn refresh-connection [conn]
+  (when (close-connection conn)
+    (create-connection (:ConnectionConfigName conn) (:ConnectionId conn))))

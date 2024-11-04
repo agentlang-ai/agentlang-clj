@@ -138,8 +138,16 @@
                          (merge {:Name llm-name} llm-attrs)})}})))]
       (when (not= :ok (:status r))
         (log/error (str "failed to initialize LLM - " llm-name)))))
-  (doseq [[conn-name conn-attrs] (:connections config)]
-    (cc/configure-new-connection conn-name conn-attrs)))
+  (doseq [[conn-name conn-attrs] (:connection-configurations config)]
+    (cc/configure-new-connection conn-name conn-attrs))
+  (doseq [conn (:connections config)]
+    (let [[conn-name conn-config-name]
+          (cond
+            (vector? conn) conn
+            (keyword? conn) [conn conn]
+            (string? conn) (let [conn (keyword? conn)] [conn conn])
+            :else (u/throw-ex (str "Invalid connection config: " conn)))]
+      (cc/cache-connection! conn-config-name conn-name))))
 
 (defn run-appinit-tasks! [evaluator init-data]
   (e/save-model-config-instances)

@@ -25,12 +25,11 @@
   (cc/get-connection :selfservice-slack-connection))
 
 (defn slack-api-key []
-  (or (:api-key (slack-connection)) (System/getenv "SLACK_API_KEY")))
+  (or (cc/connection-parameter (slack-connection)) (System/getenv "SLACK_API_KEY")))
 
-(defn slack-base-url []
-  (or (:base-url (slack-connection)) "https://slack.com/api"))
+(def slack-base-url "https://slack.com/api")
 
-(defn get-url [endpoint] (str (slack-base-url) endpoint))
+(defn get-url [endpoint] (str slack-base-url endpoint))
 
 (defn- handle-response [response result]
   (let [status (:status response)
