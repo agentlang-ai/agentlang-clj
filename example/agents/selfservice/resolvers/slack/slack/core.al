@@ -1,14 +1,14 @@
 (component
  :Slack.Core
- {:clj-import '[(:require [clojure.string :as s]
-                          [agentlang.component :as cn]
-                          [agentlang.util :as u]
-                          [agentlang.util.http :as http]
-                          [agentlang.util.logger :as log]
-                          [agentlang.datafmt.json :as json]
-                          [agentlang.evaluator :as ev]
-                          [agentlang.connections.client :as cc]
-                          [agentlang.lang.internal :as li])]})
+ {:clj-import (quote [(:require [clojure.string :as s]
+                                [agentlang.component :as cn]
+                                [agentlang.util :as u]
+                                [agentlang.util.http :as http]
+                                [agentlang.util.logger :as log]
+                                [agentlang.datafmt.json :as json]
+                                [agentlang.evaluator :as ev]
+                                [agentlang.connections.client :as cc]
+                                [agentlang.lang.internal :as li])])})
 
 (entity
  :Chat

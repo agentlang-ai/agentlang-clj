@@ -13,6 +13,8 @@
    "My Slack Connection"
    {:Type :api-key
     :Parameter #$ SLACK_API_KEY}}
+  :username #$ CM_USERNAME
+  :password #$ CM_PASSWORD
   :connections [[:Ticket/JiraConnection "My Jira Connection"]
                 [:Ticket/GithubConnection "My Github Connection"]
                 [:Slack/Connection "My Slack Connection"]]}}

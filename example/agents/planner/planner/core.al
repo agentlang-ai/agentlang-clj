@@ -69,7 +69,7 @@
 ;; Usage:
 ;; POST api/Planner.Core/InvokeEmployeeAgent
 ;; {"Planner.Core/InvokeEmployeeAgent":
-;;   {"UserInstruction": "lookup all employees and for each employee send an email to manager@abc.com intrroducing themselves"}}
+;;   {"UserInstruction": "lookup all employees and for each employee send an email to manager@abc.com introducing themselves"}}
 
 (event
  :CreateLead

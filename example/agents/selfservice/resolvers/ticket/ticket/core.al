@@ -1,13 +1,13 @@
 (component
  :Ticket.Core
- {:clj-import '[(:require [agentlang.util :as u]
-                          [agentlang.util.logger :as log]
-                          [agentlang.util.http :as http]
-                          [agentlang.util.seq :as us]
-                          [agentlang.datafmt.json :as json]
-                          [agentlang.component :as cn]
-                          [agentlang.connections.client :as cc]
-                          [agentlang.lang.b64 :as b64])]})
+ {:clj-import (quote [(:require [agentlang.util :as u]
+                                [agentlang.util.logger :as log]
+                                [agentlang.util.http :as http]
+                                [agentlang.util.seq :as us]
+                                [agentlang.datafmt.json :as json]
+                                [agentlang.component :as cn]
+                                [agentlang.connections.client :as cc]
+                                [agentlang.lang.b64 :as b64])])})
 (entity
  :JiraConnectionConfig
  {:rooturl :String
