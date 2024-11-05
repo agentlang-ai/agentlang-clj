@@ -321,7 +321,7 @@
                (op/intern-instance
                 (vec
                  (concat
-                  [rec-name alias]
+                  [rec-name alias attrs]
                   (if (ctx/build-partial-instance? ctx)
                     [false false]
                     [true (and (cn/entity? rec-name)
@@ -550,6 +550,7 @@
             [nil pat])
           orig-nm (ctx/dynamic-type ctx (li/instance-pattern-name pat))
           full-nm (li/normalize-name orig-nm)
+          rec-version (get-in pat [orig-nm :meta :version])
           {component :component record :record
            path :path refs :refs :as parts} (li/path-parts full-nm)
           refs (seq refs)
@@ -563,7 +564,7 @@
           timeout-ms (ls/timeout-ms-tag pat)
           [tag scm] (if (or path refs)
                       [:dynamic-upsert nil]
-                      (cv/find-schema nm full-nm))]
+                      (cv/find-schema nm full-nm rec-version))]
       (let [c (case tag
                 (:entity :record) emit-realize-instance
                 :event (do

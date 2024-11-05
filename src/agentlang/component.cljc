@@ -342,10 +342,13 @@
    (let [[recname attrname] (li/split-ref aref)]
      (if attrname
        (when-let [rec (component-find [component (or version (get-model-version component)) :records recname])]
-         (find-attribute-schema-internal (get-in rec [:schema attrname])))
-       (when-let [scm (component-find [component (get-model-version component) :attributes aref])]
+         (let [[c a] (li/split-path (get-in rec [:schema attrname]))]
+           (find-attribute-schema-internal c version a)))
+       (when-let [scm (component-find [component (or version (get-model-version component)) :attributes aref])]
          (if-let [parent-type (:type scm)]
-           (merge (apply find-attribute-schema-internal (li/split-path parent-type)) scm)
+           (merge 
+            (let [[c a] (li/split-path parent-type)]
+              (find-attribute-schema-internal c version a)) scm)
            scm)))))
   ([component aref]
    (find-attribute-schema-internal component nil aref))
@@ -353,9 +356,11 @@
    (let [[component aref] (li/split-path path)]
      (find-attribute-schema-internal component aref))))
 
-(defn find-attribute-schema
+(defn find-attribute-schema 
+  ([component version aref]
+   (dissoc (find-attribute-schema-internal component version aref) :meta))
   ([component aref]
-   (dissoc (find-attribute-schema-internal component aref) :meta))
+   (find-attribute-schema component nil aref))
   ([path]
    (dissoc (find-attribute-schema-internal path) :meta)))
 
@@ -836,17 +841,22 @@
     (assoc attributes attrname (p (get attributes attrname)))
     attributes))
 
-(defn- validated-attribute-values [recname schema attributes]
+(defn- validated-attribute-values [recname recversion schema attributes]
   (let [r (check-attribute-names recname schema attributes)]
     (or (error? r)
         (loop [schema schema, attributes attributes]
           (if-let [[aname atype] (first schema)]
             (if-not (li/name? aname)
               (recur (rest schema) attributes)
-              (let [typname (li/extract-attribute-name atype)]
+              (let [typname (li/extract-attribute-name atype)
+                    [component aref] (li/split-path typname)]
                 (recur
                  (rest schema)
-                 (if-let [ascm (find-attribute-schema typname)]
+                 (if-let [ascm (find-attribute-schema 
+                                component 
+                                (if (contains? (set (internal-component-names)) component)
+                                  nil recversion)
+                                aref)]
                    (apply-attribute-validation
                     aname ascm (preproc-attribute-value attributes aname typname))
                    (ensure-attribute-is-instance-of typname aname attributes)))))
@@ -892,18 +902,24 @@
       true)))
 
 (defn validate-record-attributes
-  ([recname recattrs schema]
+  ([recname recversion recattrs schema]
    ;; The :inferred key will be added
    ;; only for inferred events. Do no validate
    ;; the schema of inferred events.
    (if (or (:inferred schema) (has-external-schema? recname))
      recattrs
-     (validated-attribute-values recname schema recattrs)))
+     (validated-attribute-values recname recversion schema recattrs)))
+  ([recname recattrs schema]
+   (validate-record-attributes recname nil recattrs schema))
   ([recname recattrs]
    (validate-record-attributes recname recattrs (ensure-schema recname))))
 
-(defn- type-tag-of [recname]
-  (type-tag-key (find-record-schema recname)))
+(defn- type-tag-of
+  ([recname version]
+   (let [[component aref] (li/split-path recname)]
+     (type-tag-key (find-record-schema component version aref))))
+  ([recname]
+   (type-tag-of recname nil)))
 
 (defn- serialized-instance? [x]
   (and (type-tag-key x) (type-key x)))
@@ -986,7 +1002,7 @@
                  attrs-with-insts)]
      (if (error? attrs)
        attrs
-       (u/make-record-instance (type-tag-of record-name) record-name attrs))))
+       (u/make-record-instance (type-tag-of record-name version) record-name attrs))))
   ([record-name attributes validate?]
    (make-instance record-name nil attributes validate?))
   ([record-name attributes]
