@@ -2137,7 +2137,7 @@
       inst)))
 
 (defn instance-to-partial-path
-  ([child-type parent-inst relname]
+  ([child-type parent-inst relname version]
    (let [pt (instance-type-kw parent-inst)
          ct (li/make-path child-type)]
      (if-let [rel (or relname (parent-relationship pt ct))]
@@ -2146,14 +2146,16 @@
          (if pp
            (str (pi/path-string pp) "/" rn)
            (str "/" (pi/encoded-uri-path-part pt)
-                "/" ((identity-attribute-name pt) parent-inst)
+                "/" ((identity-attribute-name pt version) parent-inst)
                 "/" rn)))
        (u/throw-ex (str "no parent-child relationship found for - " [pt ct])))))
+  ([child-type parent-inst relname]
+   (child-type parent-inst relname nil))
   ([child-type parent-inst]
    (instance-to-partial-path child-type parent-inst nil)))
 
 (defn instance-to-full-path
-  ([child-type child-id parent-inst relname]
+  ([child-type child-id parent-inst relname version]
    (let [parent-inst (cond
                        (map? parent-inst)
                        parent-inst
@@ -2164,20 +2166,24 @@
                        :else parent-inst)]
      (when (entity-instance? parent-inst)
        (let [[c _] (li/split-path child-type)]
-         (str (pi/as-fully-qualified-path c (instance-to-partial-path child-type parent-inst relname))
+         (str (pi/as-fully-qualified-path c (instance-to-partial-path child-type parent-inst relname version))
               "/" (pi/encoded-uri-path-part child-type) "/" child-id)))))
+  ([child-type child-id parent-inst relname]
+   (instance-to-full-path child-type child-id parent-inst relname nil))
   ([child-type child-id parent-inst]
    (instance-to-full-path child-type child-id parent-inst nil)))
 
 (defn full-path-from-references
-  ([parent-inst relname child-id child-type]
+  ([parent-inst relname child-id child-type version]
    (instance-to-full-path
     (if (keyword? child-type)
       child-type
       (keyword child-type))
-    (or child-id "%") parent-inst relname))
+    (or child-id "%") parent-inst relname version))
+  ([parent-inst relname child-type version]
+   (full-path-from-references parent-inst relname nil child-type version))
   ([parent-inst relname child-type]
-   (full-path-from-references parent-inst relname nil child-type)))
+   (full-path-from-references parent-inst relname nil child-type nil)))
 
 (defn between-relationship-instance? [inst]
   (when-let [t (instance-type-kw inst)]

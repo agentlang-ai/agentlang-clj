@@ -1161,8 +1161,8 @@
                                 ~v ~(cn/path-identity-attribute-name recname recversion))))))
             pats [[:eval
                    (if idpat
-                     `(agentlang.component/full-path-from-references ~pp-alias ~rel-s ~idpat ~rec-s)
-                     `(agentlang.component/full-path-from-references ~pp-alias ~rel-s ~rec-s))
+                     `(agentlang.component/full-path-from-references ~pp-alias ~rel-s ~idpat ~rec-s ~recversion)
+                     `(agentlang.component/full-path-from-references ~pp-alias ~rel-s ~rec-s ~recversion))
                    :as v]
                   (assoc (or pat-with-fixed-path pat) :as pat-alias)]
             post-pats (when (and maybe-can-fix-path (not pat-with-fixed-path))
