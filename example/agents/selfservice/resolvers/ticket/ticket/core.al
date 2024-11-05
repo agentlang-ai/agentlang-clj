@@ -123,7 +123,7 @@
 
 (defn get-tickets-connection []
   (when-not test-mode
-    (or (cc/get-connection :selfservice-jira-connection)
+    (or (cc/get-connection :Ticket/JiraConnection)
         {:rooturl (u/getenv "TICKETS_ROOT_URL")
          :user (u/getenv "TICKETS_USER")
          :token (u/getenv "TICKETS_TOKEN")})))
@@ -154,7 +154,7 @@
                          ", with status " status " and reason " (:body result)))))))
 
 (defn- get-github-token []
-  (or (cc/connection-parameter (cc/get-connection :selfservice-github-connection))
+  (or (cc/connection-parameter (cc/get-connection :Ticket/GithubConnection))
       (u/getenv "GITHUB_API_TOKEN")))
 
 (resolver

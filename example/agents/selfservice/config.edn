@@ -1,15 +1,18 @@
-{:connection-configurations
- {:selfservice-jira-connection
-  {:Type :custom
-   :Parameter {:rooturl #$ TICKETS_ROOT_URL
-               :user #$ TICKETS_USER
-               :token #$ TICKETS_TOKEN}}
+{:connection-manager
+ {:configurations
+  {"My Jira Connection"
+   {:Type :custom
+    :Parameter {:rooturl #$ TICKETS_ROOT_URL
+                :user #$ TICKETS_USER
+                :token #$ TICKETS_TOKEN}}
 
-  :selfservice-github-connection
-  {:Type :bearer-token
-   :Parameter #$ GITHUB_API_TOKEN}
+   "My Github Connection"
+   {:Type :bearer-token
+    :Parameter #$ GITHUB_API_TOKEN}
 
-  :selfservice-slack-connection
-  {:Type :api-key
-   :Parameter #$ SLACK_API_KEY}}
- :connections [:selfservice-jira-connection :selfservice-slack-connection :selfservice-github-connection]}
+   "My Slack Connection"
+   {:Type :api-key
+    :Parameter #$ SLACK_API_KEY}}
+  :connections [[:Ticket/JiraConnection "My Jira Connection"]
+                [:Ticket/GithubConnection "My Github Connection"]
+                [:Slack/Connection "My Slack Connection"]]}}

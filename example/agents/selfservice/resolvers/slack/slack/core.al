@@ -22,7 +22,7 @@
 (def test-mode (System/getenv "SELFSERVICE_TEST_MODE"))
 
 (defn slack-connection []
-  (cc/get-connection :selfservice-slack-connection))
+  (cc/get-connection :Slack/Connection))
 
 (defn slack-api-key []
   (or (cc/connection-parameter (slack-connection)) (System/getenv "SLACK_API_KEY")))
