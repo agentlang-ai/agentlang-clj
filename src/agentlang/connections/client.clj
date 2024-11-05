@@ -7,7 +7,7 @@
 ;; A client library for the connection-manager-service.
 
 (defn- connections-api-host []
-  (or (:connections-api-host (gs/get-app-config))
+  (or (:host (:connection-manager (gs/get-app-config)))
       "http://localhost:5000"))
 
 (defn configure-new-connection [conn-name conn-attrs]
