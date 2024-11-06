@@ -69,7 +69,7 @@
 (defn on-user-login [user-name]
   #?(:clj
      (try
-       (let [r (ev/eval-all-dataflows
+       (let [r (ev/eval-internal
                 (cn/make-instance
                  :Agentlang.Kernel.Identity/OnUserLogin
                  {:Username user-name}))]
