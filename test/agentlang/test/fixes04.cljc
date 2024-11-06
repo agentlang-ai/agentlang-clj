@@ -33,16 +33,23 @@
 
 (deftest issue-1538-contains-not-found
   (defcomponent :I1538
-    (entity :I1538/User {:Name :String})
+    (entity :I1538/User {:Name {:type :String :guid true}})
     (entity :I1538/Workspace {:Id :Identity :WorkspaceName :String})
     (relationship :I1538/BelongsTo {:meta {:contains [:I1538/User :I1538/Workspace]}})
+    (dataflow
+     :I1538/AddTest
+     {:I1538/User {:Name "TestUser"} :as :U}
+     {:I1538/Workspace {:WorkspaceName "WS1"}
+      :-> [[:I1538/BelongsTo :U]]})
     (dataflow
      :I1538/Test1
      [:try
       {:I1538/Workspace? {}
-       :-> [[:I1538/BelongsTo? {:I1538/User {:Name? "Abc"}}]]
+       :-> [[:I1538/BelongsTo? {:I1538/User {:Name? :I1538/Test1.User}}]]
        :as :W}
-      :ok [:eval '(println "Workspace found")]
-      :not-found [:eval '(println "Workspace not found")]
-      :error [:eval '(println "Workspace query error")]]))
-  (println (tu/result {:I1538/Test1 {}})))
+      :ok [:eval '(identity "found")]
+      :not-found [:eval '(identity "not-found")]
+      :error [:eval '(identity "error")]]))
+  (is (cn/instance-of? :I1538/Workspace (tu/first-result {:I1538/AddTest {}})))
+  (is (= "found" (tu/result {:I1538/Test1 {:User "TestUser"}})))
+  (is (= "not-found" (tu/result {:I1538/Test1 {:User "Abc"}}))))
