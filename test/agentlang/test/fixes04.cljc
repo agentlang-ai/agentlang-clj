@@ -30,3 +30,19 @@
             :R.Name]
       :as :K]))
   (is (= "David" (tu/result {:I1490/Test1 {}}))))
+
+(deftest issue-1538-contains-not-found
+  (defcomponent :I1538
+    (entity :I1538/User {:Name :String})
+    (entity :I1538/Workspace {:Id :Identity :WorkspaceName :String})
+    (relationship :I1538/BelongsTo {:meta {:contains [:I1538/User :I1538/Workspace]}})
+    (dataflow
+     :I1538/Test1
+     [:try
+      {:I1538/Workspace? {}
+       :-> [[:I1538/BelongsTo? {:I1538/User {:Name? "Abc"}}]]
+       :as :W}
+      :ok [:eval '(println "Workspace found")]
+      :not-found [:eval '(println "Workspace not found")]
+      :error [:eval '(println "Workspace query error")]]))
+  (println (tu/result {:I1538/Test1 {}})))
