@@ -2,11 +2,17 @@
 [![AgentLang clj CI](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-clj.yml/badge.svg)](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-clj.yml)
 [![AgentLang cljs CI](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-cljs.yml/badge.svg)](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-cljs.yml)
 
-# The AgentLang Programming Language
-AgentLang is a very high-level, declarative, open-source programming language for solving complex tasks with the help of interacting AI agents. Agentlang makes it easy to enhance agents with tools, knowledge bases and chat prompts. Agents can also form complex graphs of inter-relationships that allows them to collaborate together in solving difficult problems.
+<div align="center">
+# AgentLang Programming Language
 
-While most AI programming frameworks limit themselves to LLM based text-generation tasks, AgentLang is designed as a complete tool for real-world application development. As a language, AgentLang is data-oriented and declarative, with an abstraction that is closer to natural languages than traditional programming languages. This makes AgentLang a much better fit for LLM-powered code generation. Users can rapidly build business application in AgentLang from high-level
-specifications - typically more than 10x faster than traditional programming languages.
+## AgentLang is the easiest and most open way to build AI Agents, Chatbots and Apps. With AgentLang, you can build teams of AI agents that collaborate (with other AI agents and humans) to handle complex tasks.
+
+## AgentLang is a data-oriented, declarative abstraction for building agents and apps, similar to how Terraform is a declarative abstraction for infrastructure-as-code. It is feature-rich with first-class constructs for Agents, Knowledge Base, Integrations, Data modeling, Flows, RBAC, and many other features.
+
+## AgentLang programs run on the JVM and can make use of any of the millions of existing Java/JVM libraries out there (Clojure, Kotlin, etc). AgentLang runtime has native integration with databases, vector dbs, auth systems.
+
+## AgentLang comes with all the modern tooling, dependency management needed to build production-grade agents and apps.
+</div>
 
 ## AgentLang is open
 The AgentLang language specification, its compiler and runtime are open source.
