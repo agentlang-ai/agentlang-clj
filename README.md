@@ -3,16 +3,18 @@
 [![AgentLang cljs CI](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-cljs.yml/badge.svg)](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-cljs.yml)
 
 <div align="center">
+
 # AgentLang Programming Language
 
-## AgentLang is the easiest and most open way to build AI Agents, Chatbots and Apps. With AgentLang, you can build teams of AI agents that collaborate (with other AI agents and humans) to handle complex tasks.
+AgentLang is the easiest and most open way to build AI Agents, Chatbots and Apps. With AgentLang, you can build teams of AI agents that collaborate (with other AI agents and humans) to handle complex tasks.
 
-## AgentLang is a data-oriented, declarative abstraction for building agents and apps, similar to how Terraform is a declarative abstraction for infrastructure-as-code. It is feature-rich with first-class constructs for Agents, Knowledge Base, Integrations, Data modeling, Flows, RBAC, and many other features.
-
-## AgentLang programs run on the JVM and can make use of any of the millions of existing Java/JVM libraries out there (Clojure, Kotlin, etc). AgentLang runtime has native integration with databases, vector dbs, auth systems.
-
-## AgentLang comes with all the modern tooling, dependency management needed to build production-grade agents and apps.
 </div>
+
+### AgentLang is a data-oriented, declarative abstraction for building agents and apps, similar to how Terraform is a declarative abstraction for infrastructure-as-code. It is feature-rich with first-class constructs for Agents, Knowledge Base, Integrations, Data modeling, Flows, RBAC, and many other features.
+
+### AgentLang programs run on the JVM and can make use of any of the millions of existing Java/JVM libraries out there (Clojure, Kotlin, etc). AgentLang runtime has native integration with databases, vector dbs, auth systems.
+
+### AgentLang comes with all the modern tooling, dependency management needed to build production-grade agents and apps.
 
 ## AgentLang is open
 The AgentLang language specification, its compiler and runtime are open source.
