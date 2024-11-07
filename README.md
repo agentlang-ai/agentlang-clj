@@ -12,7 +12,7 @@ AgentLang is the **easiest way** to build AI Agents, Chatbots and Apps - build *
 
 The AgentLang language specification, its compiler and runtime are open source. The code you build in AgentLang can be run anywhere, thereby **avoiding the vendor lock-in** of other AI agent/programming platforms.
 
-[Website](https://agentlang-ai.github.io/agentlang/) - [Example](#example) - [Documentation](/docs/#readme)
+[Website](https://agentlang-ai.github.io/agentlang/) - [Examples](#examples) - [Documentation](/docs/#readme)
 
 </div>
 
@@ -29,7 +29,7 @@ AgentLang programs run on the JVM and can make use of any of the millions of exi
 
 AgentLang comes with all the modern tooling, dependency management needed to build production-grade agents and apps.
 
-## Example
+## Examples
 
 The following code snippet shows a simple agent that can interact with a human user:
 
