@@ -666,9 +666,12 @@
         [result nil alias]))))
 
 (defn- compile-maybe-pattern-list [ctx pat]
-  (if (and (vector? pat) (not (li/registered-macro? (first pat))))
-    (mapv #(compile-pattern ctx %) pat)
-    (compile-pattern ctx pat)))
+  (mapv #(compile-pattern ctx %)
+        (if (vector? pat)
+          (if (li/registered-macro? (first pat))
+            [pat]
+            pat)
+          [pat])))
 
 (defn- compile-match-cases [ctx cases]
   (loop [cases cases, cases-code []]
@@ -739,7 +742,7 @@
 
 (defn- compile-construct-with-handlers
   ([ctx pat default-handlers]
-   (let [body (compile-pattern ctx (first pat))
+   (let [body (mapv #(compile-pattern ctx %) (preproc-patterns [(first pat)]))
          hpats (us/flatten-map (rest pat))
          handler-pats (if (seq hpats)
                         (distribute-handler-keys

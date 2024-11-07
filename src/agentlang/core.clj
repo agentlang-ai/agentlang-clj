@@ -54,7 +54,16 @@
   [model-info _]
   (let [[[_ _] config] (ur/prepare-runtime nil model-info)]
     (when-let [server-cfg (ur/make-server-config config)]
-      (ev/eval-all-dataflows {:Agentlang.Kernel.Lang/Migrations {}})
+      (try
+        (let
+         [r (ev/eval-all-dataflows
+             (cn/make-instance
+              {:Agentlang.Kernel.Lang/Migrations {}}))]
+          (log/info (str "migrations result: " r))
+          r)
+        (catch Exception ex
+          (log/error (str "migrations event failed: " (.getMessage ex)))
+          (log/error ex)))
       (log/info (str "Migrations config - " server-cfg)))))
 
 (defn generate-swagger-doc [model-name args]
