@@ -68,7 +68,7 @@ curl --header "Content-Type: application/json" \
 http://localhost:8080/api/Chat/Session
 ```
 
-If all goes well, the agent will reply with a joke about itself!
+You should see a response from the agent with a joke about itself!
 
 ### Contributing
 
