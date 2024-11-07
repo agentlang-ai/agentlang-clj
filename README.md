@@ -8,6 +8,8 @@
 
 AgentLang is the easiest and most open way to build AI Agents, Chatbots and Apps - build teams of AI agents that collaborate (with other AI agents and humans) to handle complex tasks.
 
+AgentLang is purpose-built for enterprise use cases and is battle-tested in production environments. Users are building AI agents that integrate with their enterprise systems and automate monotonous, time-consuming, undifferentated tasks.
+
 </div>
 
 ### AgentLang is innovative
