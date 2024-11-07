@@ -687,6 +687,13 @@
       (valid-attribute-value
        attr-name (check-format ascm attr-name obj) (dissoc ascm :type)))))
 
+(defn- attr-type-preprocessor [attr-type]
+  (case attr-type
+    :Agentlang.Kernel.Lang/Float float
+    :Agentlang.Kernel.Lang/Double double
+    :Agentlang.Kernel.Lang/Decimal decimal
+    false))
+
 (defn valid-attribute-value
   "Check against the attribute schema, if the provided value (v)
   is a valid value for the attribute. If valid, return v. If v is nil,
@@ -702,7 +709,10 @@
 
         (:listof ascm)
         (let [tp (:listof ascm)
-              p (partial element-type-check tp (find-schema tp))]
+              p (partial element-type-check tp (find-schema tp))
+              aval (if-let [p (attr-type-preprocessor tp)]
+                     (mapv p aval)
+                     aval)]
           (if (su/all-true? (mapv p aval))
             aval
             (raise-error :invalid-list-element [aname])))
@@ -759,11 +769,7 @@
     (raise-error :no-record-set [attrname])))
 
 (defn- preproc-attribute-value [attributes attrname attr-type]
-  (if-let [p (case attr-type
-               :Agentlang.Kernel.Lang/Float float
-               :Agentlang.Kernel.Lang/Double double
-               :Agentlang.Kernel.Lang/Decimal decimal
-               false)]
+  (if-let [p (attr-type-preprocessor attr-type)]
     (assoc attributes attrname (p (get attributes attrname)))
     attributes))
 
