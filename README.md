@@ -6,31 +6,28 @@
 
 # AgentLang Programming Language
 
-AgentLang is the easiest and most open way to build AI Agents, Chatbots and Apps. With AgentLang, you can build teams of AI agents that collaborate (with other AI agents and humans) to handle complex tasks.
+AgentLang is the easiest and most open way to build AI Agents, Chatbots and Apps - build teams of AI agents that collaborate (with other AI agents and humans) to handle complex tasks.
 
 </div>
 
-AgentLang is a data-oriented, declarative abstraction for building agents and apps, similar to how Terraform is a declarative abstraction for infrastructure-as-code. It is feature-rich with first-class constructs for Agents, Knowledge Base, Integrations, Data modeling, Flows, RBAC, and many other features.
+### AgentLang is innovative
 
-AgentLang programs run on the JVM and can make use of any of the millions of existing Java/JVM libraries out there (Clojure, Kotlin, etc). AgentLang runtime has native integration with databases, vector dbs, auth systems.
+AgentLang is a data-oriented, declarative abstraction for building agents and apps, similar to how Terraform is a declarative abstraction for infrastructure-as-code. It is feature-rich making programming easy and fun:
 
-AgentLang comes with all the modern tooling, dependency management needed to build production-grade agents and apps.
+1. **First-class AI Agents** - interacting AI Agents is a built-in language construct - developers can choose from one of the built-in agent-types, or easily add their own agent-types.
+2. **Graph-based Data Model** - model real-world relationships elegantly as a hierarchical graph of business entities with relationships. Such [entities and relationships](https://docs.agentlang.io/docs/concepts/data-model) are first-class constructs in AgentLang.
+3. **RBAC** - tightly control operations on business entities through [declarative access-control](https://docs.agentlang.io/docs/concepts/zero-trust-programming) encoded directly in the model itself.
+4. **Declarative flows** - express complex business logic simply as [purely-declarative patterns of data](https://docs.agentlang.io/docs/concepts/declarative-dataflow).
+5. **Resolvers** - use a simple, but [powerful mechanism](https://docs.agentlang.io/docs/concepts/resolvers) to interface with external systems.
+
 
 ### AgentLang is open
-The AgentLang language specification, its compiler and runtime are open source.
 
-The code you build in AgentLang can be run anywhere using the open source compiler and runtime, thereby avoiding the vendor lock-in of other AI programming platforms.
+The AgentLang language specification, its compiler and runtime are open source. The code you build in AgentLang can be run anywhere using the open source compiler and runtime, thereby avoiding the vendor lock-in of other AI programming platforms.
 
-### AgentLang is innovative
-AgentLang introduces a number of innovative concepts to programming:
+AgentLang programs run on the JVM and can make use of any of the millions of existing Java/Clojure and other JVM libraries out there. AgentLang runtime has native integration with databases, vector dbs, auth systems.
 
-1. **First-class AI Agents** - interacting AI Agents is a built-in language concept - developers can choose from one of the built-in agent-types, or easily add their own agent-types.
-2. **Graph-based Hierarchical Data Model** - compose the high-level data model of an application as a hierarchical graph of business entities with relationships. Such [entities and relationships](https://docs.agentlang.io/docs/concepts/data-model) are first-class constructs in AgentLang.
-3. **Zero-trust Programming** - tightly control operations on business entities through [declarative access-control](https://docs.agentlang.io/docs/concepts/zero-trust-programming) encoded directly in the model itself.
-4. **Declarative Dataflow** - express business logic as [purely-declarative patterns of data](https://docs.agentlang.io/docs/concepts/declarative-dataflow).
-5. **Resolvers** - use a simple, but [powerful mechanism](https://docs.agentlang.io/docs/concepts/resolvers) to interface with external systems.
-6. **Interceptors** - [extend the agentlang runtime](https://docs.agentlang.io/docs/concepts/interceptors) with custom capabilities.
-7. **Entity-graph-Database Mapping** - take advantage of an [abstract persistence layer](https://docs.agentlang.io/docs/concepts/entity-db-mapping) for fully-automated storage of entity instances.
+AgentLang comes with all the modern tooling, dependency management needed to build production-grade agents and apps.
 
 ### A Taste of AgentLang
 
