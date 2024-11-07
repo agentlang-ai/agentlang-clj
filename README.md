@@ -31,7 +31,7 @@ AgentLang comes with all the modern tooling, dependency management needed to bui
 
 ## Examples
 
-The following code snippet shows a simple agent that can interact with a human user:
+### Humor Bot
 
 ```clojure
 (component :Chat)
@@ -40,6 +40,39 @@ The following code snippet shows a simple agent that can interact with a human u
  {:Name :example-agent
   :Input :Chat/Session
   :UserInstruction "You are an AI bot who tell jokes"}}
+```
+
+### Expense Processor
+
+Scans expense receipts and generates expense records
+
+```clojure
+(component :Expense)
+
+(entity
+ :Expense
+ {:Id :Identity
+  :Vendor :String
+  :Address :String
+  :Amount :Double
+  :ExpenseDate :Date
+  :CreatedAt {:default now}})
+
+{:Agentlang.Core/Agent
+ {:Name :receipt-ocr-agent
+  :Type :ocr
+  :UserInstruction (str "Analyse the image of a receipt and return only the items and their amounts. "
+                        "No need to include sub-totals, totals and other data.")
+  :LLM "openai-4o-mini"}}
+
+{:Agentlang.Core/Agent
+ {:Name :expense-agent
+  :Type :planner
+  :LLM "openai-4o-mini"
+  :UserInstruction "Convert an expense report into individual instances of the expense entity."
+  :Tools [:Expense.Workflow/Expense]
+  :Input :Expense.Workflow/SaveExpenses
+  :Delegates {:To :receipt-ocr-agent :Preprocessor true}}}
 ```
 
 Save this code to a file named `chat.al` and it's ready to be run as a highly-scalable service with auto-generated HTTP APIs for interacting with the agent. But before you can actually run it, you need to install AgentLang. The next section will help you with that.
