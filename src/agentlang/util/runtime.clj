@@ -139,8 +139,11 @@
       (when (not= :ok (:status r))
         (log/error (str "failed to initialize LLM - " llm-name)))))
   (when-let [cm-config (:connection-manager config)]
-    (doseq [[conn-name conn-attrs] (:configurations cm-config)]
-      (cc/configure-new-connection conn-name conn-attrs))
+    (doseq [integ-name (:integrations cm-config)]
+      (cc/create-new-integration integ-name))
+    (doseq [[integ-name cfgs] (:configurations cm-config)]
+      (doseq [[conn-name conn-attrs] cfgs]
+        (cc/configure-new-connection integ-name conn-name conn-attrs)))
     (doseq [conn (:connections cm-config)]
       (let [[conn-name conn-config-name]
             (cond
