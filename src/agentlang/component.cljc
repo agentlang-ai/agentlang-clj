@@ -42,6 +42,10 @@
   (u/safe-set models (assoc @models model-name spec))
   model-name)
 
+(defn unregister-model [model-name]
+  (u/safe-set models (dissoc @models model-name))
+  model-name)
+
 (defn model-names [] (keys @models))
 (defn fetch-model [name] (get @models name))
 (defn model-property [prop name] (prop (fetch-model name)))

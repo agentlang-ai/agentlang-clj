@@ -26,12 +26,11 @@
        (if a (str a (if #?(:clj (Character/isLetterOrDigit c) :cljs true) c \_)) c))
      nil s)))
 
-(def ^:private schema-version
-  (memoize
-   (fn [component-name]
-     (escape-graphic-chars
-      (or (cn/model-version (cn/model-for-component component-name))
-          "0.0.1")))))
+(defn- schema-version
+  [component-name]
+  (escape-graphic-chars
+   (or (cn/model-version (cn/model-for-component component-name))
+       "0.0.1")))
 
 (defn entity-table-name
   ([entity-name version]
