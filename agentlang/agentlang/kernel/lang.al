@@ -66,10 +66,13 @@
   :ExpiryEvent :Map
   :Status {:oneof ["ready" "running" "terminating" "term-cancel" "term-ok" "term-error" "term-abnormal"]
            :default "ready"}
-  :CreatedTimeMs {:type :Long :default dt/current-time-millis}
-  :LastHeartbeatMs {:type :Long :default dt/current-time-millis}})
+  :CreatedTimeMs {:type :Int :default dt/unix-timestamp}
+  :LastHeartbeatMs {:type :Int :default dt/unix-timestamp}})
 
+(event :SetTimerStatus {:TimerName :String :Status :String})
+(event :SetTimerHeartbeat {:TimerName :String})
 (dataflow :SetTimerStatus {:Timer {:Name? :SetTimerStatus.TimerName :Status :SetTimerStatus.Status}})
+(dataflow :SetTimerHeartbeat {:Timer {:Name? :SetTimerHeartbeat.TimerName :LastHeartbeatMs '(agentlang.lang.datetime/unix-timestamp)}})
 
 (dataflow
  :LoadPolicies
@@ -127,7 +130,7 @@
    :paths [:Agentlang.Kernel.Lang/LoadModelFromMeta]}
   {:name :timer
    :type :timer
-   :compose? false
+   :compose? true
    :paths [:Agentlang.Kernel.Lang/Timer]}
   (when (u/host-is-jvm?)
     {:name :data-sync

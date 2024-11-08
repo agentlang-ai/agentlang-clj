@@ -19,7 +19,7 @@
    (def ^:private ^ExecutorService executor (Executors/newCachedThreadPool)))
 
 (defn- update-task-handle! [task-name handle]
-  (swap! handles assoc task-name handle))
+  (u/safe-set handles (assoc @handles task-name handle)))
 
 (defn- expiry-as-ms [inst]
   (let [n (:Expiry inst)]
@@ -30,21 +30,38 @@
       :Days (* 24 60 60 1000 n))))
 
 (defn- sleep [task-name secs]
-  #?(:clj
-     (try
-       (.sleep TimeUnit/SECONDS secs)
-       (catch Exception ex
-         (log/error (str "task " - task-name " sleep interrupted - " ex))))))
+  (when (pos? secs)
+    #?(:clj
+       (try
+         (.sleep TimeUnit/SECONDS secs)
+         (catch Exception ex
+           (log/error (str "task " - task-name " sleep interrupted - " ex)))))))
+
+(defn- update-heartbeat! [task-name]
+  (let [result
+        (first
+         ((es/get-safe-eval-patterns)
+          :Agentlang.Kernel.Lang
+          [{:Agentlang.Kernel.Lang/SetTimerHeartbeat
+            {:TimerName task-name}}]))]
+    (if result
+      task-name
+      (log/warn (str "failed to update heartbeat for timer " task-name ", " (:status result))))))
 
 (defn- set-status! [status task-name]
-  (let [result ((es/get-active-evaluator) (cn/make-instance {:Agentlang.Kernel.Lang/SetTimerStatus
-                                                             {:TimerName task-name :Status status}}))]
-    (u/pprint result)
-    result))
+  (let [result
+        (first
+         ((es/get-safe-eval-patterns)
+          :Agentlang.Kernel.Lang
+          [{:Agentlang.Kernel.Lang/SetTimerStatus
+            {:TimerName task-name :Status status}}]))]
+    (if result
+      task-name
+      (log/warn (str "failed to set status for timer " task-name ", " (:status result))))))
 
-(def set-status-ok! "term-ok")
-(def set-status-error! "term-error")
-(def set-status-terminating! "terminating")
+(def set-status-ok! (partial set-status! "term-ok"))
+(def set-status-error! (partial set-status! "term-error"))
+(def set-status-terminating! (partial set-status! "terminating"))
 
 (defn- cancel-task! [task-name]
   (when-let [handle (get @handles task-name)]
@@ -68,17 +85,21 @@
     (try
       (let [result ((es/get-active-evaluator) (cn/make-instance (:ExpiryEvent inst)))]
         (set-status-ok! n)
+        (log/info (str "timer " n " result: " result))
         result)
       (catch #?(:clj Exception :cljs js/Error) ex
         (set-status-error! n)
         (log/error (str "error in task callback - " ex))))))
 
 (defn- timer-cancelled? [n]
-  (let [result ((es/get-active-evaluator)
-                (cn/make-instance
-                 {:Agentlang.Kernel.Lang/Lookup_Timer {:Name n}}))]
-    (println "$$$$$$$$$$$$$$$$$$$$$$$" result)
-    (= "term-cancel" (:Status result))))
+  (let [inst (first
+              ((es/get-safe-eval-patterns)
+               :Agentlang.Kernel.Lang
+               [{:Agentlang.Kernel.Lang/Lookup_Timer {:Name n}}]))]
+    (if inst
+      (= "term-cancel" (:Status inst))
+      (do (log/warn (str "failed to check cancelled status of timer " n))
+          true))))
 
 (def ^:private heartbeat-secs 5)
 
@@ -86,16 +107,19 @@
   (let [expire-secs (timer-expiry-as-seconds inst)
         n (:Name inst)]
     (fn []
-      (loop [rem-secs expire-secs, check-cancel false]
-        (if (and check-cancel (timer-cancelled? n))
-          (cancel-task! n)
-          (if (< rem-secs heartbeat-secs)
-            (do (sleep n rem-secs)
-                (set-status-terminating! n)
-                (run-task inst))
-            (do (sleep n heartbeat-secs)
-                (update-heartbeat! inst)
-                (recur (- rem-secs heartbeat-secs) true))))))))
+      (try
+        (loop [rem-secs expire-secs, check-cancel false]
+          (if (and check-cancel (timer-cancelled? n))
+            (cancel-task! n)
+            (if (< rem-secs heartbeat-secs)
+              (do (sleep n rem-secs)
+                  (set-status-terminating! n)
+                  (run-task inst))
+              (do (sleep n heartbeat-secs)
+                  (update-heartbeat! n)
+                  (recur (- rem-secs heartbeat-secs) true)))))
+        (catch #?(:clj Exception :cljs js/Error) ex
+          #?(:clj (log/error ex)))))))
 
 (defn timer-upsert [inst]
   #?(:clj
