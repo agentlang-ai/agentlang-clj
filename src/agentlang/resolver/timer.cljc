@@ -13,6 +13,11 @@
      (:import [java.util.concurrent ExecutorService Executors
                Future TimeUnit])))
 
+;; TODO:
+;; If the timer-manager flag is set in config:
+;; 1. On startup, check for runnable timers in the store and start them.
+;; 2. Periodically check for failing nodes and restart them.
+
 (def ^:private handles (u/make-cell {}))
 
 #?(:clj
