@@ -1072,20 +1072,22 @@
 
     (do-load-references [self env [[record-name alias] refs]]
       (if-let [[path v] (env/instance-ref-path env record-name alias refs)]
-        (if (cn/an-instance? v)
-          (let [opcode-eval (partial eval-opcode self)
-                inst (assoc-computed-attributes env (cn/instance-type v) v opcode-eval)
-                rel-ctx (atom nil)
-                final-inst (ensure-relationship-constraints env rel-ctx (cn/instance-type inst) inst)
-                env (env/merge-relationship-context env @rel-ctx)
-                [env r]
-                (bind-and-persist env final-inst)]
-            (i/ok (if r r final-inst) env))
-          (if-let [store (env/get-store env)]
-            (if (store/reactive? store)
-              (i/ok (store/get-reference store path refs) env)
-              (i/ok v env))
-            (i/ok v env)))
+        (if-not path
+          (i/ok v env)
+          (if (cn/an-instance? v)
+            (let [opcode-eval (partial eval-opcode self)
+                  inst (assoc-computed-attributes env (cn/instance-type v) v opcode-eval)
+                  rel-ctx (atom nil)
+                  final-inst (ensure-relationship-constraints env rel-ctx (cn/instance-type inst) inst)
+                  env (env/merge-relationship-context env @rel-ctx)
+                  [env r]
+                  (bind-and-persist env final-inst)]
+              (i/ok (if r r final-inst) env))
+            (if-let [store (env/get-store env)]
+              (if (store/reactive? store)
+                (i/ok (store/get-reference store path refs) env)
+                (i/ok v env))
+              (i/ok v env))))
         (i/not-found record-name env)))
 
     (do-new-instance [_ env record-name]

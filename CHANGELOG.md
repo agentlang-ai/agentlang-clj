@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1-alpha1] - 2024-11-08
+
+- Update timeout for nREPL drawbridge
+
 ## [0.6.0] - 2024-10-22
 
 - Cleanup of agent examples and some minor fixes

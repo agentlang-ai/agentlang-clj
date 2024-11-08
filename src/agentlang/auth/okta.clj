@@ -320,10 +320,11 @@
                 sess/session-cookie-replace
                 sess/session-cookie-create)
               session-id (assoc result :username user)))
-      {:status :redirect-found
-       :location client-url
-       :set-cookie (str "sid=" session-id)
-       :cookie-domain cookie-domain}
+      (do
+        (auth/on-user-login user)
+        {:status :redirect-found
+         :location client-url
+         :set-cookie (str "sid=" session-id)})
       {:error "failed to create session"})))
 
 (defmethod auth/session-user tag [{req :request cookie :cookie :as auth-config}]
