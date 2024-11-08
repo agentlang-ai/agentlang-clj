@@ -59,13 +59,17 @@
 
 (entity
  :Timer
- {:Expiry :Int
+ {:Name {:type :String :guid true}
+  :Expiry :Int
   :ExpiryUnit {:oneof ["Seconds" "Minutes" "Hours" "Days"]
                :default "Seconds"}
   :ExpiryEvent :Map
-  ;; :TaskHandle is set by the runtime, represents the
-  ;; thread that execute the event after timer expiry.
-  :TaskHandle {:type :Any :optional true}})
+  :Status {:oneof ["ready" "running" "terminating" "term-cancel" "term-ok" "term-error" "term-abnormal"]
+           :default "ready"}
+  :CreatedTimeMs {:type :Long :default dt/current-time-millis}
+  :LastHeartbeatMs {:type :Long :default dt/current-time-millis}})
+
+(dataflow :SetTimerStatus {:Timer {:Name? :SetTimerStatus.TimerName :Status :SetTimerStatus.Status}})
 
 (dataflow
  :LoadPolicies

@@ -142,3 +142,9 @@
 #?(:clj
    (defn unix-timestamp []
      (quot (System/currentTimeMillis) 1000)))
+
+(defn current-time-millis []
+  #?(:clj
+     (System/currentTimeMillis)
+     :cljs
+     (. (js/Date.) (getTime))))
