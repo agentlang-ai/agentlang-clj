@@ -261,8 +261,8 @@
                                            client-url :client-url
                                            cookie-domain :cookie-domain
                                            :as auth-config}]
-  (let [user-state (str (b64/encode-string client-url) user-state-delim
-                        (b64/encode-string cookie-domain))
+  (let [user-state (str (when client-url (b64/encode-string client-url)) user-state-delim
+                       (when cookie-domain (b64/encode-string cookie-domain)))
         auth-config (assoc auth-config :user-state user-state)]
     (if-let [sid (auth/cookie-to-session-id auth-config cookie)]
       (do
@@ -272,11 +272,9 @@
            :location client-url
            :cookie-domain cookie-domain}
           {:status :redirect-found
-           :location (first (make-authorize-url auth-config))
            :cookie-domain cookie-domain}))
       {:status :redirect-found
-       :location (first (make-authorize-url auth-config))
-       :cookie-domain cookie-domain})))
+       :location (first (make-authorize-url auth-config))})))
 
 (defn- cleanup-roles [roles default-role]
   (let [roles (if (vector? roles)
@@ -324,6 +322,7 @@
         (auth/on-user-login user)
         {:status :redirect-found
          :location client-url
+         :cookie-domain cookie-domain
          :set-cookie (str "sid=" session-id)})
       {:error "failed to create session"})))
 

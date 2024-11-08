@@ -157,9 +157,8 @@
    :headers
    (let [hdrs (assoc (headers) "Location" location)]
      (if cookie
-       (let [cookie-domain (or cookie-domain
-                               (get-in (gs/get-app-config) [:authentication :cookie-domain]))]
-         (assoc hdrs "Set-Cookie" (str cookie "; Domain=" cookie-domain "; Path=/")))
+       (let [cd (or cookie-domain (get-in (gs/get-app-config) [:authentication :cookie-domain]))]
+         (assoc hdrs "Set-Cookie" (str cookie "; Domain=" (if (= "NULL" cd) "" cd) "; Path=/")))
        hdrs))})
 
 (defn- maybe-assoc-root-type [mode obj result]
@@ -1124,7 +1123,7 @@
      (auth/authenticate-session (assoc auth-config
                                        :cookie cookie
                                        :client-url (:origin query-params)
-                                       :cookie-domain (:cdomain query-params))))))
+                                       :cookie-domain (:server_redirect_host query-params))))))
 
 (defn- process-auth-callback [evaluator call-post-signup [auth-config _] request]
   (log-request "Auth-callback request" request)
