@@ -5,14 +5,29 @@
             [agentlang.component :as cn]
             [agentlang.store :as s]
             [agentlang.lang.tools.loader :as loader]
-            [agentlang.evaluator :as e]
             [agentlang.test.util :as tu]
+            [agentlang.global-state :as gs]
             [agentlang.evaluator :as ev]))
 
-(defn- load-model [model-name model-path]
-  (let [[model model-root] (loader/read-model model-path)]
-    (loader/load-components-from-model model model-root)
-    (ur/init-runtime model-name nil)))
+(defn- reset-models-state []
+  (gs/uninstall-standalone-patterns!)
+  (let [components (cn/component-names)]
+    (loop [c components]
+      (when (seq c)
+        (when-not
+         (contains? (set (cn/internal-component-names)) (first c))
+          (cn/remove-component (first c)))
+        (recur (rest c))))))
+
+(defn- load-model 
+  ([model-name model-path reset-state]
+   (when reset-state 
+     (reset-models-state))
+   (let [[model model-root] (loader/read-model model-path)]
+     (loader/load-components-from-model model model-root)
+     (ur/init-runtime model-name nil)))
+  ([model-name model-path]
+   (load-model model-name model-path false)))
 
 (defn- clear-model-init [model-name]
   (s/remove-inited-component model-name)
@@ -21,14 +36,15 @@
 (deftest test-same-ent
   (let [model-name :Factory
         old-model "test/sample/migrations/1-same-ent/old/factory/model.al"
-        new-model "test/sample/migrations/1-same-ent/model.al"]
-    (load-model model-name old-model)
+        new-model "test/sample/migrations/1-same-ent/model.al"] 
+    
+    (load-model model-name old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:Factory/Init {}}))
 
     (let [customers (tu/fresult (ev/eval-all-dataflows
                                  (cn/make-instance {:Factory/LookupAll_Customer {}})))]
-      (is (= 5 (count customers)))) 
-    
+      (is (= 5 (count customers))))
+
     (clear-model-init model-name)
     (load-model model-name new-model)
     (ev/eval-all-dataflows
@@ -48,11 +64,12 @@
       (is (and (= 3 (count customers_select)) (and (:Name fcs) (:Age fcs) (:Gender fcs)))))
     (clear-model-init model-name)))
 
-(deftest test-attr-chang
+(deftest test-attr-change
   (let [model-name :Factory
         old-model "test/sample/migrations/2-attr-change/old/factory/model.al"
         new-model "test/sample/migrations/2-attr-change/model.al"]
-    (load-model model-name old-model)
+    
+    (load-model model-name old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:Factory/Init {}}))
 
     (let [shipments (tu/fresult (ev/eval-all-dataflows
@@ -66,7 +83,7 @@
     (load-model model-name new-model)
     (ev/eval-all-dataflows
      (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
-    
+
     (let [shipments (tu/fresult (ev/eval-all-dataflows
                                  (cn/make-instance {:Factory/LookupAll_Shipment {}})))
           fs (first shipments)]
@@ -79,7 +96,8 @@
   (let [model-name :Manager
         old-model "test/sample/migrations/4-rel-contains/old/manager/model.al"
         new-model "test/sample/migrations/4-rel-contains/model.al"]
-    (load-model model-name old-model)
+    
+    (load-model model-name old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:Manager/Init {}}))
     (let [users (tu/fresult (ev/eval-all-dataflows
                              (cn/make-instance {:Manager/LookupAll_User {}})))]

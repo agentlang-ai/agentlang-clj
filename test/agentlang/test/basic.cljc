@@ -83,7 +83,11 @@
     (is (valid-opcode? opc/set-literal-attribute?
                        (nth opcs 2) [:Y 200]))
     (is (valid-opcode? opc/intern-instance?
-                       (nth opcs 3) [[:CompileTest :E1] nil true true]))))
+                       (nth opcs 3)
+                       (fn [[r a _ v u]]
+                         (and (= r [:CompileTest :E1])
+                              (= a nil) (= v true) 
+                              (= u true)))))))
 
 (deftest compile-pattern-02
   (let [[ctx c] (pattern-compiler)
@@ -107,7 +111,11 @@
                          (nth opcs 2) (fn [[n f]]
                                         (and (= :Y n) (fn? f)))))
       (is (valid-opcode? opc/intern-instance?
-                         (nth opcs 3) [[:CompileTest :E1] nil true true])))))
+                         (nth opcs 3)
+                         (fn [[r a _ v u]]
+                           (and (= r [:CompileTest :E1])
+                                (= a nil) (= v true)
+                                (= u true))))))))
 
 (deftest circular-dependency
   (let [[ctx c] (pattern-compiler)
@@ -1366,149 +1374,149 @@
            (is (every? #(uuid? ((tu/append-id :RefCheck3/E) %)) data))))
 
        (testing "record"
-           (record {:RefCheck3/E
-                    {:X :Int
-                     :Y :Int}}))
+         (record {:RefCheck3/E
+                  {:X :Int
+                   :Y :Int}}))
 
-         (let [data (tu/generate-data :RefCheck3/E)]
-           (is (seq? data))
-           (is (every? #(int? (:RefCheck3/E.X %)) data))
-           (is (every? #(int? (:RefCheck3/E.Y %)) data))
-           (is (every? #(nil? ((tu/append-id :RefCheck3/E) %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E)]
+         (is (seq? data))
+         (is (every? #(int? (:RefCheck3/E.X %)) data))
+         (is (every? #(int? (:RefCheck3/E.Y %)) data))
+         (is (every? #(nil? ((tu/append-id :RefCheck3/E) %)) data))))
 
-       (testing "Reference to an entity's attribute"
-         (entity {:RefCheck3/E1 {:A :Int}})
-         (entity {:RefCheck3/E2 {:AId {:ref (tu/append-id :RefCheck3/E1)}
-                                 :X :Int}})
-         (entity {:RefCheck3/E3 {:AIdId {:ref :RefCheck3/E2.AId}}})
+     (testing "Reference to an entity's attribute"
+       (entity {:RefCheck3/E1 {:A :Int}})
+       (entity {:RefCheck3/E2 {:AId {:ref (tu/append-id :RefCheck3/E1)}
+                               :X :Int}})
+       (entity {:RefCheck3/E3 {:AIdId {:ref :RefCheck3/E2.AId}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(uuid? (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(uuid? (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "Reference to an entity"
-         (entity {:RefCheck3/E1 {:A :Int}})
-         (entity {:RefCheck3/E2 {:AId {:ref (tu/append-id :RefCheck3/E1)}
-                                 :X :Int}})
-         (entity {:RefCheck3/E3 {:AIdId {:type :RefCheck3/E1}}})
+     (testing "Reference to an entity"
+       (entity {:RefCheck3/E1 {:A :Int}})
+       (entity {:RefCheck3/E2 {:AId {:ref (tu/append-id :RefCheck3/E1)}
+                               :X :Int}})
+       (entity {:RefCheck3/E3 {:AIdId {:type :RefCheck3/E1}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(instance? clojure.lang.PersistentArrayMap (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(instance? clojure.lang.PersistentArrayMap (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "Reference to a record"
-         (record {:RefCheck3/E1 {:A :Int}})
-         (entity {:RefCheck3/E2 {:AId {:ref :RefCheck3/E1.A}
-                                 :X :Int}})
-         (entity {:RefCheck3/E3 {:AIdId {:type :RefCheck3/E1}}})
+     (testing "Reference to a record"
+       (record {:RefCheck3/E1 {:A :Int}})
+       (entity {:RefCheck3/E2 {:AId {:ref :RefCheck3/E1.A}
+                               :X :Int}})
+       (entity {:RefCheck3/E3 {:AIdId {:type :RefCheck3/E1}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(instance? clojure.lang.PersistentArrayMap (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(instance? clojure.lang.PersistentArrayMap (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "oneof"
-         (entity {:RefCheck3/E3 {:AIdId {:oneof ["diesel", "petrol", "cng"]}}})
+     (testing "oneof"
+       (entity {:RefCheck3/E3 {:AIdId {:oneof ["diesel", "petrol", "cng"]}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(string? (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(string? (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "string without format"
-         (entity {:RefCheck3/E3 {:AIdId {:type :String}}})
+     (testing "string without format"
+       (entity {:RefCheck3/E3 {:AIdId {:type :String}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(string? (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(string? (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "keyword"
-         (entity {:RefCheck3/E3 {:AIdId {:type :Keyword}}})
+     (testing "keyword"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Keyword}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(keyword? (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(keyword? (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "path"
-         (entity {:RefCheck3/E3 {:AIdId {:type :Path}}})
+     (testing "path"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Path}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(or (keyword? %) (string? %)) (map :RefCheck3/E3.AIdId data)))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(or (keyword? %) (string? %)) (map :RefCheck3/E3.AIdId data)))))
 
-       (testing "int64"
-         (entity {:RefCheck3/E3 {:AIdId {:type :Int64}}})
+     (testing "int64"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Int64}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(int? (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(int? (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "bigInteger"
-         (entity {:RefCheck3/E3 {:AIdId {:type :BigInteger}}})
+     (testing "bigInteger"
+       (entity {:RefCheck3/E3 {:AIdId {:type :BigInteger}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(integer? (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(integer? (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "float"
-         (entity {:RefCheck3/E3 {:AIdId {:type :Float}}})
+     (testing "float"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Float}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(float? (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(float? (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "double"
-         (entity {:RefCheck3/E3 {:AIdId {:type :Double}}})
+     (testing "double"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Double}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(double? (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(double? (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "decimal"
-         (entity {:RefCheck3/E3 {:AIdId {:type :Decimal}}})
+     (testing "decimal"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Decimal}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(decimal? (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(decimal? (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "boolean"
-         (entity {:RefCheck3/E3 {:AIdId {:type :Boolean}}})
+     (testing "boolean"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Boolean}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(boolean? (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(boolean? (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "date"
-         (entity {:RefCheck3/E3 {:AIdId {:type :Date}}})
+     (testing "date"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Date}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(instance? java.time.LocalDate %) (map :RefCheck3/E3.AIdId data)))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(instance? java.time.LocalDate %) (map :RefCheck3/E3.AIdId data)))))
 
-       (testing "dateTime"
-         (entity {:RefCheck3/E3 {:AIdId {:type :DateTime}}})
+     (testing "dateTime"
+       (entity {:RefCheck3/E3 {:AIdId {:type :DateTime}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(instance? java.time.LocalDateTime %) (map :RefCheck3/E3.AIdId data)))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(instance? java.time.LocalDateTime %) (map :RefCheck3/E3.AIdId data)))))
 
-       (testing "time"
-         (entity {:RefCheck3/E3 {:AIdId {:type :Time}}})
+     (testing "time"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Time}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(instance? java.time.LocalTime %) (map :RefCheck3/E3.AIdId data)))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(instance? java.time.LocalTime %) (map :RefCheck3/E3.AIdId data)))))
 
-       (testing "any"
-         (entity {:RefCheck3/E3 {:AIdId {:type :Any}}})
+     (testing "any"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Any}}})
 
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(any? (:RefCheck3/E3.AIdId %)) data))))
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(any? (:RefCheck3/E3.AIdId %)) data))))
 
-       (testing "map"
-         (entity {:RefCheck3/E3 {:AIdId {:type :Map}}})
-         (let [data (tu/generate-data :RefCheck3/E3)]
-           (is (seq? data))
-           (is (every? #(map? (:RefCheck3/E3.AIdId %)) data))))))
+     (testing "map"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Map}}})
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(map? (:RefCheck3/E3.AIdId %)) data))))))
 
 (deftest components-in-model
   (component :Abc.X)
