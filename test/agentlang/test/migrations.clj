@@ -18,34 +18,40 @@
   (s/remove-inited-component model-name)
   (cn/unregister-model model-name))
 
-(deftest test-migrations-rel-contains
-  (let [model-name :Manager
-        old-model "test/sample/migrations-rel-contains/old/manager/model.al"
-        new-model "test/sample/migrations-rel-contains/model.al"]
+(deftest test-same-ent
+  (let [model-name :Factory
+        old-model "test/sample/migrations/1-same-ent/old/factory/model.al"
+        new-model "test/sample/migrations/1-same-ent/model.al"]
     (load-model model-name old-model)
-    (ev/eval-all-dataflows (cn/make-instance {:Manager/Init {}}))
-    (let [users (tu/fresult (ev/eval-all-dataflows
-                             (cn/make-instance {:Manager/LookupAll_User {}})))]
-      (is (= 3 (count users)))) 
+    (ev/eval-all-dataflows (cn/make-instance {:Factory/Init {}}))
+
+    (let [customers (tu/fresult (ev/eval-all-dataflows
+                                 (cn/make-instance {:Factory/LookupAll_Customer {}})))]
+      (is (= 5 (count customers)))) 
+    
     (clear-model-init model-name)
     (load-model model-name new-model)
     (ev/eval-all-dataflows
-     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}})) 
-    (let [users (tu/fresult (ev/eval-all-dataflows
-                             (cn/make-instance {:Manager/LookupAll_User {}})))
-          ws (tu/fresult (ev/eval-all-dataflows
-                          (cn/make-instance {:Manager/LookupAll_Workspace {}})))
-          ws1 (first (filter #(= (:WorkspaceName %) "WS1") ws))
-          ws1-user (first (filter #(= (:__Id__ %) (:User ws1)) users))] 
-      (is (= 3 (count users))) 
-      (is (seq (:User (first ws))))
-      (is (= (count ws) 3))
-      (is (= "User1" (:Name ws1-user))))))
+     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
 
-(deftest test-migrations-attribute-changes
+    (let [customers (tu/fresult (ev/eval-all-dataflows
+                                 (cn/make-instance {:Factory/LookupAll_Customer {}})))
+          fs (first customers)
+          persons (tu/fresult (ev/eval-all-dataflows
+                               (cn/make-instance {:Factory/LookupAll_Person {}})))
+          fp (first persons)
+          customers_select (tu/fresult (ev/eval-all-dataflows
+                                        (cn/make-instance {:Factory/LookupAll_CustomerMale {}})))
+          fcs (first customers_select)]
+      (is (and (= 5 (count customers)) (and (:Name fs) (:Age fs) (:Gender fs))))
+      (is (and (= 5 (count persons)) (and (:Name fp) (:Age fp) (:Gender fp))))
+      (is (and (= 3 (count customers_select)) (and (:Name fcs) (:Age fcs) (:Gender fcs)))))
+    (clear-model-init model-name)))
+
+(deftest test-attr-chang
   (let [model-name :Factory
-        old-model "test/sample/migrations-attr-change/old/factory/model.al"
-        new-model "test/sample/migrations-attr-change/model.al"]
+        old-model "test/sample/migrations/2-attr-change/old/factory/model.al"
+        new-model "test/sample/migrations/2-attr-change/model.al"]
     (load-model model-name old-model)
     (ev/eval-all-dataflows (cn/make-instance {:Factory/Init {}}))
 
@@ -66,4 +72,29 @@
           fs (first shipments)]
       (is (= 5 (count shipments)))
       (is (and (:MinPrice fs) (:MaxPrice fs) (:Amount fs)
-               (:BuyerName fs) (:Address fs) (:Verified fs))))))
+               (:BuyerName fs) (:Address fs) (:Verified fs))))
+    (clear-model-init model-name)))
+
+(deftest test-rel-contains
+  (let [model-name :Manager
+        old-model "test/sample/migrations/4-rel-contains/old/manager/model.al"
+        new-model "test/sample/migrations/4-rel-contains/model.al"]
+    (load-model model-name old-model)
+    (ev/eval-all-dataflows (cn/make-instance {:Manager/Init {}}))
+    (let [users (tu/fresult (ev/eval-all-dataflows
+                             (cn/make-instance {:Manager/LookupAll_User {}})))]
+      (is (= 3 (count users))))
+    (clear-model-init model-name)
+    (load-model model-name new-model)
+    (ev/eval-all-dataflows
+     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (let [users (tu/fresult (ev/eval-all-dataflows
+                             (cn/make-instance {:Manager/LookupAll_User {}})))
+          ws (tu/fresult (ev/eval-all-dataflows
+                          (cn/make-instance {:Manager/LookupAll_Workspace {}})))
+          ws1 (first (filter #(= (:WorkspaceName %) "WS1") ws))
+          ws1-user (first (filter #(= (:__Id__ %) (:User ws1)) users))]
+      (is (= 3 (count users)))
+      (is (seq (:User (first ws))))
+      (is (= (count ws) 3))
+      (is (= "User1" (:Name ws1-user))))))
