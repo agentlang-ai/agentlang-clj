@@ -8,7 +8,7 @@ function msg {
     echo "$@" 1>&2
 }
 
-export CURRENT_AGENTLANG_VERSION="0.6.0-alpha3"
+export CURRENT_AGENTLANG_VERSION="0.6.0"
 
 if [ -e model.agentlang ]; then
     agentlang_version_in_model=`grep ":agentlang-version" model.agentlang | sed -E  's/(.*) {1}(.*)/\2/' | xargs`
@@ -24,7 +24,7 @@ fi
 echo "Agentlang ${AGENTLANG_VERSION}"
 
 # Must be sha256sum
-export AGENTLANG_CHECKSUM='e8cd6164f5c44c916d337d2a12b56ee7b9e13fa71153f21117cd3a5cbf4de3d1'
+export AGENTLANG_CHECKSUM='88ae50e49e21dacde3cc77a0d9fb7f29e02d858ad4e89e3e2106e14d60feb9cb'
 
 if [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "msys" ]]; then
     delimiter=";"

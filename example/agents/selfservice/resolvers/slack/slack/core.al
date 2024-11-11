@@ -17,6 +17,8 @@
   :mrkdwn {:type :Boolean :default true}
   :thread {:type :String :optional true}})
 
+(def test-mode (System/getenv "SELFSERVICE_TEST_MODE"))
+
 (def slack-api-key (System/getenv "SLACK_API_KEY"))
 
 (def slack-base-url "https://slack.com/api")
@@ -66,11 +68,18 @@
         new-instance (handle-response response instance)]
     (assoc new-instance :text (wait-for-reply new-instance))))
 
+(defn- print-instance [inst]
+  (println "** " (cn/instance-type-kw inst) " **")
+  (u/pprint (cn/instance-attributes inst))
+  inst)
+
 (defn create-entity [instance]
-  (let [[c n] (li/split-path (cn/instance-type instance))]
-    (if (= n :Chat)
-      (create-chat "chat.postMessage" instance)
-      instance)))
+  (if test-mode
+    (print-instance (assoc instance :text (u/trace ">>> " (rand-nth ["this request is approved" "this is rejected"]))))
+    (let [[c n] (li/split-path (cn/instance-type instance))]
+      (if (= n :Chat)
+        (create-chat "chat.postMessage" instance)
+        instance))))
 
 (resolver
  :Slack.Core/Resolver

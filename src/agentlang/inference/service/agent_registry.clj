@@ -14,7 +14,7 @@
 (register-agent-handler "planner" logic/handle-planner-agent)
 (register-agent-handler "analyzer" logic/handle-analysis-agent)
 (register-agent-handler "chat" logic/handle-chat-agent)
-(register-agent-handler "classifier" logic/handle-chat-agent)
+(register-agent-handler "classifier" logic/handle-classifier-agent)
 (register-agent-handler "eval" logic/handle-eval-agent)
 (register-agent-handler "ocr" logic/handle-ocr-agent)
 

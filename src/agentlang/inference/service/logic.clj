@@ -12,6 +12,7 @@
             [agentlang.inference.embeddings.core :as ec]
             [agentlang.inference.service.model :as model]
             [agentlang.inference.service.tools :as tools]
+            [agentlang.inference.service.planner :as planner]
             [agentlang.inference.service.lib.agent :as agent]
             [agentlang.inference.service.lib.prompt :as prompt])
   (:import (clojure.lang ExceptionInfo)))
@@ -85,7 +86,7 @@
         {:errormsg (.getMessage e)}))))
 
 (defn- log-trigger-agent! [instance]
-  (log/info (str "Triggering " (:Type instance) " agent - " (u/pretty-str instance))))
+  (log/info (str "Triggering " (:Type instance) " agent - " (:Name instance))))
 
 (defn- verify-analyzer-extension [ext]
   (when ext
@@ -128,13 +129,6 @@
     response
     result))
 
-(def ^:private agent-prefix "agent:")
-(def ^:private agent-prefix-len (count agent-prefix))
-
-(defn- agent-filter-response [s]
-  (when-let [idx (s/index-of s agent-prefix)]
-    (s/trim (subs s (+ idx agent-prefix-len)))))
-
 (defn- respond-with-agent [agent-name agents user-instruction]
   (if-let [agent (first (filter #(= agent-name (:Name %)) agents))]
     (:Response (@generic-agent-handler (assoc agent :UserInstruction user-instruction)))
@@ -146,19 +140,20 @@
           delegates (model/find-agent-post-delegates agent-instance)
           ins (:UserInstruction agent-instance)]
       (log/debug (str "Response from agent " (:Name agent-instance) " - " response))
-      (if-let [agent-name (agent-filter-response response)]
+      (if-let [agent-name (when (model/classifier-agent? agent-instance) response)]
         (respond-with-agent agent-name delegates (or (get-in agent-instance [:Context :UserInstruction]) ins))
         (if (seq delegates)
           (let [n (:Name agent-instance)
-                rs (mapv #(let [ins (str (or (:UserInstruction %) "") "\n" response)]
-                            (format-as-agent-response % (@generic-agent-handler (assoc % :UserInstruction ins))))
+                rs (mapv #(let [ins (str (or (:UserInstruction %) "") "\n" response)
+                                ctx (assoc (:Context ins) :ParentResponse response)]
+                            (format-as-agent-response % (@generic-agent-handler (assoc % :UserInstruction ins :Context ctx))))
                          delegates)]
             [(apply str rs) model-info])
           result)))
     result))
 
 (defn- update-delegate-user-instruction [delegate agent-instance]
-  (if (= "ocr" (:Type delegate))
+  (if (model/ocr-agent? agent-instance)
     (assoc delegate :Context (:Context agent-instance))
     (assoc delegate
            :Context (:Context agent-instance)
@@ -171,7 +166,6 @@
     (let [d (first delegates)
           [response model-info]
           (:Response (@generic-agent-handler (update-delegate-user-instruction d agent-instance)))]
-      (log/debug (str "Response from pre-processor agent " (:Name d) "using llm " model-info " - " response))
       response)))
 
 (defn- maybe-add-docs [docs user-ins]
@@ -198,9 +192,16 @@
    #(let [ins (:UserInstruction instance)
           docs (maybe-lookup-agent-docs instance)
           preprocessed-instruction (call-preprocess-agents instance)
-          final-instruction (maybe-add-docs docs (or preprocessed-instruction ins))
+          ins (if (or (model/planner-agent? instance) (model/eval-agent? instance))
+                (str ins (if preprocessed-instruction (str "\n" preprocessed-instruction) ""))
+                (or preprocessed-instruction ins))
+          final-instruction (maybe-add-docs docs ins)
           instance (assoc instance :UserInstruction final-instruction)]
       (compose-agents instance (provider/make-completion instance)))))
+
+(defn handle-classifier-agent [instance]
+  (let [s (str (:UserInstruction instance) "\nReturn only the category name and nothing else.\n")]
+    (handle-chat-agent (assoc instance :UserInstruction s))))
 
 (defn- start-chat [agent-instance]
   ;; TODO: integrate messaging resolver
@@ -273,100 +274,20 @@
     (seqable? r) (vec r)
     :else r))
 
-(def ^:private generic-planner-instructions
-  (str "Consider the following entity and event definitions:\n"
-       (u/pretty-str
-        '(entity
-          :Acme.Core/Customer
-          {:Email {:type :Email :guid true}
-           :Name :String
-           :Address {:type :String :optional true}
-           :LoyaltyPoints {:type :Int :default 50}}))
-       "\n\n"
-       (u/pretty-str
-        '(event
-          :Acme.Core/LookupCustomerByEmail
-          {:Email :Email}))
-       "\n\n"
-       (u/pretty-str
-        '(entity
-          :Acme.Core/PlatinumCustomer
-          {:Email :Email}))
-       "\n\n"
-       (u/pretty-str
-        '(entity
-          :Acme.Core/GoldenCustomer
-          {:Email :Email}))
-       "\n\nIf the instruction given to you is to construct a customer instance with name `joe` and email `joe@acme.com`,\n"
-       "you must return the pattern:\n"
-       (u/pretty-str
-        [{:Acme.Core/Customer {:Email "joe@acme.com" :Name "joe"} :as :Customer}])
-       "\nThere's no need to fill in attributes marked `:optional true`, `:read-only true` or those with a `:default` value, unless explicitly instructed.\n"
-       "You can also ignore attributes with types `:Now` and `:Identity` - these will be automatically filled-in by the system.\n"
-       "For example, if the instruction is to create customer `joe` with email `joe@acme.com` and loyalty points 6700, then you must return\n"
-       (u/pretty-str
-        [{:Acme.Core/Customer {:Email "joe@acme.com" :Name "joe", :LoyaltyPoints 6700} :as :Customer}])
-       "\nIf the instruction is to lookup a customer, then you can create an event pattern:\n"
-       (u/pretty-str
-        [{:Acme.Core/LookupCustomerByEmail {:Email "joe@acme.com"} :as :Customer}])
-       "\nYou can also generate patterns that are evaluated against conditions, using the `:match` clause. For example,\n"
-       "if the instruction is to create a customer named `joe` with email `joe@acme.com` and then apply the following \n"
-       "business rules:\n"
-       "1. If the loyalty-points is 50, return the customer instance.\n"
-       "2. If the loyalty-points is greater than 50 and less than 1000, mark the customer as golden.\n"
-       "3. Otherwise, mark the customer as platinum\n"
-       "Given the above instruction, you must return the following dataflow patterns:\n"
-       (u/pretty-str
-        [{:Acme.Core/Customer {:Name "joe" :Email "joe@acme.com"} :as :Customer}
-         [:match
-          [:= :Customer.LoyaltyPoints 50] [:Customer]
-          [:and [:> :Customer.LoyaltyPoints 50] [:< :Customer.LoyaltyPoints 1000]]
-          [{:Acme.Core/GoldenCustomer {:Email :Customer.Email}}]
-          [{:Acme.Core/PlatinumCustomer {:Email :Customer.Email}}]]])
-       "\n\nConsider the syntax of the `:match` pattern - there are conditions and consequences. `[:= :Customer.LoyaltyPoints 50]` "
-       "is an example of a condition. `[:Customer]` is its consequence. There is also an `else` part for `:match`, which is a "
-       "pattern that will be evaluated if all conditions return false. In this example "
-       "`[{:Acme.Core/PlatinumCustomer {:Email :Customer.Email}}]` is the else-pattern.\n"
-       ;; "In addition to entities, you may also create patterns to invoke AI agents. Such invocations will look like:\n"
-       ;; (u/pretty-str
-       ;;  {:Acme.Core/InvokeAnAgent
-       ;;   {:UserInstruction "hello, there"}
-       ;;   :as :ResponseFromAgent})
-       ;; "\n\nResponse from an agent is usually some text and can be handled in a `:match` patterns as:\n"
-       ;; (u/pretty-str
-       ;;  [:match :ResponseFromAgent
-       ;;   "hi" "happy"
-       ;;   "hello" "happy"
-       ;;   "sad"])
-       ;; "\n\nThat was a simple example on invoking ai agents from dataflow patterns.\n"
-       "Now that you understand how to translate business workflows (or dataflows) into entity and `:match` patterns, "
-       "consider the entity definitions and user-instructions that follows to generate fresh dataflow patterns. "
-       "An important note: do not return any plain text in your response, only return the vector of dataflow patterns.\n"
-       "If your input contains patterns of instances like `{:Acme.Core/Employee {:Name \"sam\" :Salary 1000 :Email \"sam@came.com\"} :as :E1}`, keep those "
-       "at the top of the generated dataflow so that reference to `:E1` can be used later. An example of such usage is: \n"
-       (u/pretty-str
-        {:Acme.Core/EmailMessage
-         {:Email :E1.Email
-          :Message '(str "hello " :E1.Name ", welcome aboard!")}
-         :as :AnEmailMessage})
-       ;; "\nIf the user instruction contains an `:Input` instance, please add that also to the top of the dataflow."
-       "\nNote the function call expression is preceded by a single-quote and references uses a simple dot-notation. "
-       "There's no parenthesis needed for references.\n"
-       "A note about aliases - aliases are names defiled as `:as :SomeName` and attached to a pattern. "
-       "If you create a reference like `:Customer.Email`, make sure the alias `:Customer` is attached to a previous instance pattern. "
-       "Always attach aliases to instance patterns outside of a `:match`. But never attach aliases to instance patterns inside a `:match`."
-       "\nAnother important thing you should keep in mind: your response must not include any objects from the previous "
-       "examples. Your response should only make use of the entities and other definitions provided by the user below.\n\n"))
+(defn- trim-till-first-expr [s]
+  (if-let [i (s/index-of s "(")]
+    (subs s i (inc (s/last-index-of s ")")))
+    s))
 
-(defn- agent-tools-as-definitions [instance]
-  (str
-   (when-let [cns (:ToolComponents instance)]
-     (tools/raw-components cns))
-   (tools/as-raw-tools
-    (mapv (fn [tool]
-            (let [f ((keyword (:type tool)) tool)]
-              (keyword (:name f))))
-          (model/lookup-agent-tools instance)))))
+(defn- normalize-planner-expressions [s]
+  (if-let [exprs (if (string? s)
+                   (u/safe-read-string (trim-till-first-expr s))
+                   s)]
+    (cond
+      (planner/maybe-expressions? exprs) exprs
+      (planner/maybe-an-expression? exprs) `(do ~exprs)
+      :else exprs)
+    s))
 
 (defn- instance-results? [xs]
   (every? cn/an-instance? xs))
@@ -378,36 +299,51 @@
       true)
     false))
 
+(defn- block-expressions [exprs]
+  (when (planner/maybe-expressions? exprs)
+    (rest exprs)))
+
+(defn- splice-parent-expressions [instance result]
+  (let [orig-exprs (if (string? result)
+                     (read-string result)
+                     result)]
+    (if-let [parent-response (:ParentResponse (:Context instance))]
+      (if-let [pexprs (block-expressions
+                       (if (string? parent-response)
+                         (u/safe-read-string parent-response)
+                         parent-response))]
+        `(~'do ~@pexprs ~@(block-expressions orig-exprs))
+        orig-exprs)
+      orig-exprs)))
+
 (defn handle-planner-agent [instance]
   (log-trigger-agent! instance)
-  (let [instance (assoc instance :UserInstruction
-                        (str generic-planner-instructions
-                             "Entity definitions from user:\n\n" (agent-tools-as-definitions instance)
-                             "Instruction from user:\n\n" (:UserInstruction instance)))
-        _ (log/debug (str "Updated instruction for agent " (:Name instance) ": " (:UserInstruction instance)))
-        tools [] #_(vec (concat
+  (let [tools [] #_(vec (concat
                          (apply concat (mapv tools/all-tools-for-component (:ToolComponents instance)))
                          (mapv maybe-add-tool-params (model/lookup-agent-tools instance))))
         has-tools (seq tools)
-        [result model-name] (handle-chat-agent
-                             (if has-tools
-                               (assoc instance :tools tools)
-                               instance))
-        _ (log/debug (str "Planner " (:Name instance) " raw result: " result))
+        [orig-result model-name] (handle-chat-agent
+                                  (if has-tools
+                                    (assoc instance :tools tools)
+                                    instance))
+        _ (log/debug (str "Planner " (:Name instance) " raw result: " orig-result))
+        r0 (normalize-planner-expressions orig-result)
+        result (splice-parent-expressions instance r0)
+        _ (log/debug (str "Planner " (:Name instance) " final result: " result))
         patterns (if has-tools
                    (mapv tools/tool-call-to-pattern result)
-                   (if (string? result)
-                     (read-string result)
-                     result))]
+                   (planner/expressions-to-patterns
+                    (if (string? result)
+                      (read-string result)
+                      result)))]
     (if (seq patterns)
-      (do (log/debug (str "Patterns generated by " (:Name instance) ": "
-                          (u/pretty-str patterns)))
+      (do (log/debug (str "Patterns generated by " (:Name instance) ": " (u/pretty-str patterns)))
           [(format-planner-result
             (if (dataflow-patterns? patterns)
               (u/safe-ok-result (e/eval-patterns :Agentlang.Core patterns))
               patterns))
            model-name])
-      [{:result :noop} model-name])))
+      [result model-name])))
 
 (defn handle-ocr-agent [instance]
   (p/call-with-provider

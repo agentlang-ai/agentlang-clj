@@ -62,50 +62,40 @@
  :ProfileRejected
  [:eval '(println "Rejected profile: " :ProfileRejected.CandidateEmail)])
 
-{:Agentlang.Core/LLM
- {:Type "openai"
-  :Name "llm01"
-  :Config {:ApiKey (agentlang.util/getenv "OPENAI_API_KEY")
-           :EmbeddingApiEndpoint "https://api.openai.com/v1/embeddings"
-           :EmbeddingModel "text-embedding-3-small"
-           :CompletionApiEndpoint "https://api.openai.com/v1/chat/completions"
-           :CompletionModel "gpt-3.5-turbo"}}}
+{:Agentlang.Core/LLM {:Name :llm01}}
 
 {:Agentlang.Core/Agent
- {:Name "summary-agent"
-  :Type "chat"
+ {:Name :summary-agent
   :UserInstruction (str "You are a recruiter that analyses a resume and provides a summary of the "
                         "skills and experience of the candidate. The summary must be in the format - "
                         "Skills: <major-skills-of-the-candidate>, Experience in years: <years>, "
                         "Name: <candidate-name>, Email: <candidate-email>")
-  :LLM "llm01"}}
+  :LLM :llm01}}
 
 {:Agentlang.Core/Agent
- {:Name "interview-scheduler-agent"
-  :Type "eval"
-  :LLM "llm01"
-  :Chat
-  {:Messages
-   [{:role :system
-     :content (str "You are an intelligent agent who schedules an interview if the profile summary of a candidate meets "
-                   "the specified requirements. For example, if the profile summary is "
-                   "\"Python programmer with 3+ years experience. Name: Sam, Email: sam@me.com\" and the requirement is "
-                   "\"We need to hire python programmers with 2+ years experience. Possible interviewers are ravi@acme.com, "
-                   "joe@acme.com and sally@acme.com.\" then schedule an interview as: "
-                   "[{:Recruitment.Workflow/ScheduleInterview {:CandidateEmail \"sam@me.com\" :CandidateName \"Sam\" :CandidateProfile \"Python programmer with 3+ years experience.\" :AssignedTo \"ravi@acme.com\"}}]."
-                   "Make sure to distribute interview assignments as evenly as possible. If the profile summary does not match "
-                   "the requirement, the return: "
-                   "[{:Recruitment.Workflow/ProfileRejected {:CandidateEmail \"sam@me.com\", :Reason \"not enough experience\"}}]"
-                   "\n"
-                   "In the current application, you need to review summarized resumes of C++ programmers "
-                   "and schedule interviews  with candidates with good experience.")}]}
-  :Delegates {:To "summary-agent" :Preprocessor true}}}
+ {:Name :interview-scheduler-agent
+  :Type :eval
+  :LLM :llm01
+  :Input :Recruitment.Workflow/InvokeAgent
+  :UserInstruction
+  (str "You are an intelligent agent who schedules an interview if the profile summary of a candidate meets "
+       "the specified requirements. For example, if the profile summary is "
+       "\"Python programmer with 3+ years experience. Name: Sam, Email: sam@me.com\" and the requirement is "
+       "\"We need to hire python programmers with 2+ years experience. Possible interviewers are ravi@acme.com, "
+       "joe@acme.com and sally@acme.com.\" then schedule an interview as: "
+       "[{:Recruitment.Workflow/ScheduleInterview {:CandidateEmail \"sam@me.com\" :CandidateName \"Sam\" :CandidateProfile \"Python programmer with 3+ years experience.\" :AssignedTo \"ravi@acme.com\"}}]."
+       "Make sure to distribute interview assignments as evenly as possible. If the profile summary does not match "
+       "the requirement, the return: "
+       "[{:Recruitment.Workflow/ProfileRejected {:CandidateEmail \"sam@me.com\", :Reason \"not enough experience\"}}]"
+       "\n"
+       "In the current application, you need to review summarized resumes of C++ programmers "
+       "and schedule interviews  with candidates with good experience.")
+  :Delegates {:To :summary-agent :Preprocessor true}}}
 
 ;; Usage:
 ;; POST api/Recruitment.Workflow/InvokeAgent
 ;; {"Recruitment.Workflow/InvokeAgent":
 ;;  {"UserInstruction": "Here's a resume: <some-resume-text>"}}
-(inference :InvokeAgent {:agent "interview-scheduler-agent"})
 
 (def slot-data
   [{:Date "2024-08-10"

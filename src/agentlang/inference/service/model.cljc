@@ -15,7 +15,9 @@
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
             [agentlang.evaluator :as e]
-            [agentlang.lang.internal :as li]))
+            [agentlang.lang.internal :as li]
+            [agentlang.global-state :as gs]
+            [agentlang.inference.service.planner :as planner]))
 
 (component :Agentlang.Core)
 
@@ -111,7 +113,8 @@
 
 (record
  :Agentlang.Core/Inference
- {:UserInstruction :String})
+ {:UserInstruction :String
+  :ChatId {:type :String :optional true}})
 
 (entity
  :Agentlang.Core/Agent
@@ -119,13 +122,20 @@
   :Type {:type :String :default "chat"}
   :Features {:check feature-list? :optional true}
   :AppUuid {:type :UUID :default u/get-app-uuid}
-  :ChatUuid {:type :UUID :default u/uuid-string}
   :UserInstruction {:type :String :optional true}
   :ToolComponents {:check tool-components-list? :optional true}
   :Input {:type :String :optional true}
   :Context {:type :Map :optional true}
   :Response {:type :Any :read-only true}
   :CacheChatSession {:type :Boolean :default true}})
+
+(defn- agent-of-type? [typ agent-instance]
+  (= typ (:Type agent-instance)))
+
+(def ocr-agent? (partial agent-of-type? "ocr"))
+(def classifier-agent? (partial agent-of-type? "classifier"))
+(def planner-agent? (partial agent-of-type? "planner"))
+(def eval-agent? (partial agent-of-type? "eval"))
 
 (defn- preproc-agent-tools-spec [tools]
   (when tools
@@ -158,32 +168,62 @@
       (vector? delegs) (mapv preproc-agent-delegates delegs)
       :else delegs)))
 
+(defn- preproc-agent-docs [docs]
+  (mapv (fn [spec]
+          (if-let [agent (:Agent spec)]
+            (assoc spec :Agent (u/keyword-as-string agent))
+            spec))
+        docs))
+
+(defn- classifier-with-instructions [agent-instance]
+  (if-let [s (when-let [delegates (seq (mapv :To (:Delegates agent-instance)))]
+               (str "Classify the following user query into one of the categories - "
+                    (s/join ", " delegates)
+                    (when-let [ins (:UserInstruction agent-instance)]
+                      (str "\n"
+                           "The user query is: \"" ins "\"\n"
+                           "Return only the category name and nothing else.\n"))))]
+    (assoc agent-instance :UserInstruction s)
+    agent-instance))
+
+(defn- verify-name [n]
+  (when (or (s/index-of n "/") (s/index-of n "."))
+    (u/throw-ex (str "Invalid name " n ", cannot contain `/` or `.`")))
+  n)
+
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
  (fn [pat]
    (let [attrs (li/record-attributes pat)
          nm (:Name attrs)
-         input (preproc-agent-input-spec  (:Input attrs))
+         input (preproc-agent-input-spec (:Input attrs))
          tools (preproc-agent-tools-spec (:Tools attrs))
          delegates (preproc-agent-delegates (:Delegates attrs))
          tp (:Type attrs)
-         llm (:LLM attrs)]
+         llm (or (:LLM attrs) {:Type "openai"})
+         docs (:Documents attrs)
+         new-attrs
+         (-> attrs
+             (cond->
+                 nm (assoc :Name (verify-name (u/keyword-as-string nm)))
+                 input (assoc :Input input)
+                 tools (assoc :Tools tools)
+                 delegates (assoc :Delegates delegates)
+                 docs (assoc :Documents (preproc-agent-docs docs))
+                 tp (assoc :Type (u/keyword-as-string tp))
+                 llm (assoc :LLM (u/keyword-as-string llm))))]
      (assoc pat :Agentlang.Core/Agent
-            (-> attrs
-                (cond->
-                    nm (assoc :Name (u/keyword-as-string nm))
-                    input (assoc :Input input)
-                    tools (assoc :Tools tools)
-                    delegates (assoc :Delegates delegates)
-                    tp (assoc :Type (u/keyword-as-string tp))
-                    llm (assoc :LLM (u/keyword-as-string llm))))))))
+            (cond
+              (planner-agent? new-attrs) (planner/with-instructions new-attrs)
+              (classifier-agent? new-attrs) (classifier-with-instructions new-attrs)
+              :else new-attrs)))))
 
 (defn maybe-define-inference-event [event-name]
   (if (cn/find-schema event-name)
     (if (cn/event? event-name)
       event-name
       (u/throw-ex (str "not an event - " event-name)))
-    (event {event-name {:UserInstruction :Agentlang.Kernel.Lang/String}})))
+    (event {event-name {:meta {:inherits :Agentlang.Core/Inference}}})))
 
 (defn maybe-input-as-inference [agent]
   (when-let [input (:Input agent)]
@@ -239,7 +279,7 @@
 
 (entity
  :Agentlang.Core/ChatSession
- {:Id {:type :UUID :guid true :default u/uuid-string}
+ {:Id {:type :String :guid true :default u/uuid-string}
   :Messages {:check agent-messages?}})
 
 (relationship
@@ -257,6 +297,13 @@
  {:Agentlang.Core/ChatSession? {}
   :-> [[:Agentlang.Core/AgentChatSession?
         :Agentlang.Core/LookupAgentChatSessions.Agent]]})
+
+(dataflow
+ :Agentlang.Core/CreateAgentChatSession
+ {:Agentlang.Core/ChatSession
+  {:Id :Agentlang.Core/CreateAgentChatSession.ChatId
+   :Messages :Agentlang.Core/CreateAgentChatSession.Messages}
+  :-> [[:Agentlang.Core/AgentChatSession :Agentlang.Core/CreateAgentChatSession.Agent]]})
 
 (dataflow
  :Agentlang.Core/ResetAgentChatSessions
@@ -357,6 +404,37 @@
   ([event callback] (eval-event event callback false))
   ([event] (eval-event event identity)))
 
+(defn- maybe-agent-pattern [p]
+  (when (and (map? p)
+             (= :Agentlang.Core/Agent (li/record-name p)))
+    p))
+
+(defn lookup-agent-by-name [agent-name]
+  #?(:clj
+     (eval-event
+      {:Agentlang.Core/Lookup_Agent
+       {:Name (u/keyword-as-string agent-name)}}
+      first)
+     :cljs
+     (let [valid-pats (us/nonils
+                       (map (fn [p]
+                              (cond
+                                (and (vector? p) (= :try (first p))) (maybe-agent-pattern (second p))
+                                (map? p) (maybe-agent-pattern p)
+                                :else nil))
+                            @gs/standalone-patterns))
+           n (u/keyword-as-string agent-name)]
+       (when-let [agent-pat (first
+                             (filter (fn [p]
+                                       (and (= :Agentlang.Core/Agent (li/record-name p))
+                                            (= n (:Name (li/record-attributes p)))))
+                                     valid-pats))]
+         (cn/make-instance agent-pat)))))
+
+(defn agent-input-type [agent-instance]
+  (when-let [input (:Input agent-instance)]
+    (u/string-as-keyword input)))
+
 (defn- find-agent-delegates [preproc agent-instance]
   (eval-event
    {:Agentlang.Core/FindAgentDelegates
@@ -401,11 +479,33 @@
      :Uri doc-uri
      :Title doc-title}}))
 
+(defn- context-chat-id [agent-instance]
+  (get-in agent-instance [:Context :ChatId]))
+
 (defn lookup-agent-chat-session [agent-instance]
-  (eval-event
-   {:Agentlang.Core/LookupAgentChatSessions
-    {:Agent agent-instance}}
-   first))
+  (when-let [chat-sessions (seq (eval-event
+                                 {:Agentlang.Core/LookupAgentChatSessions
+                                  {:Agent agent-instance}}))]
+    (if-let [chat-id (context-chat-id agent-instance)]
+      (first (filter #(= (:Id %) chat-id) chat-sessions))
+      (let [n (:Name agent-instance)]
+        (first (filter #(= (:Id %) n) chat-sessions))))))
+
+(defn create-agent-chat-session [agent-instance alt-instruction]
+  (let [ins (or (:UserInstruction agent-instance) alt-instruction)]
+    (when ins
+      (eval-event
+       {:Agentlang.Core/CreateAgentChatSession
+        {:ChatId (or (context-chat-id agent-instance) (:Name agent-instance))
+         :Messages [{:role :system :content ins}]
+         :Agent agent-instance}}
+       identity true))))
+
+(defn maybe-init-agent-chat-session [agent-instance alt-instruction]
+  (or (when (:CacheChatSession agent-instance)
+        (when-not (lookup-agent-chat-session agent-instance)
+          (create-agent-chat-session agent-instance alt-instruction)))
+      agent-instance))
 
 (defn update-agent-chat-session [chat-session messages]
   (eval-event
@@ -416,10 +516,7 @@
 
 (defn reset-agent-chat-session [agent]
   (if (string? agent)
-    (when-let [agent-instance (eval-event
-                      {:Agentlang.Core/Lookup_Agent
-                       {:Name agent}}
-                      first)]
+    (when-let [agent-instance (lookup-agent-by-name agent)]
       (reset-agent-chat-session agent-instance))
     (when-let [sess (lookup-agent-chat-session agent)]
       (let [msgs (vec (filter #(= :system (:role %)) (:Messages sess)))]

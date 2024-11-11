@@ -2,12 +2,12 @@
   (:require [clojure.string :as s]
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
-            [agentlang.util.logger :as log]
             [agentlang.component :as cn]
             [agentlang.datafmt.json :as json]
             [agentlang.lang.raw :as raw]
             [agentlang.lang.internal :as li]
-            [agentlang.lang.kernel :as k]))
+            [agentlang.lang.kernel :as k]
+            #?(:clj [agentlang.util.logger :as log])))
 
 (defn- record-name-as-function-name [rec-name]
   (let [rec-name (li/make-path rec-name)]
@@ -93,8 +93,10 @@
                         {:type "object"
                          :properties (into {} (mapv (comp vec (partial take 2)) props))
                          :required (vec (mapv first (filter last props)))}}})
-                    (do (log/warn (str "cannot generate tool, no schema found for - " rec-name))
-                        nil))]
+                    (do
+                      #?(:clj (log/warn (str "cannot generate tool, no schema found for - " rec-name))
+                         :cljs (println (str "cannot generate tool, no schema found for - " rec-name)))
+                      nil))]
          (swap! tool-cache assoc rec-name tool-spec)
          tool-spec)))
   ([find-schema rec-name] (record-to-tool find-schema rec-name nil)))
@@ -131,6 +133,7 @@
 (def ^:private raw-event-tool (partial raw-tool 'event raw/find-event))
 (def ^:private raw-entity-tool (partial raw-tool 'entity raw/find-entity))
 (def ^:private raw-record-tool (partial raw-tool 'record raw/find-record))
+(def ^:private raw-relationship-tool (partial raw-tool 'relationship raw/find-relationship))
 
 (defn- raw-tools [raw-tool rec-names]
   (s/join
@@ -140,6 +143,7 @@
 (def ^:private raw-event-tools (partial raw-tools raw-event-tool))
 (def ^:private raw-entity-tools (partial raw-tools raw-entity-tool))
 (def ^:private raw-record-tools (partial raw-tools raw-record-tool))
+(def ^:private raw-relationship-tools (partial raw-tools raw-relationship-tool))
 
 (defn raw-components [components]
   (let [tools
@@ -147,8 +151,9 @@
                 (let [component (if (string? component) (keyword component) component)
                       event-tools (raw-event-tools (cn/event-names component))
                       entity-tools (raw-entity-tools (cn/entity-names component))
+                      rel-tools (raw-relationship-tools (cn/relationship-names component))
                       record-tools (raw-record-tools (cn/record-names component))]
-                  (str event-tools "\n" entity-tools "\n" record-tools)))
+                  (str event-tools "\n" entity-tools "\n" rel-tools "\n" record-tools)))
               components)]
     (str (s/join "\n" tools) "\n")))
 
@@ -157,6 +162,7 @@
                seq
                (mapv (fn [n]
                        (cond
+                         (cn/relationship? n) (raw-relationship-tool n)
                          (cn/entity? n) (raw-entity-tool n)
                          (cn/event? n) (raw-event-tool n)
                          :else (raw-record-tool n)))

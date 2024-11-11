@@ -1,5 +1,7 @@
 (ns agentlang.inference.service.core
-  (:require [agentlang.util :as u]
+  (:require [clojure.string :as s]
+            [agentlang.util :as u]
+            [agentlang.util.seq :as us]
             [agentlang.evaluator :as ev]
             [agentlang.global-state :as gs]
             [agentlang.inference.service.model :as model]
@@ -8,11 +10,21 @@
 
 (defn init [] (api-resolver/register-resolver))
 
-(defn- setup-agent-document [agent-name doc-num doc-url]
-  (let [doc-title (str agent-name "-doc-" doc-num)]
-    (model/add-agent-document agent-name doc-title doc-url)))
+(defn- preproc-doc-spec [doc]
+  (cond
+    (map? doc) doc
+    (string? doc) {:Title (or (last (s/split doc #"/")) "")  :Uri doc}
+    :else (u/throw-ex (str "Invalid document value - " doc))))
+
+(defn- agent-documents [config]
+  (when-let [agents (:agents config)]
+    (us/nonils
+     (mapv (fn [[agent-name spec]]
+             (when-let [docs (:Documents spec)]
+               [(name agent-name) (mapv preproc-doc-spec docs)]))
+           agents))))
 
 (defn setup-agent-documents []
-  (doseq [[agent-name docs] (:agent-documents (gs/get-app-config))]
-    (mapv (fn [doc i] (setup-agent-document agent-name (inc i) doc)) docs (range (count docs))))
+  (doseq [[agent-name docs] (agent-documents (gs/get-app-config))]
+    (mapv #(model/add-agent-document agent-name (:Title %) (:Uri %)) docs))
   true)

@@ -790,8 +790,7 @@
       inst)))
 
 (defn register-inference-dataflow [inference-name spec]
-  (let [ins (:instructions spec)
-        agent-spec (let [aspec (:agent spec)]
+  (let [agent-spec (let [aspec (:agent spec)]
                      (if (keyword? aspec)
                        (str aspec)
                        aspec))
@@ -808,7 +807,7 @@
         rh (:with-response-handler spec)
         pfns (when (or pfn rh)
                `[:eval (agentlang.lang/instance-assoc :Agent "PromptFn" ~pfn "ResponseHandler" ~rh) :as :Agent])
-        p1 `[:eval (agentlang.inference/run-inference-for-event ~inference-name ~ins :Agent)]]
+        p1 `[:eval (agentlang.inference/run-inference-for-event ~inference-name :Agent)]]
     (cn/register-dataflow inference-name nil (if pfns [p0 pfns p1] [p0 p1]))
     inference-name))
 
