@@ -11,7 +11,7 @@
  :B
  {:Id :Identity
   :X :Int
-  :Y '(tiny-f :X)})
+  :Y '(sample.tiny/tiny-f :X)})
 
 (dataflow
  :Agentlang.Kernel.Identity/PostSignUp

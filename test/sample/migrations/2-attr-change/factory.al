@@ -19,5 +19,5 @@
   {:Factory/Shipment
    {:MaxPrice :%.Price
     :Amount :%.Quantity
-    :BuyerName (quote (concat-names :%.CustomerFirstName :%.CustomerLastName))
+    :BuyerName (quote (factory/concat-names :%.CustomerFirstName :%.CustomerLastName))
     :Address :%.Country}}])

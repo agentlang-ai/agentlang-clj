@@ -25,9 +25,13 @@
     (partial repl/repl-eval store (atom nil) evaluator)))
 
 (defn init-nrepl-eval-func [model-name options]
-  (ur/force-call-after-load-model
-    model-name
-    (fn []
-      (let [model-info (ur/read-model-and-config options)
-            [[ev store] _] (ur/prepare-repl-runtime model-info)]
-        (reset! nrepl-eval-init (initialize-nrepl-environment model-name store ev))))))
+  (.start
+   (Thread.
+    #(loop [rs (ur/get-runtime-init-result)]
+       (if-not rs
+         (do (try
+               (Thread/sleep 1000)
+               (catch Exception _ false))
+             (recur (ur/get-runtime-init-result)))
+         (let [[[ev store] _] rs]
+           (reset! nrepl-eval-init (initialize-nrepl-environment model-name store ev))))))))

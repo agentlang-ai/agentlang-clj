@@ -127,6 +127,7 @@
   :Input {:type :String :optional true}
   :Context {:type :Map :optional true}
   :Response {:type :Any :read-only true}
+  :Integrations {:listof :String :optional true}
   :CacheChatSession {:type :Boolean :default true}})
 
 (defn- agent-of-type? [typ agent-instance]

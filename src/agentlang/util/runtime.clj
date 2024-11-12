@@ -139,8 +139,20 @@
                          (merge {:Name llm-name} llm-attrs)})}})))]
       (when (not= :ok (:status r))
         (log/error (str "failed to initialize LLM - " llm-name)))))
-  (doseq [[conn-name conn-attrs] (:connections config)]
-    (cc/configure-new-connection conn-name conn-attrs)))
+  (when-let [cm-config (:connection-manager config)]
+    (doseq [integ-name (:integrations cm-config)]
+      (cc/create-new-integration integ-name))
+    (doseq [[integ-name cfgs] (:configurations cm-config)]
+      (doseq [[conn-name conn-attrs] cfgs]
+        (cc/configure-new-connection integ-name conn-name conn-attrs)))
+    (doseq [conn (:connections cm-config)]
+      (let [[conn-name conn-config-name]
+            (cond
+              (vector? conn) conn
+              (keyword? conn) [conn conn]
+              (string? conn) (let [conn (keyword? conn)] [conn conn])
+              :else (u/throw-ex (str "Invalid connection config: " conn)))]
+        (cc/cache-connection! conn-config-name conn-name)))))
 
 (defn run-appinit-tasks! [evaluator init-data]
   (e/save-model-config-instances)
@@ -190,6 +202,8 @@
 (defn- runtime-inited-with [value]
   (reset! runtime-inited value)
   value)
+
+(defn get-runtime-init-result [] @runtime-inited)
 
 (defn init-runtime [model config]
   (let [store (store-from-config config)
@@ -319,15 +333,19 @@
   (let [basic-config (load-config options)]
     [basic-config (assoc options config-data-key basic-config)]))
 
+(def ^:private loaded-models (u/make-cell #{}))
 
 (defn call-after-load-model
   ([model-name f ignore-load-error]
    (gs/in-script-mode!)
-   (when (try
-           (build/load-model model-name)
-           (catch Exception ex
-             (if ignore-load-error true (throw ex))))
-     (f)))
+   (if (some #{model-name} @loaded-models)
+     (f)
+     (when (try
+             (when (build/load-model model-name)
+               (u/safe-set loaded-models (conj @loaded-models model-name)))
+             (catch Exception ex
+               (if ignore-load-error true (throw ex))))
+       (f))))
   ([model-name f]
    (call-after-load-model model-name f false)))
 

@@ -95,6 +95,9 @@
     pat))
 
 
+(defn- component-name-as-ns [cn]
+  (symbol (s/lower-case (subs (str cn) 1))))
+
 #?(:clj
    (do
      (def ^:dynamic *parse-expressions* true)
@@ -102,11 +105,28 @@
      (defn use-lang []
        (use '[agentlang.lang]))
 
+     (defn do-clj-imports [imports]
+       (when (seq imports)
+         (let [imports (if (= 'quote (first imports))
+                         (first (rest imports))
+                         imports)]
+           (doseq [import-spec imports]
+             (apply
+              (case (first import-spec)
+                :require require
+                :use use
+                (u/throw-ex (str "invalid import directive - " (first import-spec))))
+              (rest import-spec))))))
+
      (defn evaluate-expression [exp]
        (when (and (seqable? exp) (= 'component (first exp)))
-         (doseq [dep (:refer (first (nthrest exp 2)))]
-           (let [dep-ns (symbol (s/lower-case (subs (str dep) 1)))]
-             (use [dep-ns]))))
+         (eval `(ns ~(component-name-as-ns (second exp))))
+         (use-lang)
+         (let [spec (first (nthrest exp 2))]
+           (do-clj-imports (:clj-import spec))
+           (doseq [dep (:refer spec)]
+             (let [dep-ns (component-name-as-ns dep)]
+               (use [dep-ns])))))
        (eval exp))
 
      (defn read-expressions
@@ -352,4 +372,3 @@
        (let [continuation (fn [_]
                             (load-components-from-model model (partial callback :comp)))]
          (load-model-dependencies model (partial callback :deps continuation))))))
-

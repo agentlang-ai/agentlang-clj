@@ -123,8 +123,8 @@
   ([component typname]
    (if (pos? (.indexOf (str typname) "/"))
      typname
-     (full-name component typname)))
-  ([typname] (canonical-type-name (get-current-component) typname)))
+     (full-name (or component (get-current-component)) typname)))
+  ([typname] (canonical-type-name nil typname)))
 
 (defn normalize-type-name [^String n]
   (last (li/split-path n)))
@@ -1847,10 +1847,7 @@
   ([recname recversion]
    (contain-rels true recname recversion)))
 
-(defn parent-identity-attribute-type [parent-recname]
-  (when-let [a (or (path-identity-attribute-name parent-recname)
-                   (identity-attribute-name parent-recname))]
-    (attribute-type parent-recname a)))
+(def parent-identity-attribute-type (constantly :Any))
 
 (defn parent-of? [child parent]
   (let [child (li/make-path child)
@@ -1921,9 +1918,13 @@
 
 (defn crud-event-name
   ([component-name entity-name evtname]
-   (canonical-type-name
-    component-name
-    (keyword (str (name evtname) "_" (name entity-name)))))
+   (let [parts (li/split-path entity-name)
+         component-name (if (>= (count parts) 2)
+                          (first parts)
+                          component-name)]
+     (canonical-type-name
+      component-name
+      (keyword (str (name evtname) "_" (name entity-name))))))
   ([entity-name evtname]
    (let [[c n] (li/split-path entity-name)]
      (if (and c n)
