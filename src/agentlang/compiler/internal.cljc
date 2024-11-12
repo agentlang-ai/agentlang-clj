@@ -18,25 +18,25 @@
     v
     (u/throw-ex (str "variable not in context - " s))))
 
-(defn- valid-attr-value [ctx k v schema]
+(defn- valid-attr-value [ctx k v schema version]
   (cond
     (const-value? v)
-    (cv/validate-attribute-value k v schema)
+    (cv/validate-attribute-value k v schema version)
 
     (symbol? v)
     (if-let [x (var-in-context ctx v)]
-      (valid-attr-value ctx k x schema)
+      (valid-attr-value ctx k x schema version)
       v)
 
     :else v))
 
-(defn classify-attributes [ctx pat-attrs schema]
+(defn classify-attributes [ctx pat-attrs schema version]
   (loop [ps pat-attrs, result {}]
     (if-let [[ak av :as a] (first ps)]
       (recur
        (rest ps)
        (let [k (li/normalize-name ak)
-             v (valid-attr-value ctx k av schema)
+             v (valid-attr-value ctx k av schema version)
              tag (cond
                    (li/query-pattern? ak) :query
                    (or (const-value? v) (vector? v)) :computed

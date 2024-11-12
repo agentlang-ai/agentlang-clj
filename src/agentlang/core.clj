@@ -32,7 +32,8 @@
             [agentlang.swagger.docindex :as docindex]
             [agentlang.graphql.generator :as gg]
             [agentlang.util.runtime :as ur]
-            [agentlang.lang.tools.nrepl.core :as nrepl])
+            [agentlang.lang.tools.nrepl.core :as nrepl]
+            [agentlang.evaluator :as ev])
   (:import [java.util Properties]
            [java.io File]
            [org.apache.commons.exec CommandLine Executor DefaultExecutor])
@@ -48,6 +49,22 @@
        (log/info (str "Server config - " server-cfg))
        (h/run-server evaluator server-cfg nrepl-handler))))
   ([model-info nrepl-handler] (run-service nil model-info nrepl-handler)))
+
+(defn run-migrations
+  [model-info _]
+  (let [[[_ _] config] (ur/prepare-runtime nil model-info)]
+    (when-let [server-cfg (ur/make-server-config config)]
+      (try
+        (let
+         [r (ev/eval-all-dataflows
+             (cn/make-instance
+              {:Agentlang.Kernel.Lang/Migrations {}}))]
+          (log/info (str "migrations result: " r))
+          r)
+        (catch Exception ex
+          (log/error (str "migrations event failed: " (.getMessage ex)))
+          (log/error ex)))
+      (log/info (str "Migrations config - " server-cfg)))))
 
 (defn generate-swagger-doc [model-name args]
   (let [model-path (first args)]
@@ -275,10 +292,15 @@
             identity
             (map #(apply (partial run-plain-option args) %)
                  {:run               #(ur/call-after-load-model
-                                        (first %) (fn []
-                                                    (run-service
-                                                      (ur/read-model-and-config options)
-                                                      (agentlang-nrepl-handler (first %) options))))
+                                       (first %) (fn []
+                                                   (run-service
+                                                    (ur/read-model-and-config options)
+                                                    (agentlang-nrepl-handler (first %) options))))
+                  :custom:migrate    #(ur/call-after-load-model-migrate
+                                       (first %) (fn []
+                                                   (run-migrations
+                                                    (ur/read-model-and-config options)
+                                                    (agentlang-nrepl-handler (first %) options))))
                   :compile           #(println (build/compile-model (first %)))
                   :build             #(println (build/standalone-package (first %)))
                   :install           #(println (build/install-model nil (first %)))
@@ -287,11 +309,11 @@
                   :repl              (ur/run-repl-func options
                                                        (fn [model-name opts]
                                                          (println (ur/force-call-after-load-model
-                                                                    model-name
-                                                                    (fn []
-                                                                      (let [model-info (ur/read-model-and-config opts)
-                                                                            [[ev store] _] (ur/prepare-repl-runtime model-info)]
-                                                                        (repl/run model-name store ev)))))))
+                                                                   model-name
+                                                                   (fn []
+                                                                     (let [model-info (ur/read-model-and-config opts)
+                                                                           [[ev store] _] (ur/prepare-repl-runtime model-info)]
+                                                                       (repl/run model-name store ev)))))))
                   :nrepl             (ur/run-repl-func options
                                                        (fn [model-name opts]
                                                          (let [nrepl-config (get-in opts [:-*-config-data-*- :nrepl] {})
@@ -299,16 +321,16 @@
                                                                port (or (:port nrepl-config) 7888)
                                                                server-opts (cond-> {:port    port
                                                                                     :handler (agentlang-nrepl-handler model-name opts)}
-                                                                                   bind (assoc :bind bind))]
+                                                                             bind (assoc :bind bind))]
                                                            (apply nrepl.server/start-server (mapcat identity server-opts))
                                                            (println (str "nREPL server running on port " port
                                                                          (when bind (str " and bound to " bind)))))))
                   :publish           #(println (publish-library %))
                   :deploy            #(println (d/deploy (:deploy basic-config) (first %)))
                   :db:migrate        #(ur/call-after-load-model
-                                        (first %)
-                                        (fn []
-                                          (db-migrate
-                                            (keyword (first %))
-                                            (second (ur/read-model-and-config options)))))}))
+                                       (first %)
+                                       (fn []
+                                         (db-migrate
+                                          (keyword (first %))
+                                          (second (ur/read-model-and-config options)))))}))
           (run-script args options)))))

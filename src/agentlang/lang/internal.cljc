@@ -212,6 +212,11 @@
                   (and (string? n) (name? (keyword n))))
           n)))))
 
+(defn record-version [pat recname]
+  (if (name? pat)
+    nil
+    (when (map? pat) (get-in pat [recname :meta :version]))))
+
 (defn record-attributes [pat]
   (when (map? pat)
     (let [pat (dissoc pat :meta :as)]

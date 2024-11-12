@@ -111,16 +111,16 @@
       (recur (rest fns) (assoc raw-obj a (f env raw-obj)))
       raw-obj)))
 
-(defn- assoc-futures [record-name obj]
-  (loop [fattrs (cn/future-attrs record-name), obj obj]
+(defn- assoc-futures [record-name rec-version obj]
+  (loop [fattrs (cn/future-attrs record-name rec-version), obj obj]
     (if-let [[k v] (first fattrs)]
       (recur (rest fattrs)
              (assoc obj k v))
       obj)))
 
-(defn- assoc-computed-attributes [env record-name raw-obj eval-opcode]
+(defn- assoc-computed-attributes [env record-name rec-version raw-obj eval-opcode]
   (let [env (enrich-environment-with-refs env record-name raw-obj)
-        [efns evattrs] (cn/all-computed-attribute-fns record-name)
+        [efns evattrs] (cn/all-computed-attribute-fns record-name rec-version)
         f (partial assoc-fn-attributes env)
         interim-obj (if (seq evattrs)
                       (assoc-evaled-attributes
@@ -129,7 +129,7 @@
                         (li/split-path record-name) raw-obj)
                        raw-obj evattrs eval-opcode)
                       raw-obj)]
-    (f (assoc-futures record-name interim-obj) efns)))
+    (f (assoc-futures record-name rec-version interim-obj) efns)))
 
 (defn- set-obj-attr
   ([env attr-name attr-ref attr-value]
@@ -568,14 +568,14 @@
                          r))))]
       (filter predic result))))
 
-(defn- query-all [env store entity-name query is-aggregate-query]
+(defn- query-all [env store entity-name entity-version query is-aggregate-query]
   (cond
     (vector? query)
     (let [[params env] (evaluate-id-result env (rest query))
           results (store/do-query store (first query) params)]
       [(if is-aggregate-query
          (stu/normalize-aggregates results)
-         (stu/results-as-instances entity-name results))
+         (stu/results-as-instances entity-name entity-version nil results))
        env])
 
     (string? query)
@@ -591,7 +591,7 @@
 (defn- find-instances-in-store [env store entity-name full-query]
   (let [q (or (stu/compiled-query full-query)
               (store/compile-query store full-query))]
-    (query-all env store entity-name q (stu/aggregate-query? (stu/raw-query full-query)))))
+    (query-all env store entity-name (:version (stu/raw-query full-query)) q (stu/aggregate-query? (stu/raw-query full-query)))))
 
 (defn- maybe-async-channel? [x]
   (and x (not (seqable? x))))
@@ -622,41 +622,41 @@
       obj)
     obj))
 
-(defn- validated-instance [record-name obj]
+(defn- validated-instance [record-name rec-version obj]
   (if (cn/an-instance? obj)
     (if-not (cn/entity-instance? obj)
       (cn/validate-instance obj)
       obj)
     (cn/make-instance
-     record-name (normalize-partial-path record-name obj)
+     record-name rec-version (normalize-partial-path record-name obj)
      (require-validation? (li/make-path record-name)))))
 
 (defn- pop-instance
   "An instance is built in stages, the partial object is stored in a stack.
    Once an instance is realized, pop it from the stack and bind it to the environment."
-  ([env record-name eval-opcode validation-required]
+  ([env record-name rec-version eval-opcode validation-required]
    (if (env/can-pop? env record-name)
      (if-let [xs (env/pop-obj env)]
        (let [[env single? [_ x]] xs]
          (if (maybe-async-channel? x)
            [x single? env]
            (let [objs (if single? [x] x)
-                 final-objs (mapv #(assoc-computed-attributes env record-name % eval-opcode) objs)
+                 final-objs (mapv #(assoc-computed-attributes env record-name rec-version % eval-opcode) objs)
                  insts (if validation-required
-                         (mapv (partial validated-instance record-name) final-objs)
+                         (mapv (partial validated-instance record-name rec-version) final-objs)
                          final-objs)
                  bindable (if single? (first insts) insts)]
              [bindable single? env])))
        [nil false env])
      [nil false (env/reset-objstack env)]))
-  ([env record-name eval-opcode]
-   (pop-instance env record-name eval-opcode true)))
+  ([env record-name rec-version eval-opcode]
+   (pop-instance env record-name rec-version eval-opcode true)))
 
 (defn- pop-and-intern-instance
   "An instance is built in stages, the partial object is stored in a stack.
    Once an instance is realized, pop it from the stack and bind it to the environment."
   [env record-name alias eval-opcode]
-  (let [[bindable single? new-env] (pop-instance env record-name eval-opcode)]
+  (let [[bindable single? new-env] (pop-instance env record-name nil eval-opcode)]
     (if bindable
       (let [env (env/bind-instances env record-name (if single? [bindable] bindable))]
         [bindable (if alias (env/bind-instance-to-alias env alias bindable) env)])
@@ -778,7 +778,7 @@
 
 (defn- eval-for-each [evaluator env eval-opcode collection body-code elem-alias result-alias]
   (let [eval-body (partial eval-for-each-body evaluator env eval-opcode body-code elem-alias)
-        results (mapv eval-body collection)]
+        results (mapv eval-body collection)] 
     (if (every? #(ok-result %) results)
       (let [eval-output (mapv #(ok-result %) results)
             result-insts (if (seq? (first eval-output))
@@ -857,7 +857,7 @@
                (let [[insts env :as r] (find-instances env (env/get-store env) entity-name queries)]
                  (if (:filter-by result-filter)
                    [(filter-results-by-rels entity-name insts result-filter) env]
-                   r))))]
+                   r))))] 
      (cond
        (maybe-async-channel? insts)
        (i/ok
@@ -865,7 +865,8 @@
         (env/push-obj env entity-name insts))
 
        (seq insts)
-       (let [id-attr-name (cn/identity-attribute-name entity-name)
+       (let [version (get-in queries [:raw-query :version])
+             id-attr-name (cn/identity-attribute-name entity-name version)
              ids (mapv id-attr-name insts)]
          (i/ok
           insts
@@ -985,9 +986,11 @@
               (cn/remove-event event-name))))))))
 
 (defn- intern-instance [self env eval-opcode eval-event-dataflows
-                        record-name inst-alias validation-required upsert-required]
-  (let [[insts single? env] (pop-instance env record-name (partial eval-opcode self) validation-required)
-        scm (cn/ensure-schema record-name)
+                        record-name inst-alias queries validation-required upsert-required]
+  
+  (let [rec-version (get-in queries [:query :raw-query :version])
+        [insts single? env] (pop-instance env record-name rec-version (partial eval-opcode self) validation-required)
+        scm (cn/ensure-schema record-name rec-version)
         extn-attrs (cn/find-extension-attribute-names record-name)
         orig-insts insts
         insts (if extn-attrs
@@ -998,7 +1001,7 @@
     (when validation-required
       (doseq [inst (if single? [insts] insts)]
         (when-let [attrs (cn/instance-attributes inst)]
-          (cn/validate-record-attributes record-name attrs scm))))
+          (cn/validate-record-attributes record-name rec-version attrs scm))))
     (cond
       (maybe-async-channel? insts)
       (i/ok insts env)
@@ -1022,7 +1025,7 @@
           (let [env-with-inst (env/bind-instances env record-name local-result)
                 final-env (if inst-alias
                             (env/bind-instance-to-alias env-with-inst inst-alias bindable)
-                            env-with-inst)]
+                            env-with-inst)] 
             (i/ok local-result final-env))
           (i/ok local-result env)))
 
@@ -1076,7 +1079,7 @@
           (i/ok v env)
           (if (cn/an-instance? v)
             (let [opcode-eval (partial eval-opcode self)
-                  inst (assoc-computed-attributes env (cn/instance-type v) v opcode-eval)
+                  inst (assoc-computed-attributes env (cn/instance-type v) nil v opcode-eval)
                   rel-ctx (atom nil)
                   final-inst (ensure-relationship-constraints env rel-ctx (cn/instance-type inst) inst)
                   env (env/merge-relationship-context env @rel-ctx)
@@ -1124,10 +1127,10 @@
     (do-set-compound-attribute [_ env [attr-name f]]
       (set-obj-attr env attr-name f))
 
-    (do-intern-instance [self env [record-name inst-alias validation-required upsert-required]]
+    (do-intern-instance [self env [record-name inst-alias queries validation-required upsert-required]] 
       (intern-instance
-       self env eval-opcode eval-event-dataflows
-       record-name inst-alias validation-required upsert-required))
+        self env eval-opcode eval-event-dataflows
+        record-name inst-alias queries validation-required upsert-required))
 
     (do-intern-event-instance [self env [record-name alias-name with-types timeout-ms]]
       (let [[inst env] (pop-and-intern-instance
@@ -1291,7 +1294,7 @@
                   (intern-instance
                    self (env/push-obj env record-name inst)
                    eval-opcode eval-event-dataflows
-                   record-name inst-alias true upsert-required))
+                   record-name inst-alias nil true upsert-required))
                 result)))))
 
     (do-dynamic-upsert [self env [path-parts attrs inst-compiler alias-name]]
