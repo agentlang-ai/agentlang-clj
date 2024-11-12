@@ -1,5 +1,6 @@
 (ns agentlang.resolver.timer
   (:require [agentlang.util :as u]
+            [agentlang.util.seq :as su]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
             [agentlang.component :as cn]
@@ -67,6 +68,7 @@
 (def set-status-ok! (partial set-status! "term-ok"))
 (def set-status-error! (partial set-status! "term-error"))
 (def set-status-terminating! (partial set-status! "terminating"))
+(def set-status-running! (partial set-status! "running"))
 
 (defn- cancel-task! [task-name]
   (when-let [handle (get @handles task-name)]
@@ -77,12 +79,17 @@
 
 (defn- timer-expiry-as-seconds [inst]
   (let [unit (u/string-as-keyword (:ExpiryUnit inst))
-        expiry (:Expiry inst)]
-    (case unit
-      :Seconds expiry
-      :Minutes (* expiry 60)
-      :Hours (* expiry 3600)
-      :Days (* expiry 86400))))
+        expiry (:Expiry inst)
+        expiry-secs
+        (case unit
+          :Seconds expiry
+          :Minutes (* expiry 60)
+          :Hours (* expiry 3600)
+          :Days (* expiry 86400))
+        current-time-secs (dt/unix-timestamp)]
+    (if (> current-time-secs (+ (:CreatedTimeSecs inst) expiry-secs))
+      1
+      expiry-secs)))
 
 (defn- run-task [inst]
   (let [n (:Name inst)]
@@ -140,3 +147,26 @@
 (defmake :timer
   (fn [_ _]
     (r/make-resolver :timer resolver-fns)))
+
+(defn- no-heartbeat? [timer]
+  (let [secs (dt/unix-timestamp)]
+    (> (- secs (:LastHeartbeatSecs timer)) 10)))
+
+(defn- start-timer [timer]
+  (when (timer-upsert timer)
+    (set-status-running! (:Name timer))
+    (assoc timer :Status "running")))
+
+(defn- extract-result [result]
+  (when-let [rs (first result)]
+    (when (= :ok (:status rs))
+      (:result rs))))
+
+(defn restart-all-runnable []
+  (su/nonils
+   (mapv
+    (fn [timer]
+      (case (:Status timer)
+        "ready" (start-timer timer)
+        "running" (when (no-heartbeat? timer) (start-timer timer))))
+    (extract-result ((es/get-active-evaluator) (cn/make-instance {:Agentlang.Kernel.Lang/FindRunnableTimers {}}))))))

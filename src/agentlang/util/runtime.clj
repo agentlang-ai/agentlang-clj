@@ -7,6 +7,7 @@
     [agentlang.util :as u]
     [agentlang.util.seq :as su]
     [agentlang.util.logger :as log]
+    [agentlang.resolver.timer :as timer]
     [agentlang.resolver.registry :as rr]
     [agentlang.compiler :as c]
     [agentlang.component :as cn]
@@ -154,11 +155,24 @@
               :else (u/throw-ex (str "Invalid connection config: " conn)))]
         (cc/cache-connection! conn-config-name conn-name)))))
 
+(defn- run-pending-timers! []
+  (when (:timer-manager (gs/get-app-config))
+    (future
+      (loop []
+        (doseq [timer (seq (timer/restart-all-runnable))]
+          (when (= "running" (:Status timer))
+            (log/info (str "Started timer " (:Name timer)))))
+        (try
+          (Thread/sleep 15000)
+          (catch InterruptedException _ nil))
+        (recur)))))
+
 (defn run-appinit-tasks! [evaluator init-data]
   (e/save-model-config-instances)
   (run-configuration-patterns! evaluator (gs/get-app-config))
   (run-standalone-patterns! evaluator)
-  (trigger-appinit-event! evaluator init-data))
+  (trigger-appinit-event! evaluator init-data)
+  (run-pending-timers!))
 
 (defn merge-resolver-configs [app-config resolver-configs]
   (let [app-resolvers (:resolvers app-config)]

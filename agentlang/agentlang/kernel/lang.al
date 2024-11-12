@@ -65,14 +65,18 @@
                :default "Seconds"}
   :ExpiryEvent :Map
   :Status {:oneof ["ready" "running" "terminating" "term-cancel" "term-ok" "term-error" "term-abnormal"]
-           :default "ready"}
-  :CreatedTimeMs {:type :Int :default dt/unix-timestamp}
-  :LastHeartbeatMs {:type :Int :default dt/unix-timestamp}})
+           :default "ready" :indexed true}
+  :CreatedTimeSecs {:type :Int :default dt/unix-timestamp}
+  :LastHeartbeatSecs {:type :Int :default dt/unix-timestamp}})
 
 (event :SetTimerStatus {:TimerName :String :Status :String})
 (event :SetTimerHeartbeat {:TimerName :String})
 (dataflow :SetTimerStatus {:Timer {:Name? :SetTimerStatus.TimerName :Status :SetTimerStatus.Status}})
-(dataflow :SetTimerHeartbeat {:Timer {:Name? :SetTimerHeartbeat.TimerName :LastHeartbeatMs '(agentlang.lang.datetime/unix-timestamp)}})
+(dataflow :SetTimerHeartbeat {:Timer {:Name? :SetTimerHeartbeat.TimerName :LastHeartbeatSecs '(agentlang.lang.datetime/unix-timestamp)}})
+
+(dataflow
+ :FindRunnableTimers
+ {:Timer? {:where [:or [:= :Status "ready"] [:= :Status "running"]]}})
 
 (dataflow
  :LoadPolicies

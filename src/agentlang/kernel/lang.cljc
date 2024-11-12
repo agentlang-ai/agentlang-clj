@@ -34,7 +34,7 @@
 (attribute :Agentlang.Kernel.Lang/String {:check k/kernel-string?})
 (attribute
  :Agentlang.Kernel.Lang/Keyword
- {:check (fn* [p1__391#] (or (keyword? p1__391#) (string? p1__391#)))})
+ {:check (fn* [p1__395#] (or (keyword? p1__395#) (string? p1__395#)))})
 (attribute :Agentlang.Kernel.Lang/Path {:check k/path?})
 (attribute :Agentlang.Kernel.Lang/DateTime {:check k/date-time?})
 (attribute :Agentlang.Kernel.Lang/Date {:check k/date?})
@@ -95,10 +95,11 @@
     "term-ok"
     "term-error"
     "term-abnormal"],
-   :default "ready"},
-  :CreatedTimeMs
+   :default "ready",
+   :indexed true},
+  :CreatedTimeSecs
   {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp},
-  :LastHeartbeatMs
+  :LastHeartbeatSecs
   {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp}})
 (event
  :Agentlang.Kernel.Lang/SetTimerStatus
@@ -119,8 +120,15 @@
  #:Agentlang.Kernel.Lang{:Timer
                          {:Name?
                           :Agentlang.Kernel.Lang/SetTimerHeartbeat.TimerName,
-                          :LastHeartbeatMs
+                          :LastHeartbeatSecs
                           '(agentlang.lang.datetime/unix-timestamp)}})
+(dataflow
+ :Agentlang.Kernel.Lang/FindRunnableTimers
+ #:Agentlang.Kernel.Lang{:Timer?
+                         {:where
+                          [:or
+                           [:= :Status "ready"]
+                           [:= :Status "running"]]}})
 (dataflow
  :Agentlang.Kernel.Lang/LoadPolicies
  #:Agentlang.Kernel.Lang{:Policy
@@ -131,7 +139,6 @@
 (event
  :Agentlang.Kernel.Lang/AppInit
  {:Data :Agentlang.Kernel.Lang/Map})
-(event :Agentlang.Kernel.Lang/Migrations {})
 (event :Agentlang.Kernel.Lang/InitConfig {})
 (record
  :Agentlang.Kernel.Lang/InitConfigResult
@@ -181,4 +188,4 @@
     :paths [:Agentlang.Kernel.Lang/DataSync]})])
 (def
  Agentlang_Kernel_Lang___COMPONENT_ID__
- "9d5a0bc9-a2b9-44a9-a31d-1e001d7b292a")
+ "204db928-8682-4a62-a5ea-7882558bdaf3")
