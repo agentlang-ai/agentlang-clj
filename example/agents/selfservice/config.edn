@@ -1,0 +1,22 @@
+{:connection-manager
+ {:integrations ["ticket" "slack"]
+  :configurations
+  {"ticket"
+   {"My Jira Connection"
+    {:Type :custom
+     :Parameter {:rooturl #$ TICKETS_ROOT_URL
+                 :user #$ TICKETS_USER
+                 :token #$ TICKETS_TOKEN}}
+
+    "My Github Connection"
+    {:Type :bearer-token
+     :Parameter #$ GITHUB_API_TOKEN}}
+   "slack"
+   {"My Slack Connection"
+    {:Type :api-key
+     :Parameter #$ SLACK_API_KEY}}}
+  :username #$ CM_USERNAME
+  :password #$ CM_PASSWORD
+  :connections [[:Ticket/JiraConnection "My Jira Connection"]
+                [:Ticket/GithubConnection "My Github Connection"]
+                [:Slack/Connection "My Slack Connection"]]}}

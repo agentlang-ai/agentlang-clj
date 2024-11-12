@@ -356,7 +356,7 @@
                 {:Npid/B {:Id 102 :No 24}}
                 li/path-attr "/A/1/AB/"}})]
       (is (b? b2))
-      (is (= 1 (li/parent-attr b2))))))
+      (is (= "1" (li/parent-attr b2))))))
 
 (deftest issue-1377-pattern-doc
   (defcomponent :I1377

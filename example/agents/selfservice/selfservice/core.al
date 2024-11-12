@@ -39,8 +39,8 @@ Now please classify the following text based on these rules.\n\n"
   :UserInstruction "You'll receive some tickets with requests from users to join GitHub organizations. Follow the following steps:
 1. Find the manager for the ticket, you can query on the ticket Id.
 2. Find the slack-channel for the manager.
-3. For each ticket, send an approval request as a slack message on the manager's channel. This message must include the user's email, github org name and the ticket Id.
-4. Get the slack chat's response and classify it as either approve or reject.
+3. For each ticket, send an approval request as a slack message on the manager's channel. This message must include the user's email, github org name and the ticket Id. (Only a single message must be send on slack for each ticket).
+4. Get the slack chat's response and classify it as either approve or reject. (The reponse will be available in the chat instance you created in the preceding step).
 5. If the classification result is to approve the request, then
      a. create a ticket comment with the text \"approved\".
      b. add the user as a member to the github org.

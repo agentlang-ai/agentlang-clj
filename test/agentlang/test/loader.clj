@@ -40,12 +40,12 @@
   (let [expected-spec '(do (component :Sample.Tiny)
                            (entity :Sample.Tiny/A {:Id :Identity, :X :Int})
                            (defn tiny-f [x] (* 100 x))
-                           (entity :Sample.Tiny/B {:Id :Identity, :X :Int, :Y '(tiny-f :X)})
+                           (entity :Sample.Tiny/B {:Id :Identity, :X :Int, :Y '(sample.tiny/tiny-f :X)})
                            (dataflow :Agentlang.Kernel.Identity/PostSignUp #:Sample.Tiny{:A {:X 200}}))
-        b-update-exp '(entity :Sample.Tiny/B {:Id :Identity :K :Int :Y '(tiny-f :K)})
+        b-update-exp '(entity :Sample.Tiny/B {:Id :Identity :K :Int :Y '(sample.tiny/tiny-f :K)})
         new-df '(dataflow :Sample.Tiny/Evt
                           [:eval '(* :Sample.Tiny/Evt.X 2) :as :P]
-                          {:Sample.Tiny/A {:X '(tiny-f :P)}})
+                          {:Sample.Tiny/A {:X '(sample.tiny/tiny-f :P)}})
         updated-spec-01 `(do ~@(concat (assoc (vec (rest expected-spec)) 3 b-update-exp)
                                        [new-df]))]
     (is (= expected-spec (raw/as-edn :Sample.Tiny)))

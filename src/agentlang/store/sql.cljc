@@ -16,12 +16,12 @@
    where-clause))
 
 (defn- make-wildcard [query]
-  (if (su/aggregate-query? query)
-    (mapv
-     #(let [c (get query %)]
-        (keyword (str "%" (name %) "." (when (not= c :*) "_") (name (get query %)))))
-     (keys (dissoc query :where)))
-    [:*]))
+    (if (su/aggregate-query? query)
+      (mapv
+       #(let [c (get query %)]
+          (keyword (str "%" (name %) "." (when (not= c :*) "_") (name (get query %)))))
+       (keys (dissoc query :where :version)))
+      [:*]))
 
 (defn- with-deleted-flag [flag where]
   (let [clause [:= su/deleted-flag-col-kw flag]]

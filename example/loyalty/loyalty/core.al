@@ -32,7 +32,7 @@
 a loyalty point for the customer."
  [:match
   [:> :Instance.Amount 1000.0]
-  {:Point {:Value '(compute-points :Instance.Amount)}
+  {:Point {:Value '(loyalty.core/compute-points :Instance.Amount)}
    :-> [[{:Points {}} {:Customer {:Email? :Instance.CustomerEmail}}]]}
   :Instance])
 
@@ -43,4 +43,4 @@ a loyalty point for the customer."
  "Return the total loyalty-points for a customer."
  {:Point? {} :-> [[{:Points {:Customer? :FetchPoints.CustomerEmail}}]]
   :as :Result}
- [:eval '(total-points :Result)])
+ [:eval '(loyalty.core/total-points :Result)])

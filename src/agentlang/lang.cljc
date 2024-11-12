@@ -60,8 +60,6 @@
   "Create and activate a new component with the given name."
   ([n spec]
    (let [ns-name (li/validate-name n)]
-     (when (cn/component-exists? ns-name)
-       (cn/remove-component ns-name))
      (let [r (cn/create-component
               ns-name
               (when spec
@@ -844,9 +842,13 @@
                   (str "." (name sub-attr))))))
 
 (defn- crud-event-inst-accessor
-  ([evtname canonical? inst-attr]
+  ([evtname cname inst-attr]
    (let [r (crud-event-subattr-accessor evtname :Instance inst-attr)]
-     (if canonical? (cn/canonical-type-name r) r)))
+     (if cname
+       (if (keyword? cname)
+         (cn/canonical-type-name cname r)
+         (cn/canonical-type-name r))
+       r)))
   ([evtname inst-attr] (crud-event-inst-accessor evtname true inst-attr))
   ([evtname] (crud-event-inst-accessor evtname true nil)))
 
@@ -1124,7 +1126,8 @@
         attr-names (cn/attribute-names (cn/fetch-schema child))
         ctx-aname (k/event-context-attribute-name)]
     (let [crevt (ev :Create)
-          cr-path (evt-path-attr crevt)]
+          cr-path (evt-path-attr crevt)
+          child-cn (first (li/split-path child))]
       (event-internal
        crevt
        {:Instance child
@@ -1132,7 +1135,7 @@
                       :default pi/default-path}
         li/event-context ctx-aname})
       (cn/register-dataflow
-       (ev :Create)
+       crevt
        [{child
          (merge
           (into
@@ -1141,7 +1144,7 @@
                  [a (if (= a li/path-attr)
                       ;; The path-identity will be appended by the evaluator.
                       cr-path
-                      (crud-event-inst-accessor crevt a))])
+                      (crud-event-inst-accessor crevt child-cn a))])
                attr-names))
           {li/path-attr cr-path})}]))
     (let [upevt (ev :Update)]

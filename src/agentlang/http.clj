@@ -1202,7 +1202,7 @@
   [[auth-config maybe-unauth] nrepl-handler request]
   (or (maybe-unauth request)
         (let [handler (drawbridge/ring-handler :nrepl-handler nrepl-handler
-                                               :default-read-timeout 200)]
+                                               :default-read-timeout 10000)]
           (handler request))))
 
 (defn wrap-nrepl-middleware [handler]

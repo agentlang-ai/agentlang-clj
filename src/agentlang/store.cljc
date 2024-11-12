@@ -191,6 +191,9 @@
 (def ^:private inited-components (u/make-cell #{}))
 (def ^:private store-schema-lock #?(:clj (Object.) :cljs nil))
 
+(defn remove-inited-component [component]
+  (u/safe-set inited-components (disj @inited-components component)))
+
 (defn maybe-init-schema [store component-name]
   (when (not (some #{component-name} @inited-components))
     (#?(:clj locking :cljs do)
