@@ -276,7 +276,7 @@
        (log/info (str "auto-creating component - " component))
        (create-component component nil))
      (when-let [pp (mt/apply-policy-parsers k meta)]
-       (log/debug (str "custom parse policies for " typname " - " pp))) 
+       (log/debug (str "custom parse policies for " typname " - " pp)))
      (u/call-and-set
       components
       #(assoc-in (if meta
@@ -350,7 +350,7 @@
            (find-attribute-schema-internal c version a)))
        (when-let [scm (component-find [component (or version (get-model-version component)) :attributes aref])]
          (if-let [parent-type (:type scm)]
-           (merge 
+           (merge
             (let [[c a] (li/split-path parent-type)]
               (find-attribute-schema-internal c version a)) scm)
            scm)))))
@@ -360,7 +360,7 @@
    (let [[component aref] (li/split-path path)]
      (find-attribute-schema-internal component aref))))
 
-(defn find-attribute-schema 
+(defn find-attribute-schema
   ([component version aref]
    (dissoc (find-attribute-schema-internal component version aref) :meta))
   ([component aref]
@@ -398,7 +398,7 @@
 (defn- find-record-schema-by-type [typ path]
   (find-record-schema-by-type-version typ nil path))
 
-(defn find-entity-schema 
+(defn find-entity-schema
   ([path version] (find-record-schema-by-type-version :entity version path))
   ([path] (find-entity-schema path nil)))
 
@@ -447,10 +447,16 @@
     (find-attribute-schema attr-name)
     attr-name))
 
-(defn find-object-schema [path]
-  (or (find-entity-schema path)
-      (find-record-schema path)
-      (find-event-schema path)))
+(defn find-object-schema
+  ([path]
+   (or (find-entity-schema path)
+       (find-record-schema path)
+       (find-event-schema path)))
+  ([path version]
+   (let [[component aref] (li/split-path path)]
+     (or (find-entity-schema path version)
+         (find-record-schema component version aref)
+         (find-record-schema-by-type-version :entity version path)))))
 
 (defn ensure-type-and-name [inst type-name type-tag]
   (assoc
@@ -872,12 +878,16 @@
                    (ensure-attribute-is-instance-of typname aname attributes)))))
             attributes)))))
 
-(defn validate-attribute-value [attr-name attr-val schema]
-  (if-let [typname (li/extract-attribute-name (get (:schema schema) attr-name))]
-    (if-let [ascm (find-attribute-schema typname)]
-      (valid-attribute-value attr-name attr-val ascm)
-      (raise-error :schema-not-found [attr-name]))
-    (raise-error :attribute-not-in-schema [attr-name])))
+(defn validate-attribute-value 
+  ([attr-name attr-val schema version] 
+   (if-let [typname (li/extract-attribute-name (get (:schema schema) attr-name))]
+     (let [[component aref] (li/split-path typname)]
+       (if-let [ascm (find-attribute-schema component version aref)]
+         (valid-attribute-value attr-name attr-val ascm)
+         (raise-error :schema-not-found [attr-name])))
+     (raise-error :attribute-not-in-schema [attr-name])))
+  ([attr-name attr-val schema]
+   (validate-attribute-value attr-name attr-val schema nil)))
 
 (def inferred-event-schema {:inferred true})
 
@@ -1313,23 +1323,33 @@
 (defn computed-attribute-fns
   "Return the expression or query functions attached to computed attributes
   as a mapping of [[attrname fn], ...]"
-  [prop schema]
-  (let [schema (dissoc (or (:schema schema) schema) :meta)
-        exps (mapv (fn [[k v]]
-                     (when-let [f (prop (find-attribute-schema v))]
-                       [k f]))
-                   schema)]
-    (seq (su/nonils exps))))
+  ([prop schema version]
+   (let [schema (dissoc (or (:schema schema) schema) :meta) 
+         exps (mapv (fn [[k v]]
+                      (let [[component aref] (li/split-path v)]
+                        (when-let [f (prop (find-attribute-schema
+                                            component version aref))]
+                          [k f])))
+                    schema)]
+     (seq (su/nonils exps))))
+  ([prop schema]
+   (computed-attribute-fns prop schema nil)))
 
-(defn future-attrs [record-name]
-  (computed-attribute-fns :future (find-object-schema record-name)))
+(defn future-attrs 
+  ([record-name rec-version]
+   (computed-attribute-fns :future (find-object-schema record-name rec-version)))
+  ([record-name]
+   (future-attrs record-name nil)))
 
 (def expr-fns (partial computed-attribute-fns :expr))
 (def eval-attrs (partial computed-attribute-fns :eval))
 
-(defn all-computed-attribute-fns [record-name]
-  (when-let [scm (find-object-schema record-name)]
-    [(expr-fns scm) (eval-attrs scm)]))
+(defn all-computed-attribute-fns
+  ([record-name rec-version]
+   (when-let [scm (find-object-schema record-name rec-version)]
+     [(expr-fns scm rec-version) (eval-attrs scm rec-version)]))
+  ([rec-name]
+   (all-computed-attribute-fns rec-name nil)))
 
 (defn mark-dirty [inst]
   (assoc inst dirty-key true))
@@ -1825,7 +1845,7 @@
   ([recname]
    (contain-rels true recname))
   ([recname recversion]
-  (contain-rels true recname recversion)))
+   (contain-rels true recname recversion)))
 
 (defn parent-identity-attribute-type [parent-recname]
   (when-let [a (or (path-identity-attribute-name parent-recname)

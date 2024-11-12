@@ -36,8 +36,8 @@
 (deftest test-same-ent
   (let [model-name :Factory
         old-model "test/sample/migrations/1-same-ent/old/factory/model.al"
-        new-model "test/sample/migrations/1-same-ent/model.al"] 
-    
+        new-model "test/sample/migrations/1-same-ent/model.al"]
+
     (load-model model-name old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:Factory/Init {}}))
 
@@ -92,6 +92,28 @@
                (:BuyerName fs) (:Address fs) (:Verified fs))))
     (clear-model-init model-name)))
 
+(deftest test-rel-change
+  (let [model-name :Manager
+        old-model "test/sample/migrations/3-rel-change/old/manager/model.al"
+        new-model "test/sample/migrations/3-rel-change/model.al"]
+
+    (load-model model-name old-model true)
+    (ev/eval-all-dataflows (cn/make-instance {:Manager/Init {}}))
+    (let [users (tu/fresult (ev/eval-all-dataflows
+                             (cn/make-instance {:Manager/LookupAll_User {}})))]
+      (is (= 3 (count users))))
+    (clear-model-init model-name)
+    (load-model model-name new-model)
+    (ev/eval-all-dataflows
+     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (let [users (tu/fresult (ev/eval-all-dataflows
+                             (cn/make-instance {:Manager/LookupAll_User {}})))
+          ws (tu/fresult (ev/eval-all-dataflows
+                          (cn/make-instance {:Manager/GetWorkspaceForUser {:Name "User1"}})))]
+      (is (= 3 (count users)))
+      (is (= 2 (count ws))))
+    (clear-model-init model-name)))
+
 (deftest test-rel-contains
   (let [model-name :Manager
         old-model "test/sample/migrations/4-rel-contains/old/manager/model.al"
@@ -115,4 +137,128 @@
       (is (= 3 (count users)))
       (is (seq (:User (first ws))))
       (is (= (count ws) 3))
-      (is (= "User1" (:Name ws1-user))))))
+      (is (= "User1" (:Name ws1-user))))
+    (clear-model-init model-name)))
+
+(deftest test-rel-rename
+  (let [model-name :App
+        old-model "test/sample/migrations/5-rel-rename/old/app/model.al"
+        new-model "test/sample/migrations/5-rel-rename/model.al"]
+
+    (load-model model-name old-model true)
+    (ev/eval-all-dataflows (cn/make-instance {:App/Init {}}))
+    (let [users (tu/fresult (ev/eval-all-dataflows
+                             (cn/make-instance {:App/LookupAll_User {}})))]
+      (is (= 3 (count users))))
+    (clear-model-init model-name)
+    (load-model model-name new-model)
+    (ev/eval-all-dataflows
+     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (let [users (tu/fresult (ev/eval-all-dataflows
+                             (cn/make-instance {:App/LookupAll_User {}})))
+          ws (tu/fresult (ev/eval-all-dataflows
+                          (cn/make-instance {:App/GetWorkspaceForUser {:Name "User1"}})))]
+      (is (= 3 (count users)))
+      (is (= 2 (count ws))))
+    (clear-model-init model-name)))
+
+(deftest test-rel-to-ref
+  (let [model-name :App
+        old-model "test/sample/migrations/6-rel-to-ref/old/app/model.al"
+        new-model "test/sample/migrations/6-rel-to-ref/model.al"]
+
+    (load-model model-name old-model true)
+    (ev/eval-all-dataflows (cn/make-instance {:App/Init {}}))
+    (let [users (tu/fresult (ev/eval-all-dataflows
+                             (cn/make-instance {:App/LookupAll_User {}})))]
+      (is (= 3 (count users))))
+    (clear-model-init model-name)
+    (load-model model-name new-model)
+    (ev/eval-all-dataflows
+     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (let [users (tu/fresult (ev/eval-all-dataflows
+                             (cn/make-instance {:App/LookupAll_User {}})))
+          ws (tu/fresult (ev/eval-all-dataflows
+                          (cn/make-instance {:App/GetWorkspaceForUser {:Name "User1"}})))
+          ws-first (first ws)]
+      (is (= 3 (count users)))
+      (is (= 2 (count ws)))
+      (is (and (:WorkspaceName ws-first) (:Id ws-first) (not (:User ws-first)))))
+    (clear-model-init model-name)))
+
+(deftest test-rel-between
+  (let [model-name :Social
+        old-model "test/sample/migrations/7-rel-between/old/social/model.al"
+        new-model "test/sample/migrations/7-rel-between/model.al"]
+    (load-model model-name old-model true)
+    (ev/eval-all-dataflows (cn/make-instance {:Social/Init {}}))
+    (let [friendships (tu/fresult (ev/eval-all-dataflows
+                               (cn/make-instance {:Social/LookupAll_Friendship {}})))]
+      (is (= 6 (count friendships))))
+    (clear-model-init model-name)
+    (load-model model-name new-model)
+    (ev/eval-all-dataflows
+     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (ev/eval-all-dataflows
+     (cn/make-instance {:Social/LookupAll_Person {}}))
+    (let [persons (tu/fresult (ev/eval-all-dataflows
+                               (cn/make-instance {:Social/LookupAll_Person {}})))
+          friendships (tu/fresult (ev/eval-all-dataflows
+                                   (cn/make-instance {:Social/LookupAll_Friendship {}})))]
+      (is (= 7 (count persons)))
+      (is (= 6 (count friendships))))
+    (clear-model-init model-name)))
+
+(deftest test-rel-between-enh
+  (let [model-name :Social
+        old-model "test/sample/migrations/8-rel-between-enh/old/social/model.al"
+        new-model "test/sample/migrations/8-rel-between-enh/model.al"]
+    (load-model model-name old-model true)
+    (ev/eval-all-dataflows (cn/make-instance {:Social/Init {}}))
+    (let [friendships (tu/fresult (ev/eval-all-dataflows
+                               (cn/make-instance {:Social/LookupAll_Friendship {}})))]
+      (is (= 6 (count friendships))))
+    (clear-model-init model-name)
+    (load-model model-name new-model)
+    (ev/eval-all-dataflows
+     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (ev/eval-all-dataflows
+     (cn/make-instance {:Social/LookupAll_Person {}}))
+    (let [persons (tu/fresult (ev/eval-all-dataflows
+                               (cn/make-instance {:Social/LookupAll_Person {}})))
+          relationships (tu/fresult (ev/eval-all-dataflows
+                                     (cn/make-instance {:Social/LookupAll_Relationship {}})))
+          fr (first relationships)]
+      (is (= 7 (count persons)))
+      (is (= 6 (count relationships)))
+      (is (and (:Me fr) (:Other fr) (:RelationshipType fr) 
+               (not (:From fr)) (not (:To fr)))))
+    (clear-model-init model-name)))
+
+(deftest test-rel-type-change
+  
+  (let [model-name :Manager
+        old-model "test/sample/migrations/9-rel-type-change/old/manager/model.al"
+        new-model "test/sample/migrations/9-rel-type-change/model.al"]
+
+    (load-model model-name old-model true)
+    (ev/eval-all-dataflows (cn/make-instance {:Manager/Init {}}))
+    (let [users (tu/fresult (ev/eval-all-dataflows
+                             (cn/make-instance {:Manager/LookupAll_User {}})))]
+      (is (= 3 (count users))))
+    (clear-model-init model-name)
+    (load-model model-name new-model)
+    (ev/eval-all-dataflows
+     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (let [users (tu/fresult (ev/eval-all-dataflows
+                             (cn/make-instance {:Manager/LookupAll_User {}})))
+          ws (tu/fresult (ev/eval-all-dataflows
+                          (cn/make-instance {:Manager/LookupAll_Workspace {}})))
+          bt (tu/fresult (ev/eval-all-dataflows
+                          (cn/make-instance {:Manager/LookupAll_BelongsTo {}})))
+          fbt (first bt)]
+      (is (= 3 (count users)))
+      (is (= (count ws) 3))
+      (is (= (count bt) 3))
+      (is (and (:USER fbt) (:WRKSPC fbt))))
+    (clear-model-init model-name)))

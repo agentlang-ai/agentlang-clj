@@ -256,15 +256,15 @@
 
     A graph of dependencies is prepared for each attribute. If there is a cycle in the graph,
     raise an error. Otherwise return a map with each attribute group and their attached graphs."
-  [ctx pat-name pat-attrs schema args]
+  [ctx pat-name pat-attrs schema version args]
   (if (:full-query? args)
     {:attrs (assoc pat-attrs :query (compile-query
                                      ctx pat-name
                                      (normalize-attrs-for-full-query pat-attrs)))}
-    (let [pat-attrs (normalize-meta-query-pat-attr pat-attrs)
+    (let [pat-attrs (normalize-meta-query-pat-attr pat-attrs) 
           {computed :computed refs :refs
            compound :compound query :query
-           :as cls-attrs} (i/classify-attributes ctx pat-attrs schema)
+           :as cls-attrs} (i/classify-attributes ctx pat-attrs schema version)
           fs (mapv #(partial build-dependency-graph %) [refs compound query])
           deps-graph (appl fs [ctx schema ug/EMPTY])
           compound-exprs (mapv (fn [[k v]] [k (compound-expr-as-fn v)]) compound)
@@ -336,18 +336,18 @@
   "Emit opcode for realizing a fully-built instance of a record, entity or event.
   It is assumed that the opcodes for setting the individual attributes were emitted
   prior to this."
-  [ctx pat-name pat-attrs schema args]
+  [ctx pat-name pat-attrs schema version args]
   (when-let [xs (cv/invalid-attributes (dissoc pat-attrs :meta :meta?) schema)]
     (if (= (first xs) cn/id-attr)
       (if (= (get schema cn/type-tag-key) :record)
         (u/throw-ex (str "Invalid attribute " cn/id-attr " for type record: " pat-name))
         (u/throw-ex (str "Wrong reference of id in line: " pat-attrs "of " pat-name)))
       (u/throw-ex (str "Invalid attributes in pattern - " xs))))
-  (let [{attrs :attrs deps-graph :deps} (parse-attributes ctx pat-name pat-attrs schema args)
+  (let [{attrs :attrs deps-graph :deps} (parse-attributes ctx pat-name pat-attrs schema version args)
         sorted-attrs (sort-attributes-by-dependency attrs deps-graph)]
     (emit-build-record-instance ctx pat-name sorted-attrs schema args)))
 
-(defn- emit-dynamic-upsert [ctx pat-name pat-attrs _ args]
+(defn- emit-dynamic-upsert [ctx pat-name pat-attrs _ _ args]
   (op/dynamic-upsert
    [pat-name pat-attrs (partial compile-pattern ctx) (:alias args)]))
 
@@ -552,7 +552,8 @@
             [nil pat])
           orig-nm (ctx/dynamic-type ctx (li/instance-pattern-name pat))
           full-nm (li/normalize-name orig-nm)
-          rec-version (get-in pat [orig-nm :meta :version])
+          rec-version (or (get-in pat [orig-nm :meta :version])
+                          (get-in pat [orig-nm :meta? :version]))
           {component :component record :record
            path :path refs :refs :as parts} (li/path-parts full-nm)
           refs (seq refs)
@@ -586,7 +587,7 @@
                                         qattrs (extract-query-attrs %)]
                                     {:opcodes opc :query-attrs qattrs})
                                  filter-pats)}))
-            opc (c ctx nm attrs scm args)]
+            opc (c ctx nm attrs scm rec-version args)]
         (ctx/put-record! ctx nm pat)
         (when alias
           (let [alias-name (ctx/alias-name alias)]

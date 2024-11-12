@@ -111,16 +111,16 @@
       (recur (rest fns) (assoc raw-obj a (f env raw-obj)))
       raw-obj)))
 
-(defn- assoc-futures [record-name obj]
-  (loop [fattrs (cn/future-attrs record-name), obj obj]
+(defn- assoc-futures [record-name rec-version obj]
+  (loop [fattrs (cn/future-attrs record-name rec-version), obj obj]
     (if-let [[k v] (first fattrs)]
       (recur (rest fattrs)
              (assoc obj k v))
       obj)))
 
-(defn- assoc-computed-attributes [env record-name raw-obj eval-opcode]
+(defn- assoc-computed-attributes [env record-name rec-version raw-obj eval-opcode]
   (let [env (enrich-environment-with-refs env record-name raw-obj)
-        [efns evattrs] (cn/all-computed-attribute-fns record-name)
+        [efns evattrs] (cn/all-computed-attribute-fns record-name rec-version)
         f (partial assoc-fn-attributes env)
         interim-obj (if (seq evattrs)
                       (assoc-evaled-attributes
@@ -129,7 +129,7 @@
                         (li/split-path record-name) raw-obj)
                        raw-obj evattrs eval-opcode)
                       raw-obj)]
-    (f (assoc-futures record-name interim-obj) efns)))
+    (f (assoc-futures record-name rec-version interim-obj) efns)))
 
 (defn- set-obj-attr
   ([env attr-name attr-ref attr-value]
@@ -641,7 +641,7 @@
          (if (maybe-async-channel? x)
            [x single? env]
            (let [objs (if single? [x] x)
-                 final-objs (mapv #(assoc-computed-attributes env record-name % eval-opcode) objs)
+                 final-objs (mapv #(assoc-computed-attributes env record-name rec-version % eval-opcode) objs)
                  insts (if validation-required
                          (mapv (partial validated-instance record-name rec-version) final-objs)
                          final-objs)
@@ -857,7 +857,7 @@
                (let [[insts env :as r] (find-instances env (env/get-store env) entity-name queries)]
                  (if (:filter-by result-filter)
                    [(filter-results-by-rels entity-name insts result-filter) env]
-                   r))))]
+                   r))))] 
      (cond
        (maybe-async-channel? insts)
        (i/ok
@@ -987,6 +987,7 @@
 
 (defn- intern-instance [self env eval-opcode eval-event-dataflows
                         record-name inst-alias queries validation-required upsert-required]
+  
   (let [rec-version (get-in queries [:query :raw-query :version])
         [insts single? env] (pop-instance env record-name rec-version (partial eval-opcode self) validation-required)
         scm (cn/ensure-schema record-name rec-version)
@@ -1078,7 +1079,7 @@
           (i/ok v env)
           (if (cn/an-instance? v)
             (let [opcode-eval (partial eval-opcode self)
-                  inst (assoc-computed-attributes env (cn/instance-type v) v opcode-eval)
+                  inst (assoc-computed-attributes env (cn/instance-type v) nil v opcode-eval)
                   rel-ctx (atom nil)
                   final-inst (ensure-relationship-constraints env rel-ctx (cn/instance-type inst) inst)
                   env (env/merge-relationship-context env @rel-ctx)
