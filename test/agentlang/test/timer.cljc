@@ -24,7 +24,8 @@
      (dataflow
       :BasicTimer/StartTimer
       {:Agentlang.Kernel.Lang/Timer
-       {:Expiry 1
+       {:Name "BasicTimer/Timer01"
+        :Expiry 1
         :ExpiryEvent
         [:q# {:BasicTimer/OnTimer
               {:X [:uq# :BasicTimer/StartTimer.X]}}]}})
