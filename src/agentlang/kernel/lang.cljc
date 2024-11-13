@@ -34,7 +34,7 @@
 (attribute :Agentlang.Kernel.Lang/String {:check k/kernel-string?})
 (attribute
  :Agentlang.Kernel.Lang/Keyword
- {:check (fn* [p1__395#] (or (keyword? p1__395#) (string? p1__395#)))})
+ {:check (fn* [p1__394#] (or (keyword? p1__394#) (string? p1__394#)))})
 (attribute :Agentlang.Kernel.Lang/Path {:check k/path?})
 (attribute :Agentlang.Kernel.Lang/DateTime {:check k/date-time?})
 (attribute :Agentlang.Kernel.Lang/Date {:check k/date?})
@@ -97,6 +97,7 @@
     "term-abnormal"],
    :default "ready",
    :indexed true},
+  :Restart {:type :Agentlang.Kernel.Lang/Boolean, :default false},
   :CreatedTimeSecs
   {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp},
   :LastHeartbeatSecs
@@ -122,6 +123,12 @@
                           :Agentlang.Kernel.Lang/SetTimerHeartbeat.TimerName,
                           :LastHeartbeatSecs
                           '(agentlang.lang.datetime/unix-timestamp)}})
+(dataflow
+ :Agentlang.Kernel.Lang/CancelTimer
+ #:Agentlang.Kernel.Lang{:SetTimerStatus
+                         {:TimerName
+                          :Agentlang.Kernel.Lang/CancelTimer.TimerName,
+                          :Status "term-cancel"}})
 (dataflow
  :Agentlang.Kernel.Lang/FindRunnableTimers
  #:Agentlang.Kernel.Lang{:Timer?
@@ -188,4 +195,4 @@
     :paths [:Agentlang.Kernel.Lang/DataSync]})])
 (def
  Agentlang_Kernel_Lang___COMPONENT_ID__
- "204db928-8682-4a62-a5ea-7882558bdaf3")
+ "8d55b5e9-d0f7-4cf3-8d03-5757173b3d25")

@@ -121,15 +121,21 @@
     (fn []
       (try
         (loop [rem-secs expire-secs, check-cancel false]
-          (if (and check-cancel (timer-cancelled? n))
-            (cancel-task! n)
-            (if (< rem-secs heartbeat-secs)
-              (do (sleep n rem-secs)
-                  (set-status-terminating! n)
-                  (run-task inst))
-              (do (sleep n heartbeat-secs)
-                  (update-heartbeat! n)
-                  (recur (- rem-secs heartbeat-secs) true)))))
+          (if (<= rem-secs heartbeat-secs)
+            (do (sleep n rem-secs)
+                (if (and check-cancel (timer-cancelled? n))
+                  (cancel-task! n)
+                  (do (set-status-terminating! n)
+                      (let [r (run-task inst)]
+                        (if (:Restart inst)
+                          (do (set-status-running! n)
+                              (recur expire-secs true))
+                          r)))))
+            (do (sleep n heartbeat-secs)
+                (if (and check-cancel (timer-cancelled? n))
+                  (cancel-task! n)
+                  (do (update-heartbeat! n)
+                      (recur (- rem-secs heartbeat-secs) true))))))
         (catch #?(:clj Exception :cljs js/Error) ex
           #?(:clj (log/error ex)))))))
 
