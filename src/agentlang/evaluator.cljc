@@ -547,6 +547,12 @@
 
 (def async-result (make-async-queue))
 
-(defn async-evaluate-pattern [pat]
-  (async/go
-    (async/>! async-result (evaluate-pattern pat))))
+#?(:clj
+   (defn async-evaluate-pattern [pat]
+     (async/go
+       (try
+        (async/>! async-result (evaluate-pattern pat))
+        (catch Exception e
+          (async/>! async-result
+                    (str "Error during evaluation:"
+                         (.getMessage e))))))))
