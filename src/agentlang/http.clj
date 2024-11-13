@@ -5,9 +5,10 @@
             [buddy.auth.middleware :refer [wrap-authentication]]
             [buddy.sign.jwt :as buddyjwt]
             [clj-time.core :as time]
-            [clojure.string :as str]
+            [clojure.core.async :as async]
             [clojure.string :as s]
             [clojure.walk :as w]
+            [clojure.edn :as edn]
             [agentlang.auth.core :as auth]
             [agentlang.auth.jwt :as jwt]
             [agentlang.compiler :as compiler]
@@ -35,7 +36,7 @@
             [agentlang.evaluator :as ev]
             [com.walmartlabs.lacinia :refer [execute]]
             [agentlang.graphql.core :as graphql]
-            [ring.middleware.params :refer [wrap-params]]
+            [ring.middleware.params :refer [wrap-params] :as params]
             [ring.middleware.keyword-params :refer [wrap-keyword-params]]
             [ring.middleware.nested-params :refer [wrap-nested-params]]
             [drawbridge.core :as drawbridge])
@@ -1204,9 +1205,23 @@
 (defn nrepl-http-handler
   [[auth-config maybe-unauth] nrepl-handler request]
   (or (maybe-unauth request)
-        (let [handler (drawbridge/ring-handler :nrepl-handler nrepl-handler
-                                               :default-read-timeout 10000)]
-          (handler request))))
+      (let [parsed-request (params/params-request request)
+            code (get-in parsed-request [:form-params "code"])
+            pattern (edn/read-string code)
+            handler (drawbridge/ring-handler :nrepl-handler nrepl-handler)
+            result-chan (async/chan)
+            ;; First handle the request
+            _ (handler request)
+            _ (ev/async-evaluate-pattern pattern result-chan)
+            timeout (async/timeout (or (System/getenv "NREPL_TIMEOUT") 10000))
+            ;; Then wait for async result
+            [result port] (async/alts!! [result-chan timeout])]
+        (async/close! timeout)
+        (if (= port timeout)
+          (do
+            (async/close! result-chan)
+            {:status 408 :body "Request timeout"})
+          {:status 200 :body result}))))
 
 (defn wrap-nrepl-middleware [handler]
   (-> handler
@@ -1307,7 +1322,7 @@
       (log/info "GraphQL schema generation and resolver injection succeeded."))
     (catch Exception e
       (log/error (str "Failed to compile GraphQL schema:"
-                      (str/join "\n" (.getStackTrace e)))))))
+                      (s/join "\n" (.getStackTrace e)))))))
 
 (defn- create-route-handlers [evaluator auth auth-info config]
   {:graphql                  (partial graphql-handler auth-info)
