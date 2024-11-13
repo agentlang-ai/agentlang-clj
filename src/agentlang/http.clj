@@ -5,7 +5,7 @@
             [buddy.auth.middleware :refer [wrap-authentication]]
             [buddy.sign.jwt :as buddyjwt]
             [clj-time.core :as time]
-            [clojure.string :as str]
+            [clojure.core.async :as async]
             [clojure.string :as s]
             [clojure.walk :as w]
             [agentlang.auth.core :as auth]
@@ -1204,9 +1204,15 @@
 (defn nrepl-http-handler
   [[auth-config maybe-unauth] nrepl-handler request]
   (or (maybe-unauth request)
-        (let [handler (drawbridge/ring-handler :nrepl-handler nrepl-handler
-                                               :default-read-timeout 10000)]
-          (handler request))))
+        (let [handler (drawbridge/ring-handler :nrepl-handler nrepl-handler)
+              ;; First handle the request
+              _ (handler request)
+              timeout (async/timeout 10000)
+              ;; Then wait for async result
+              [result port] (async/alts!! [ev/async-result timeout])]
+          (if (= port timeout)
+            {:status 400 :body "Request timeout"}
+            {:status 200 :body result}))))
 
 (defn wrap-nrepl-middleware [handler]
   (-> handler
@@ -1307,7 +1313,7 @@
       (log/info "GraphQL schema generation and resolver injection succeeded."))
     (catch Exception e
       (log/error (str "Failed to compile GraphQL schema:"
-                      (str/join "\n" (.getStackTrace e)))))))
+                      (s/join "\n" (.getStackTrace e)))))))
 
 (defn- create-route-handlers [evaluator auth auth-info config]
   {:graphql                  (partial graphql-handler auth-info)

@@ -77,6 +77,7 @@
             [reifyhealth/lein-git-down "0.4.0"]
             [lein-ancient "1.0.0-RC3"]
             [cider/cider-nrepl "0.37.1"]
+            [refactor-nrepl "3.10.0"]
             [lein-classpath-jar "0.1.0"]]
 
   :middleware [lein-git-down.plugin/inject-properties]
@@ -87,6 +88,10 @@
 
   :deploy-repositories [["clojars" {:url "https://clojars.org/repo"
                                     :sign-releases false}]]
+
+  :repl {:dependencies [[nrepl "1.1.1"]]}
+
+  :resource-paths ["resources" "target/classes"]
 
   :pom-addition [:distributionManagement
                  [:repository
