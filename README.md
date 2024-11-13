@@ -23,10 +23,10 @@ Agents are a built-in language construct - developers can choose from one of the
 ### Humor Bot
 
 ```clojure
-(component :Chat)
+(component :Humor)
 
 {:Agentlang.Core/Agent
- {:Name :example-agent
+ {:Name "Comedian"
   :Input :Chat/Session
   :UserInstruction "You are an AI bot who tell jokes"}}
 ```
@@ -51,14 +51,14 @@ Scans expense receipts and generates expense records
   :CreatedAt {:default now}})
 
 {:Agentlang.Core/Agent
- {:Name :receipt-ocr-agent
-  :Type :ocr
+ {:Name "OCR Agent"
+  :Type :planner
   :UserInstruction (str "Analyse the image of a receipt and return only the items and their amounts. "
                         "No need to include sub-totals, totals and other data.")
   :LLM "openai-4o-mini"}}
 
 {:Agentlang.Core/Agent
- {:Name :expense-agent
+ {:Name "Expense Handler"
   :Type :planner
   :LLM "openai-4o-mini"
   :UserInstruction "Convert an expense report into individual instances of the expense entity."
