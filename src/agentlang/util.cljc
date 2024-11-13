@@ -428,7 +428,8 @@
              (binding [*out* out]
                (print {:service {:port 8080}})))))
        (binding [*data-readers* {'$ read-env-var}]
-         (read-string (slurp config-file))))))
+         (merge (read-string (slurp config-file))
+                (read-string (getenv "AGENT_CONFIG")))))))
 
 (defn strs
   ([j ss] (string/join j ss))
