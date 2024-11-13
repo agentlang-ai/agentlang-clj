@@ -543,16 +543,13 @@
         (or (first (safe-eval-internal {evt-name {}}))
             (fetch-model-config-declaration ent))))))
 
-(defn make-async-queue [] (async/chan))
-
-(def async-result (make-async-queue))
-
 #?(:clj
-   (defn async-evaluate-pattern [pat]
+   (defn async-evaluate-pattern [pat result-chan]
      (async/go
        (try
-        (async/>! async-result (evaluate-pattern pat))
+        (async/>! result-chan (evaluate-pattern pat))
         (catch Exception e
-          (async/>! async-result
+          (async/>! result-chan
                     (str "Error during evaluation:"
-                         (.getMessage e))))))))
+                         (.getMessage e)))))
+       (async/close! result-chan))))

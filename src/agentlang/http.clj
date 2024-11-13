@@ -8,6 +8,7 @@
             [clojure.core.async :as async]
             [clojure.string :as s]
             [clojure.walk :as w]
+            [clojure.edn :as edn]
             [agentlang.auth.core :as auth]
             [agentlang.auth.jwt :as jwt]
             [agentlang.compiler :as compiler]
@@ -35,7 +36,7 @@
             [agentlang.evaluator :as ev]
             [com.walmartlabs.lacinia :refer [execute]]
             [agentlang.graphql.core :as graphql]
-            [ring.middleware.params :refer [wrap-params]]
+            [ring.middleware.params :refer [wrap-params] :as params]
             [ring.middleware.keyword-params :refer [wrap-keyword-params]]
             [ring.middleware.nested-params :refer [wrap-nested-params]]
             [drawbridge.core :as drawbridge])
@@ -1204,15 +1205,23 @@
 (defn nrepl-http-handler
   [[auth-config maybe-unauth] nrepl-handler request]
   (or (maybe-unauth request)
-        (let [handler (drawbridge/ring-handler :nrepl-handler nrepl-handler)
-              ;; First handle the request
-              _ (handler request)
-              timeout (async/timeout 10000)
-              ;; Then wait for async result
-              [result port] (async/alts!! [ev/async-result timeout])]
-          (if (= port timeout)
-            {:status 400 :body "Request timeout"}
-            {:status 200 :body result}))))
+      (let [parsed-request (params/params-request request)
+            code (get-in parsed-request [:form-params "code"])
+            pattern (edn/read-string code)
+            handler (drawbridge/ring-handler :nrepl-handler nrepl-handler)
+            result-chan (async/chan)
+            ;; First handle the request
+            _ (handler request)
+            _ (ev/async-evaluate-pattern pattern result-chan)
+            timeout (async/timeout (or (System/getenv "NREPL_TIMEOUT") 10000))
+            ;; Then wait for async result
+            [result port] (async/alts!! [result-chan timeout])]
+        (async/close! timeout)
+        (if (= port timeout)
+          (do
+            (async/close! result-chan)
+            {:status 408 :body "Request timeout"})
+          {:status 200 :body result}))))
 
 (defn wrap-nrepl-middleware [handler]
   (-> handler
