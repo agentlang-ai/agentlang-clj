@@ -83,3 +83,28 @@
       (let [c @a2]
         (Thread/sleep 3000)
         (is (= c @a2))))))
+
+(deftest retry-timer
+  (let [a (atom 0)]
+    (defn check-a1 []
+      (let [v @a]
+        (reset! a (+ v 1))
+        (when (zero? v)
+          (u/throw-ex "invalid a1"))
+        v))
+    (defcomponent :RetryTimer
+      (dataflow
+       :RetryTimer/StartTimer
+       {:Agentlang.Kernel.Lang/Timer
+        {:Name "RetryTimer/Timer01"
+         :Retries 2
+         :Expiry 1
+         :ExpiryEvent
+         [:q# {:RetryTimer/OnTimer01 {}}]}})
+      (dataflow :RetryTimer/OnTimer01 [:eval '(agentlang.test.timer/check-a1)]))
+    (let [timer? (partial cn/instance-of? :Agentlang.Kernel.Lang/Timer)]
+      (is (timer? (tu/first-result {:RetryTimer/StartTimer {}})))
+      (Thread/sleep 3000)
+      (is (= @a 2))
+      (Thread/sleep 3000)
+      (is (= @a 2)))))

@@ -34,7 +34,7 @@
 (attribute :Agentlang.Kernel.Lang/String {:check k/kernel-string?})
 (attribute
  :Agentlang.Kernel.Lang/Keyword
- {:check (fn* [p1__394#] (or (keyword? p1__394#) (string? p1__394#)))})
+ {:check (fn* [p1__395#] (or (keyword? p1__395#) (string? p1__395#)))})
 (attribute :Agentlang.Kernel.Lang/Path {:check k/path?})
 (attribute :Agentlang.Kernel.Lang/DateTime {:check k/date-time?})
 (attribute :Agentlang.Kernel.Lang/Date {:check k/date?})
@@ -81,11 +81,17 @@
   {:oneof [:PreEval :PostEval :Default], :default :Default}})
 (entity
  :Agentlang.Kernel.Lang/Timer
- {:Name {:type :Agentlang.Kernel.Lang/String, :guid true},
-  :Expiry :Agentlang.Kernel.Lang/Int,
+ {:LastHeartbeatSecs
+  {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp},
+  :ExpiryEvent :Agentlang.Kernel.Lang/Map,
+  :Restart {:type :Agentlang.Kernel.Lang/Boolean, :default false},
   :ExpiryUnit
   {:oneof ["Seconds" "Minutes" "Hours" "Days"], :default "Seconds"},
-  :ExpiryEvent :Agentlang.Kernel.Lang/Map,
+  :CreatedTimeSecs
+  {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp},
+  :Name {:type :Agentlang.Kernel.Lang/String, :guid true},
+  :Retries {:type :Agentlang.Kernel.Lang/Int, :default 0},
+  :Expiry :Agentlang.Kernel.Lang/Int,
   :Status
   {:oneof
    ["ready"
@@ -96,12 +102,7 @@
     "term-error"
     "term-abnormal"],
    :default "ready",
-   :indexed true},
-  :Restart {:type :Agentlang.Kernel.Lang/Boolean, :default false},
-  :CreatedTimeSecs
-  {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp},
-  :LastHeartbeatSecs
-  {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp}})
+   :indexed true}})
 (event
  :Agentlang.Kernel.Lang/SetTimerStatus
  {:TimerName :Agentlang.Kernel.Lang/String,
@@ -195,4 +196,4 @@
     :paths [:Agentlang.Kernel.Lang/DataSync]})])
 (def
  Agentlang_Kernel_Lang___COMPONENT_ID__
- "8d55b5e9-d0f7-4cf3-8d03-5757173b3d25")
+ "2200d389-d753-4bfb-a2a9-f3ed43bee787")

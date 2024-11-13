@@ -67,6 +67,7 @@
   :Status {:oneof ["ready" "running" "terminating" "term-cancel" "term-ok" "term-error" "term-abnormal"]
            :default "ready" :indexed true}
   :Restart {:type :Boolean :default false}
+  :Retries {:type :Int :default 0}
   :CreatedTimeSecs {:type :Int :default dt/unix-timestamp}
   :LastHeartbeatSecs {:type :Int :default dt/unix-timestamp}})
 

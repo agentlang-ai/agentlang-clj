@@ -15,3 +15,8 @@
 
 (defn set-safe-eval-patterns! [f] (reset! safe-eval-patterns f))
 (defn get-safe-eval-patterns [] @safe-eval-patterns)
+
+(def ^:private safe-eval-atomic (atom nil))
+
+(defn set-safe-eval-atomic! [f] (reset! safe-eval-atomic f))
+(defn get-safe-eval-atomic [] @safe-eval-atomic)

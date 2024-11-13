@@ -101,7 +101,8 @@
         result)
       (catch #?(:clj Exception :cljs js/Error) ex
         (set-status-error! n)
-        (log/error (str "error in task callback - " ex))))))
+        (log/error (str "error in task callback - " ex))
+        {:status :error}))))
 
 (defn- timer-cancelled? [n]
   (let [inst (first
@@ -113,6 +114,17 @@
       (do (log/warn (str "failed to check cancelled status of timer " n))
           true))))
 
+(defn- expiry-event-successfull? [result]
+  (cond
+    (map? result)
+    (= :ok (:status result))
+
+    (vector? result)
+    (expiry-event-successfull? (first result))
+
+    ;; assume success, if non-nil result
+    :else result))
+
 (def ^:private heartbeat-secs 5)
 
 (defn- make-callback [inst]
@@ -120,22 +132,27 @@
         n (:Name inst)]
     (fn []
       (try
-        (loop [rem-secs expire-secs, check-cancel false]
+        (loop [rem-secs expire-secs, check-cancel false, retries (:Retries inst)]
           (if (<= rem-secs heartbeat-secs)
             (do (sleep n rem-secs)
                 (if (and check-cancel (timer-cancelled? n))
                   (cancel-task! n)
                   (do (set-status-terminating! n)
                       (let [r (run-task inst)]
-                        (if (:Restart inst)
+                        (cond
+                          (:Restart inst)
                           (do (set-status-running! n)
-                              (recur expire-secs true))
-                          r)))))
+                              (recur expire-secs true retries))
+                          (and (not (expiry-event-successfull? r))
+                               (pos? retries))
+                          (do (set-status-running! n)
+                              (recur expire-secs true (dec retries)))
+                          :else r)))))
             (do (sleep n heartbeat-secs)
                 (if (and check-cancel (timer-cancelled? n))
                   (cancel-task! n)
                   (do (update-heartbeat! n)
-                      (recur (- rem-secs heartbeat-secs) true))))))
+                      (recur (- rem-secs heartbeat-secs) true retries))))))
         (catch #?(:clj Exception :cljs js/Error) ex
           #?(:clj (log/error ex)))))))
 
