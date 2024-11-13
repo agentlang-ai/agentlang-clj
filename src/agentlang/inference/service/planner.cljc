@@ -1,5 +1,6 @@
 (ns agentlang.inference.service.planner
-  (:require [agentlang.util :as u]
+  (:require [clojure.walk :as w]
+            [agentlang.util :as u]
             [agentlang.lang.internal :as li]
             [agentlang.inference.service.tools :as tools]))
 
@@ -265,3 +266,14 @@
          (str generic-planner-instructions
               "These are the application specific entity definitions shared by the user:\n\n" (agent-tools-as-definitions instance)
               "Additional application specific instructions from the user follows:\n\n" (:UserInstruction instance))))
+
+(defn validate-expressions [exprs]
+  (doseq [expr (rest exprs)]
+    (when-not (seqable? expr)
+      (u/throw-ex (str "Unexpected expression - " expr)))
+    ;; An embedded def could mean mismatched parenthesis.
+    (w/postwalk
+     #(when (and (seqable? %) (= (first %) 'def))
+        (u/throw-ex (str "Maybe there is a parenthesis mismatch in this expression - " expr)))
+     (rest expr)))
+  exprs)
