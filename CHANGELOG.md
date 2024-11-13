@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1-alpha2] - 2024-11-13
+
+- nREPL now handles all evaluation as async evaluation
+- nREPL now doesn't depend on timeout for evaluation result
+
 ## [0.6.1-alpha1] - 2024-11-08
 
 - Update timeout for nREPL drawbridge
