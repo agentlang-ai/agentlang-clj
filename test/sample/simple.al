@@ -85,3 +85,16 @@
           :Field {:type :StringField}}})
 
 (dataflow :KK {:E2 {:Y '(agentlang.lang.datetime/now)}})
+
+(event :OnTimer {:X :Int})
+
+(dataflow
+ :StartTimer
+ {:Agentlang.Kernel.Lang/Timer
+  {:Name "BasicTimer/Timer02"
+   :Expiry 25
+   :ExpiryEvent
+   [:q# {:Sample.Simple/OnTimer
+         {:X [:uq# :Sample.Simple/StartTimer.X]}}]}})
+
+(dataflow :OnTimer [:eval '(println :OnTimer.X)])
