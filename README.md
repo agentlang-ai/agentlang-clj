@@ -2,7 +2,7 @@
 
 # AgentLang Programming Language
 
-AgentLang is the **easiest way** to build AI Agents, Chatbots and Apps - build **teams of AI agents** that collaborate (with other AI agents and humans) to handle complex, time-consuming, monotonous tasks.
+AgentLang is the **easiest way** to build AI Agents, Chatbots and Apps - build **teams of AI agents** that collaborate (with other AI agents and humans) to handle complex, time-consuming, monotonous tasks. AgentLang is a data-oriented, declarative abstraction for building agents and apps, similar to how Terraform is a declarative abstraction for infrastructure-as-code.
 
 [![AppCI](https://github.com/agentlang-ai/agentlang/actions/workflows/app.yml/badge.svg)](https://github.com/agentlang-ai/agentlang/actions/workflows/app.yml)
 [![AgentLang clj CI](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-clj.yml/badge.svg)](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-clj.yml)
@@ -10,26 +10,15 @@ AgentLang is the **easiest way** to build AI Agents, Chatbots and Apps - build *
 
 ### **Open | Enterprise-grade | Production-ready**
 
-The AgentLang language specification, its compiler and runtime are open source. The code you build in AgentLang can run anywhere - **avoiding the vendor lock-in** of other AI agent/programming platforms.
+The AgentLang language specification, its compiler and runtime are open source. The code you build in AgentLang can run anywhere - **avoiding the vendor lock-in** of other AI agent/programming platforms. AgentLang programs run on the JVM and can make use of any of the millions of existing Java/Clojure and other JVM libraries out there. AgentLang runtime has native integration with databases, vector dbs, auth systems. AgentLang comes with all the modern tooling, dependency management needed to build production-grade agents and apps.
 
 [Website](https://agentlang-ai.github.io/agentlang/) - [Examples](#examples) - [Documentation](/docs/#readme)
 
 </div>
 
-## AgentLang is innovative
+## First-class AI Agents
 
-AgentLang is a data-oriented, declarative abstraction for building agents and apps, similar to how Terraform is a declarative abstraction for infrastructure-as-code. It is feature-rich making programming easy and fun:
-* **First-class AI Agents** - interacting AI Agents is a built-in language construct - developers can choose from one of the built-in agent-types, or easily add their own agent-types.
-* **Graph-based Data Model** - model real-world relationships elegantly as a hierarchical graph of business entities with relationships. Such [entities and relationships](https://docs.agentlang.io/docs/concepts/data-model) are first-class constructs in AgentLang.
-* **RBAC** - tightly control operations on business entities through [declarative access-control](https://docs.agentlang.io/docs/concepts/zero-trust-programming) encoded directly in the model itself.
-* **Declarative flows** - express complex business logic simply as purely-declarative [patterns of data operations](https://docs.agentlang.io/docs/concepts/declarative-dataflow).
-* **Resolvers** - use a simple, but [powerful mechanism](https://docs.agentlang.io/docs/concepts/resolvers) to interface with external systems.
-
-AgentLang programs run on the JVM and can make use of any of the millions of existing Java/Clojure and other JVM libraries out there. AgentLang runtime has native integration with databases, vector dbs, auth systems.
-
-AgentLang comes with all the modern tooling, dependency management needed to build production-grade agents and apps.
-
-## Examples
+Agents are a built-in language construct - developers can choose from one of the built-in agent-types, or easily add their own agent-types.
 
 ### Humor Bot
 
@@ -41,6 +30,9 @@ AgentLang comes with all the modern tooling, dependency management needed to bui
   :Input :Chat/Session
   :UserInstruction "You are an AI bot who tell jokes"}}
 ```
+## Team of AI Agents
+
+AI Agents can delegate tasks to other specialized agents and dramatically increase the efficiency and accuracy of agentic behavior.
 
 ### Expense Processor
 
@@ -74,19 +66,26 @@ Scans expense receipts and generates expense records
   :Input :Expense.Workflow/SaveExpenses
   :Delegates {:To :receipt-ocr-agent :Preprocessor true}}}
 ```
+## Data Modeling
 
-Save this code to a file named `chat.al` and it's ready to be run as a highly-scalable service with auto-generated HTTP APIs for interacting with the agent. But before you can actually run it, you need to install AgentLang. The next section will help you with that.
+Model any business domain - from simple to complex - with the relationship graph based data modeling approach of AgentLang. Apply RBAC policies, declaratively, to the data model and secure your application data.
 
-### Download and Install
+## Dataflow
 
-#### Prerequisites
+Dataflow allows you to express complex business logic simply as purely-declarative [patterns of data operations](https://docs.agentlang.io/docs/concepts/declarative-dataflow).
+
+# Getting Started
+
+### Prerequisites
 
 1. [Java SE 21](https://openjdk.org/projects/jdk/21/) or later
 2. Linux, Mac OSX or a Unix emulator in Windows
 3. Download and install the [AgentLang CLI tool](https://github.com/agentlang-ai/agentlang.cli)
 4. Set the `OPENAI_API_KEY` environment variable to a valid API key from OpenAI
 
-Now you can run the chat-agent as,
+### Running your example
+
+Save your example into a file named `chat.al`. Now you can run the chat-agent as,
 
 ```shell
 agent /path/to/chat.al
