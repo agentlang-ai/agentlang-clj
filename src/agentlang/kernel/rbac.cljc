@@ -132,4 +132,4 @@
                           :Assignee {:type :String, :indexed true}}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "a8afc099-1505-4924-8122-43b09f322910")
+ "62fde7af-6e81-49aa-a504-ce166e6b36f2")

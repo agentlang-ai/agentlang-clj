@@ -81,11 +81,17 @@
   {:oneof [:PreEval :PostEval :Default], :default :Default}})
 (entity
  :Agentlang.Kernel.Lang/Timer
- {:Name {:type :Agentlang.Kernel.Lang/String, :guid true},
-  :Expiry :Agentlang.Kernel.Lang/Int,
+ {:LastHeartbeatSecs
+  {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp},
+  :ExpiryEvent :Agentlang.Kernel.Lang/Map,
+  :Restart {:type :Agentlang.Kernel.Lang/Boolean, :default false},
   :ExpiryUnit
   {:oneof ["Seconds" "Minutes" "Hours" "Days"], :default "Seconds"},
-  :ExpiryEvent :Agentlang.Kernel.Lang/Map,
+  :CreatedTimeSecs
+  {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp},
+  :Name {:type :Agentlang.Kernel.Lang/String, :guid true},
+  :Retries {:type :Agentlang.Kernel.Lang/Int, :default 0},
+  :Expiry :Agentlang.Kernel.Lang/Int,
   :Status
   {:oneof
    ["ready"
@@ -96,11 +102,7 @@
     "term-error"
     "term-abnormal"],
    :default "ready",
-   :indexed true},
-  :CreatedTimeSecs
-  {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp},
-  :LastHeartbeatSecs
-  {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp}})
+   :indexed true}})
 (event
  :Agentlang.Kernel.Lang/SetTimerStatus
  {:TimerName :Agentlang.Kernel.Lang/String,
@@ -122,6 +124,12 @@
                           :Agentlang.Kernel.Lang/SetTimerHeartbeat.TimerName,
                           :LastHeartbeatSecs
                           '(agentlang.lang.datetime/unix-timestamp)}})
+(dataflow
+ :Agentlang.Kernel.Lang/CancelTimer
+ #:Agentlang.Kernel.Lang{:SetTimerStatus
+                         {:TimerName
+                          :Agentlang.Kernel.Lang/CancelTimer.TimerName,
+                          :Status "term-cancel"}})
 (dataflow
  :Agentlang.Kernel.Lang/FindRunnableTimers
  #:Agentlang.Kernel.Lang{:Timer?
@@ -188,4 +196,4 @@
     :paths [:Agentlang.Kernel.Lang/DataSync]})])
 (def
  Agentlang_Kernel_Lang___COMPONENT_ID__
- "204db928-8682-4a62-a5ea-7882558bdaf3")
+ "2200d389-d753-4bfb-a2a9-f3ed43bee787")

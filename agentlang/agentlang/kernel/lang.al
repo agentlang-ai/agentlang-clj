@@ -66,6 +66,8 @@
   :ExpiryEvent :Map
   :Status {:oneof ["ready" "running" "terminating" "term-cancel" "term-ok" "term-error" "term-abnormal"]
            :default "ready" :indexed true}
+  :Restart {:type :Boolean :default false}
+  :Retries {:type :Int :default 0}
   :CreatedTimeSecs {:type :Int :default dt/unix-timestamp}
   :LastHeartbeatSecs {:type :Int :default dt/unix-timestamp}})
 
@@ -73,6 +75,7 @@
 (event :SetTimerHeartbeat {:TimerName :String})
 (dataflow :SetTimerStatus {:Timer {:Name? :SetTimerStatus.TimerName :Status :SetTimerStatus.Status}})
 (dataflow :SetTimerHeartbeat {:Timer {:Name? :SetTimerHeartbeat.TimerName :LastHeartbeatSecs '(agentlang.lang.datetime/unix-timestamp)}})
+(dataflow :CancelTimer {:SetTimerStatus {:TimerName :CancelTimer.TimerName :Status "term-cancel"}})
 
 (dataflow
  :FindRunnableTimers

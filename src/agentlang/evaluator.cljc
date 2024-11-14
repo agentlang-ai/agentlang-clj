@@ -505,6 +505,7 @@
   ([component pats] (safe-eval-patterns true component pats)))
 
 (es/set-safe-eval-patterns! safe-eval-patterns)
+(es/set-safe-eval-atomic! (partial safe-eval true))
 
 (defn eval-patterns [component pats]
   (let [event-name (ln/event (li/make-path component (li/unq-name)) {})]
