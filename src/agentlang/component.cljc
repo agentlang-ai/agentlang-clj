@@ -1402,13 +1402,18 @@
 (defn unique-attribute? [entity-schema attr]
   (:unique (find-attribute-schema (get entity-schema attr))))
 
-(defn attribute-type [entity-schema-or-name attr]
+(defn entity-attribute-schema [entity-schema-or-name attr]
   (let [entity-schema (if (keyword? entity-schema-or-name)
                         (fetch-entity-schema entity-schema-or-name)
                         entity-schema-or-name)
         ascm (get entity-schema attr)]
-    (or (:type (find-attribute-schema ascm))
-        ascm)))
+    [(find-attribute-schema ascm) ascm]))
+
+(defn attribute-type [entity-schema-or-name attr]
+  (when-let [[ascm ascm0] (entity-attribute-schema entity-schema-or-name attr)]
+    (if (map? ascm)
+      (or (:type ascm) ascm0)
+      ascm)))
 
 (def identity-attribute? li/guid)
 
@@ -1850,7 +1855,10 @@
 (defn parent-identity-attribute-type [parent-recname]
   (when-let [a (or (path-identity-attribute-name parent-recname)
                    (identity-attribute-name parent-recname))]
-    (attribute-type parent-recname a)))
+    (let [[ascm ascm0] (entity-attribute-schema parent-recname a)]
+      (if (map? ascm)
+        (dissoc ascm :unique :guid :optional)
+        (or ascm ascm0)))))
 
 (defn parent-of? [child parent]
   (let [child (li/make-path child)
