@@ -236,7 +236,6 @@
     (clear-model-init model-name)))
 
 (deftest test-rel-type-change
-  
   (let [model-name :Manager
         old-model "test/sample/migrations/9-rel-type-change/old/manager/model.al"
         new-model "test/sample/migrations/9-rel-type-change/model.al"]
@@ -261,4 +260,31 @@
       (is (= (count ws) 3))
       (is (= (count bt) 3))
       (is (and (:USER fbt) (:WRKSPC fbt))))
+    (clear-model-init model-name)))
+
+(deftest test-join-entities
+  (let [model-name :Manager
+        old-model "test/sample/migrations/10-join-entities/old/manager/model.al"
+        new-model "test/sample/migrations/10-join-entities/model.al"]
+
+    (load-model model-name old-model true)
+     (ev/eval-all-dataflows (cn/make-instance {:Manager/Init {}}))
+     (let [users (tu/fresult (ev/eval-all-dataflows
+                              (cn/make-instance {:Manager/LookupAll_Customer {}})))
+           orders (tu/fresult (ev/eval-all-dataflows
+                        (cn/make-instance {:Manager/LookupAll_Order {}})))]
+       (is (= 3 (count users)))
+       (is (= 6 (count orders))))
+
+    (clear-model-init model-name)
+    (load-model model-name new-model)
+    
+    (ev/eval-all-dataflows
+     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    
+    (let [co (tu/fresult (ev/eval-all-dataflows
+                          (cn/make-instance {:Manager/LookupAll_CustomerOrder {}})))
+          cof (first co)]
+      (is (= 6 (count co)))
+      (is (and (:CustomerName cof) (:CustomerId cof) (:OrderId cof))))
     (clear-model-init model-name)))
