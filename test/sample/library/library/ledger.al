@@ -1,23 +1,16 @@
-(ns sample.library.ledger
-  "Manage a list of books in the library"
-  (:use [agentlang.lang]
-        [agentlang.lang.datetime]
-        [agentlang.lang.string]
-        [agentlang.lang.b64])
-  (:require [agentlang.component :as cn]))
+(component
+ :Library.Ledger
+ {:refer [:Library.Identity :Library.Catalog]})
 
-(component :Test.Sample.Library.Ledger)
-
-(entity {:Test.Sample.Library.Ledger/CheckoutLog
-         {:Member       {:ref     :Test.Sample.Library.Identity/Member.Email
+(entity {:CheckoutLog
+         {:Member       {:ref     :Library.Identity/Member.Email
                          :indexed true}
           :Designation  :String
-          :Book         {:ref     :Test.Sample.Library.Catalog/Book.ISBN
+          :Book         {:ref     :Library.Catalog/Book.ISBN
                          :indexed true}
           :IsCheckedout {:type    :Boolean
                          :default true}
-          :CheckoutDate {:type    :DateTime
-                         :default now}
+          :CheckoutDate :Now
           :ReturnDate   {:type     :DateTime
                          :optional true}
           :meta         {:unique [:Member :Book]}}})
@@ -27,17 +20,17 @@
           :Issued        {:type :DateTime :optional true}
           :ExpirySeconds {:type :Int :default 300}}})
 
-(dataflow :Test.Sample.Library.Ledger/MemberLogin
-          {:Test.Sample.Library.Identity/Member {:UserName? :Test.Sample.Library.Ledger/MemberLogin.UserName}}
-          [:match :Test.Sample.Library.Identity/Member.Password
-           :Test.Sample.Library.Ledger/MemberLogin.Password  {:Authentication {:Owner :Test.Sample.Library.Identity/Member}}])
+(dataflow :MemberLogin
+          {:Library.Identity/Member {:UserName? :MemberLogin.UserName}}
+          [:match :Library.Identity/Member.Password
+           :MemberLogin.Password  {:Authentication {:Owner :Library.Identity/Member}}])
 
-(dataflow :Test.Sample.Library.Ledger/UserLogin
-          {:Test.Sample.Library.Identity/User {:UserName? :Test.Sample.Library.Ledger/UserLogin.UserName}}
-          [:match :Test.Sample.Library.Identity/User.Password
-           :Test.Sample.Library.Ledger/UserLogin.Password  {:Authentication {:Owner :Test.Sample.Library.Identity/User}}])
+(dataflow :UserLogin
+          {:Library.Identity/User {:UserName? :Library.Ledger/UserLogin.UserName}}
+          [:match :User.Password
+           :UserLogin.Password  {:Authentication {:Owner :Library.Identity/User}}])
 
-(event {:Test.Sample.Library.Ledger/CheckoutBook
+(event {:CheckoutBook
         {:Member   :Email
          :Designation :String
          :Book     :String
@@ -47,21 +40,21 @@
          :Text     :String
          :To       :String}})
 
-(dataflow :Test.Sample.Library.Ledger/CheckoutBook
-          {:Test.Sample.Library.Ledger/CheckoutLog {:Member       :Test.Sample.Library.Ledger/CheckoutBook.Member
-                                               :Designation  :Test.Sample.Library.Ledger/CheckoutBook.Designation
-                                               :Book         :Test.Sample.Library.Ledger/CheckoutBook.Book
-                                               :IsCheckedout true}}
+(dataflow :CheckoutBook
+          {:CheckoutLog {:Member       :CheckoutBook.Member
+                         :Designation  :CheckoutBook.Designation
+                         :Book         :CheckoutBook.Book
+                         :IsCheckedout true}}
           #_{:Email/Push {:Backend  :Test.Sample.Library.Ledger/CheckoutBook.Backend
                           :Receiver :Test.Sample.Library.Ledger/CheckoutBook.Receiver
                           :Subject  :Test.Sample.Library.Ledger/CheckoutBook.Subject
                           :Text     :Test.Sample.Library.Ledger/CheckoutBook.Text}}
           #_{:Sms/Push {:To   :Test.Sample.Library.Ledger/CheckoutBook.To
                         :Body :Test.Sample.Library.Ledger/CheckoutBook.Text}}
-          {:Test.Sample.Library.Ledger/CheckoutLog {:Member? :Test.Sample.Library.Ledger/CheckoutBook.Member
-                                               :Book?   :Test.Sample.Library.Ledger/CheckoutBook.Book}})
+          {:CheckoutLog {:Member? :CheckoutBook.Member
+                         :Book?   :CheckoutBook.Book}})
 
-(event {:Test.Sample.Library.Ledger/CheckinBook
+(event {:CheckinBook
         {:Member   :Email
          :Designation :String
          :Book     :String
@@ -71,31 +64,31 @@
          :Text     :String
          :To       :String}})
 
-(dataflow :Test.Sample.Library.Ledger/CheckinBook
-          {:Test.Sample.Library.Ledger/CheckoutLog {:Member       :Test.Sample.Library.Ledger/CheckinBook.Member
-                                               :Designation   :Test.Sample.Library.Ledger/CheckinBook.Designation
-                                               :Book         :Test.Sample.Library.Ledger/CheckinBook.Book
-                                               :IsCheckedout false}}
+(dataflow :CheckinBook
+          {:CheckoutLog {:Member       :CheckinBook.Member
+                         :Designation   :CheckinBook.Designation
+                         :Book         :CheckinBook.Book
+                         :IsCheckedout false}}
           #_{:Email/Push {:Backend  :Test.Sample.Library.Ledger/CheckoutBook.Backend
                         :Receiver :Test.Sample.Library.Ledger/CheckoutBook.Receiver
                         :Subject  :Test.Sample.Library.Ledger/CheckoutBook.Subject
                         :Text     :Test.Sample.Library.Ledger/CheckoutBook.Text}}
           #_{:Sms/Push {:To   :Test.Sample.Library.Ledger/CheckoutBook.To
                       :Body :Test.Sample.Library.Ledger/CheckoutBook.Text}}
-          {:CheckoutLog {:Member? :Test.Sample.Library.Ledger/CheckinBook.Member
-                         :Book?   :Test.Sample.Library.Ledger/CheckinBook.Book}})
+          {:CheckoutLog {:Member? :CheckinBook.Member
+                         :Book?   :CheckinBook.Book}})
 
 (event {:CheckedoutBooks
         {:Member :UUID}})
 
 (dataflow :CheckedoutBooks
-          {:CheckoutLog {:Member? :Test.Sample.Library.Ledger/CheckedoutBooks.Member}})
+          {:CheckoutLog {:Member? :CheckedoutBooks.Member}})
 
 (event {:CheckedoutBy
         {:Book :UUID}})
 
 (dataflow :CheckedoutBy
-          {:CheckoutLog {:Book? :Test.Sample.Library.Ledger/CheckedoutBy.Book}}
+          {:CheckoutLog {:Book? :CheckedoutBy.Book}}
           [:match :CheckoutLog.IsCheckedout
            true :CheckoutLog])
 
@@ -154,5 +147,3 @@
                                                       :duration-minutes 10}
                                               :ERROR {:count            3
                                                       :duration-minutes 5}}}]}})
-
-

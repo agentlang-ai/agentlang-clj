@@ -1,6 +1,7 @@
 (ns agentlang.evaluator
   "Helper functions for compiling and evaluating patterns."
   (:require [clojure.walk :as w]
+            [clojure.core.async :as async]
             [agentlang.component :as cn]
             [agentlang.compiler :as c]
             [agentlang.env :as env]
@@ -20,7 +21,6 @@
             [agentlang.lang.datetime :as dt]
             ;; load kernel components
             [agentlang.model]
-            ;; :~
             [agentlang.global-state :as gs]
             [agentlang.evaluator.state :as es]
             [agentlang.evaluator.internal :as i]
@@ -505,6 +505,7 @@
   ([component pats] (safe-eval-patterns true component pats)))
 
 (es/set-safe-eval-patterns! safe-eval-patterns)
+(es/set-safe-eval-atomic! (partial safe-eval true))
 
 (defn eval-patterns [component pats]
   (let [event-name (ln/event (li/make-path component (li/unq-name)) {})]
@@ -542,3 +543,18 @@
       (let [evt-name (cn/crud-event-name ent :LookupAll)]
         (or (first (safe-eval-internal {evt-name {}}))
             (fetch-model-config-declaration ent))))))
+
+#?(:clj
+   (defn async-evaluate-pattern [pat result-chan]
+     (async/go
+       (try
+         (let [evaluation-result (evaluate-pattern pat)]
+           (log/info (str "Evaluation result from async-evaluate-pattern is: " evaluation-result))
+           (async/>! result-chan evaluation-result))
+         (catch Exception e
+           (do
+             (log/warn (str "Exception during evaluation on async-evaluate-pattern: " (.getMessage e)))
+             (async/>! result-chan
+                       (str "Error during evaluation:"
+                            (.getMessage e))))))
+       (async/close! result-chan))))

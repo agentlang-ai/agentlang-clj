@@ -1,5 +1,6 @@
 (ns agentlang.inference.service.planner
-  (:require [agentlang.util :as u]
+  (:require [clojure.walk :as w]
+            [agentlang.util :as u]
             [agentlang.lang.internal :as li]
             [agentlang.inference.service.tools :as tools]))
 
@@ -244,7 +245,8 @@
            :else "NO"))
        "\nAlso keep in mind that you can call only `make` on events, `update`, `delete`, `lookup-one` and `lookup-many` are reserved for entities.\n"
        "Note that you are generating code in a subset of Clojure. In your response, you should not use "
-       "any feature of the language that's not present in the above examples.\n"
+       "any feature of the language that's not present in the above examples. "
+       "This means, for conditionals you should always return a `cond` expression, and must not return an `if`.\n"
        "A `def` must always bind to the result of `make`, `update`, `delete`, `lookup-one` and `lookup-many` and nothing else.\n"
        "Now consider the entity definitions and user-instructions that follows to generate fresh dataflow patterns. "
        "An important note: do not return any plain text in your response, only return valid clojure expressions. "
@@ -264,3 +266,14 @@
          (str generic-planner-instructions
               "These are the application specific entity definitions shared by the user:\n\n" (agent-tools-as-definitions instance)
               "Additional application specific instructions from the user follows:\n\n" (:UserInstruction instance))))
+
+(defn validate-expressions [exprs]
+  (doseq [expr (rest exprs)]
+    (when-not (seqable? expr)
+      (u/throw-ex (str "Unexpected expression - " expr)))
+    ;; An embedded def could mean mismatched parenthesis.
+    (w/postwalk
+     #(when (and (seqable? %) (= (first %) 'def))
+        (u/throw-ex (str "Maybe there is a parenthesis mismatch in this expression - " expr)))
+     (rest expr)))
+  exprs)

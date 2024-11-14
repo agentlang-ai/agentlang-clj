@@ -192,10 +192,28 @@
 
 (declare compile-pattern)
 
+(defn- remove-meta-query [query]
+  (cond
+    (map? query) (dissoc query :meta :meta?)
+    (coll? query) (into [] (filter #(not= (first %) :meta) query))
+    :else query))
+
+(defn- get-version-query [query]
+  (cond
+    (map? query) (get-in query [:meta :version])
+    (coll? query)
+    (get-in
+     (first (filter #(= (first %) :meta) query))
+     [1 :version])
+    :else nil))
+
 (defn- compile-relational-entity-query [ctx entity-name query]
-  (let [q (i/expand-query
+  (let [version (get-version-query query)
+        query (remove-meta-query query)
+        q (i/expand-query
            entity-name
            (mapv query-param-process query))
+        q (assoc q :version version)
         final-cq ((fetch-compile-query-fn ctx) q)]
     (stu/package-query q final-cq)))
 
@@ -222,6 +240,11 @@
   (let [new-attrs (mapv (fn [[k v]] [(li/normalize-name k) v]) attrs)]
     (into {} new-attrs)))
 
+(defn- normalize-meta-query-pat-attr [pat-attrs]
+  (if (:meta pat-attrs)
+    (dissoc (assoc pat-attrs :meta? (:meta pat-attrs)) :meta)
+    pat-attrs))
+
 (defn- parse-attributes
   "Classify attributes in the pattern as follows:
     1. computable - values can be computed at compile-time, e.g literals.
@@ -233,14 +256,15 @@
 
     A graph of dependencies is prepared for each attribute. If there is a cycle in the graph,
     raise an error. Otherwise return a map with each attribute group and their attached graphs."
-  [ctx pat-name pat-attrs schema args]
+  [ctx pat-name pat-attrs schema version args]
   (if (:full-query? args)
     {:attrs (assoc pat-attrs :query (compile-query
                                      ctx pat-name
                                      (normalize-attrs-for-full-query pat-attrs)))}
-    (let [{computed :computed refs :refs
+    (let [pat-attrs (normalize-meta-query-pat-attr pat-attrs) 
+          {computed :computed refs :refs
            compound :compound query :query
-           :as cls-attrs} (i/classify-attributes ctx pat-attrs schema)
+           :as cls-attrs} (i/classify-attributes ctx pat-attrs schema version)
           fs (mapv #(partial build-dependency-graph %) [refs compound query])
           deps-graph (appl fs [ctx schema ug/EMPTY])
           compound-exprs (mapv (fn [[k v]] [k (compound-expr-as-fn v)]) compound)
@@ -297,7 +321,7 @@
                (op/intern-instance
                 (vec
                  (concat
-                  [rec-name alias]
+                  [rec-name alias attrs]
                   (if (ctx/build-partial-instance? ctx)
                     [false false]
                     [true (and (cn/entity? rec-name)
@@ -312,18 +336,18 @@
   "Emit opcode for realizing a fully-built instance of a record, entity or event.
   It is assumed that the opcodes for setting the individual attributes were emitted
   prior to this."
-  [ctx pat-name pat-attrs schema args]
-  (when-let [xs (cv/invalid-attributes pat-attrs schema)]
+  [ctx pat-name pat-attrs schema version args]
+  (when-let [xs (cv/invalid-attributes (dissoc pat-attrs :meta :meta?) schema)]
     (if (= (first xs) cn/id-attr)
       (if (= (get schema cn/type-tag-key) :record)
         (u/throw-ex (str "Invalid attribute " cn/id-attr " for type record: " pat-name))
         (u/throw-ex (str "Wrong reference of id in line: " pat-attrs "of " pat-name)))
       (u/throw-ex (str "Invalid attributes in pattern - " xs))))
-  (let [{attrs :attrs deps-graph :deps} (parse-attributes ctx pat-name pat-attrs schema args)
+  (let [{attrs :attrs deps-graph :deps} (parse-attributes ctx pat-name pat-attrs schema version args)
         sorted-attrs (sort-attributes-by-dependency attrs deps-graph)]
     (emit-build-record-instance ctx pat-name sorted-attrs schema args)))
 
-(defn- emit-dynamic-upsert [ctx pat-name pat-attrs _ args]
+(defn- emit-dynamic-upsert [ctx pat-name pat-attrs _ _ args]
   (op/dynamic-upsert
    [pat-name pat-attrs (partial compile-pattern ctx) (:alias args)]))
 
@@ -395,12 +419,14 @@
   to the query-instances opcode generator"
   ([ctx pat callback]
    (let [k (first (keys (cleanup-join pat)))
+         q (k pat)
+         version (get-in q [:meta :version])
          n (if ctx
              (ctx/dynamic-type ctx (query-entity-name k))
              (query-entity-name k))]
-     (when-not (cn/find-entity-schema n)
+     (when-not (cn/find-entity-schema n version)
        (u/throw-ex (str "cannot query undefined entity - " n)))
-     (let [q (k pat)
+     (let [q (dissoc q :meta :meta?)
            w (when (seq (:where q))
                (w/postwalk process-complex-query (:where q)))
            j (seq (:join pat))
@@ -409,6 +435,7 @@
                 (vec lj))
            fp (assoc q :from n :where w
                      :join j :left-join lj
+                     :version version
                      :with-attributes (if (or j lj)
                                         (ensure-with-attributes
                                          (li/normalize-name k)
@@ -503,10 +530,10 @@
 
 (declare compile-query-command)
 
-(defn- compile-map [ctx pat]
+(defn- compile-map [ctx pat] 
   (cond
     (complex-query-pattern? pat)
-    (let [[k v] [(first (keys pat)) (first (vals pat))]]
+    (let [[k v] [(first (keys pat)) (first (vals pat))]] 
       (if (pi/proper-path? v)
         (compile-map ctx {(li/normalize-name k) {li/path-query-tag v}})
         (compile-query-command ctx (query-map->command pat))))
@@ -525,6 +552,8 @@
             [nil pat])
           orig-nm (ctx/dynamic-type ctx (li/instance-pattern-name pat))
           full-nm (li/normalize-name orig-nm)
+          rec-version (or (get-in pat [orig-nm :meta :version])
+                          (get-in pat [orig-nm :meta? :version]))
           {component :component record :record
            path :path refs :refs :as parts} (li/path-parts full-nm)
           refs (seq refs)
@@ -538,7 +567,7 @@
           timeout-ms (ls/timeout-ms-tag pat)
           [tag scm] (if (or path refs)
                       [:dynamic-upsert nil]
-                      (cv/find-schema nm full-nm))]
+                      (cv/find-schema nm full-nm rec-version))]
       (let [c (case tag
                 (:entity :record) emit-realize-instance
                 :event (do
@@ -558,7 +587,7 @@
                                         qattrs (extract-query-attrs %)]
                                     {:opcodes opc :query-attrs qattrs})
                                  filter-pats)}))
-            opc (c ctx nm attrs scm args)]
+            opc (c ctx nm attrs scm rec-version args)]
         (ctx/put-record! ctx nm pat)
         (when alias
           (let [alias-name (ctx/alias-name alias)]
@@ -640,9 +669,12 @@
         [result nil alias]))))
 
 (defn- compile-maybe-pattern-list [ctx pat]
-  (if (and (vector? pat) (not (li/registered-macro? (first pat))))
-    (mapv #(compile-pattern ctx %) pat)
-    (compile-pattern ctx pat)))
+  (mapv #(compile-pattern ctx %)
+        (if (vector? pat)
+          (if (li/registered-macro? (first pat))
+            [pat]
+            pat)
+          [pat])))
 
 (defn- compile-match-cases [ctx cases]
   (loop [cases cases, cases-code []]
@@ -713,7 +745,7 @@
 
 (defn- compile-construct-with-handlers
   ([ctx pat default-handlers]
-   (let [body (compile-pattern ctx (first pat))
+   (let [body (mapv #(compile-pattern ctx %) (preproc-patterns [(first pat)]))
          hpats (us/flatten-map (rest pat))
          handler-pats (if (seq hpats)
                         (distribute-handler-keys
@@ -1002,7 +1034,7 @@
 
 (defn- maybe-dissoc-meta [pat]
   (if (map? pat)
-    (dissoc pat :meta)
+    (dissoc pat :meta :meta?)
     pat))
 
 (defn compile-pattern [ctx pat]
@@ -1099,8 +1131,9 @@
 (defn- preproc-contains-spec [pat pat-alias relpat nodepat idpat]
   (let [pk (li/record-name pat)
         recname (li/normalize-name pk)
+        recversion (li/record-version pat pk)
         relname (li/normalize-name relpat)]
-    (when-not (first (filter #(= relname (first %)) (cn/containing-parents recname)))
+    (when-not (first (filter #(= relname (first %)) (cn/containing-parents recname recversion)))
       (u/throw-ex (str "not a valid contains relationship for " recname " - " relname)))
     (if (= :_ idpat)
       (preproc-contains-spec-by-path recname pat pat-alias relpat nodepat)
@@ -1123,7 +1156,7 @@
             pat (assoc pat pk attrs)
             rec-s (li/name-str recname)
             rel-s (li/name-str relname)
-            pid-n (cn/path-identity-attribute-name recname)
+            pid-n (cn/path-identity-attribute-name recname recversion)
             maybe-can-fix-path (and (not idpat) (not (and is-rel-q is-pat-q)))
             pat-with-fixed-path
             (when maybe-can-fix-path
@@ -1131,20 +1164,20 @@
                 (assoc pat pk
                        (assoc attrs li/path-attr
                               `(agentlang.compiler/maybe-append-path-identity-pattern
-                                ~v ~(cn/path-identity-attribute-name recname))))))
+                                ~v ~(cn/path-identity-attribute-name recname recversion))))))
             pats [[:eval
                    (if idpat
-                     `(agentlang.component/full-path-from-references ~pp-alias ~rel-s ~idpat ~rec-s)
-                     `(agentlang.component/full-path-from-references ~pp-alias ~rel-s ~rec-s))
+                     `(agentlang.component/full-path-from-references ~pp-alias ~rel-s ~idpat ~rec-s ~recversion)
+                     `(agentlang.component/full-path-from-references ~pp-alias ~rel-s ~rec-s ~recversion))
                    :as v]
                   (assoc (or pat-with-fixed-path pat) :as pat-alias)]
             post-pats (when (and maybe-can-fix-path (not pat-with-fixed-path))
-                        (let [ident (cn/identity-attribute-name recname)]
+                        (let [ident (cn/identity-attribute-name recname recversion)]
                           [{recname
                             {(li/name-as-query-pattern ident)
                              (li/make-ref pat-alias ident)
                              li/path-attr `(agentlang.compiler/maybe-append-path-identity-pattern
-                                            ~v ~(cn/path-identity-attribute-name recname))}
+                                            ~v ~(cn/path-identity-attribute-name recname recversion))}
                             :as pat-alias}]))]
         {:patterns (vec (concat (flatten-preproc-patterns pp) pats post-pats))
          :alias pat-alias}))))

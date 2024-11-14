@@ -8,10 +8,12 @@
             [agentlang.component :as cn]))
 
 (defn find-schema
-  ([path orig-name]
-   (if-let [tag-scm (cn/find-schema path)]
+  ([path orig-name rec-version]
+   (if-let [tag-scm (cn/find-schema path rec-version)]
      tag-scm
      (u/throw-ex (str "schema not found - " [path orig-name]))))
+  ([path orig-name]
+   (find-schema path orig-name nil))
   ([path] (find-schema path path)))
 
 (defn invalid-attributes

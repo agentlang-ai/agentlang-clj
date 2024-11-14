@@ -5,9 +5,10 @@
             [buddy.auth.middleware :refer [wrap-authentication]]
             [buddy.sign.jwt :as buddyjwt]
             [clj-time.core :as time]
-            [clojure.string :as str]
+            [clojure.core.async :as async]
             [clojure.string :as s]
             [clojure.walk :as w]
+            [clojure.edn :as edn]
             [agentlang.auth.core :as auth]
             [agentlang.auth.jwt :as jwt]
             [agentlang.compiler :as compiler]
@@ -35,7 +36,7 @@
             [agentlang.evaluator :as ev]
             [com.walmartlabs.lacinia :refer [execute]]
             [agentlang.graphql.core :as graphql]
-            [ring.middleware.params :refer [wrap-params]]
+            [ring.middleware.params :refer [wrap-params] :as params]
             [ring.middleware.keyword-params :refer [wrap-keyword-params]]
             [ring.middleware.nested-params :refer [wrap-nested-params]]
             [drawbridge.core :as drawbridge])
@@ -152,13 +153,13 @@
      :else (response s 500 data-fmt)))
   ([s] (internal-error s :json)))
 
-(defn- redirect-found [location cookie]
+(defn- redirect-found [location cookie cookie-domain]
   {:status 302
    :headers
    (let [hdrs (assoc (headers) "Location" location)]
      (if cookie
-       (let [cookie-domain (get-in (gs/get-app-config) [:authentication :cookie-domain])]
-         (assoc hdrs "Set-Cookie" (str cookie "; Domain=" cookie-domain "; Path=/")))
+       (let [cd (or cookie-domain (get-in (gs/get-app-config) [:authentication :cookie-domain]))]
+         (assoc hdrs "Set-Cookie" (str cookie "; Domain=" (if (= "NULL" cd) "" cd) "; Path=/")))
        hdrs))})
 
 (defn- maybe-assoc-root-type [mode obj result]
@@ -1111,7 +1112,7 @@
 
 (defn- auth-response [result]
   (case (:status result)
-    :redirect-found (redirect-found (:location result) (:set-cookie result))
+    :redirect-found (redirect-found (:location result) (:set-cookie result) (:cookie-domain result))
     :ok (ok (:message result))
     (bad-request (:error result))))
 
@@ -1120,7 +1121,10 @@
   (let [cookie (get-in request [:headers "cookie"])
         query-params (when-let [s (:query-string request)] (uh/form-decode s))]
     (auth-response
-     (auth/authenticate-session (assoc auth-config :cookie cookie :client-url (:origin query-params))))))
+     (auth/authenticate-session (assoc auth-config
+                                       :cookie cookie
+                                       :client-url (:origin query-params)
+                                       :cookie-domain (:server_redirect_host query-params))))))
 
 (defn- process-auth-callback [evaluator call-post-signup [auth-config _] request]
   (log-request "Auth-callback request" request)
@@ -1201,9 +1205,30 @@
 (defn nrepl-http-handler
   [[auth-config maybe-unauth] nrepl-handler request]
   (or (maybe-unauth request)
-        (let [handler (drawbridge/ring-handler :nrepl-handler nrepl-handler
-                                               :default-read-timeout 200)]
-          (handler request))))
+      (let [parsed-request (params/params-request request)
+            _ (log/info (str "Parsed-request in nrepl-http-handler is: " parsed-request))
+            code (get-in parsed-request [:form-params "code"])
+            pattern (edn/read-string code)
+            handler (drawbridge/ring-handler :nrepl-handler nrepl-handler)
+            result-chan (async/chan)
+            ;; First handle the request
+            _ (handler request)
+            _ (ev/async-evaluate-pattern pattern result-chan)
+            timeout (async/timeout (or (System/getenv "NREPL_TIMEOUT") 10000))
+            ;; Then wait for async result
+            [result port] (async/alts!! [result-chan timeout])]
+        (async/close! timeout)
+        (log/info (str "The result from evaluation is: " result))
+        (if (= port timeout)
+          (do
+            (async/close! result-chan)
+            {:status 408 :body "Request timeout"})
+          (let [cleaned-result (if (map? result)
+                                (-> result
+                                   (dissoc :env)
+                                   (json/encode))
+                                result)]
+            {:status 200 :body cleaned-result})))))
 
 (defn wrap-nrepl-middleware [handler]
   (-> handler
@@ -1304,7 +1329,7 @@
       (log/info "GraphQL schema generation and resolver injection succeeded."))
     (catch Exception e
       (log/error (str "Failed to compile GraphQL schema:"
-                      (str/join "\n" (.getStackTrace e)))))))
+                      (s/join "\n" (.getStackTrace e)))))))
 
 (defn- create-route-handlers [evaluator auth auth-info config]
   {:graphql                  (partial graphql-handler auth-info)

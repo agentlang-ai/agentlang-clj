@@ -95,6 +95,9 @@
     pat))
 
 
+(defn- component-name-as-ns [cn]
+  (symbol (s/lower-case (subs (str cn) 1))))
+
 #?(:clj
    (do
      (def ^:dynamic *parse-expressions* true)
@@ -102,11 +105,28 @@
      (defn use-lang []
        (use '[agentlang.lang]))
 
+     (defn do-clj-imports [imports]
+       (when (seq imports)
+         (let [imports (if (= 'quote (first imports))
+                         (first (rest imports))
+                         imports)]
+           (doseq [import-spec imports]
+             (apply
+              (case (first import-spec)
+                :require require
+                :use use
+                (u/throw-ex (str "invalid import directive - " (first import-spec))))
+              (rest import-spec))))))
+
      (defn evaluate-expression [exp]
        (when (and (seqable? exp) (= 'component (first exp)))
-         (doseq [dep (:refer (first (nthrest exp 2)))]
-           (let [dep-ns (symbol (s/lower-case (subs (str dep) 1)))]
-             (use [dep-ns]))))
+         (eval `(ns ~(component-name-as-ns (second exp))))
+         (use-lang)
+         (let [spec (first (nthrest exp 2))]
+           (do-clj-imports (:clj-import spec))
+           (doseq [dep (:refer spec)]
+             (let [dep-ns (component-name-as-ns dep)]
+               (use [dep-ns])))))
        (eval exp))
 
      (defn read-expressions
@@ -128,18 +148,23 @@
           (try
             (loop [exp (rdf), raw-exps [], exps []]
               (if (= exp :done)
-                (do (raw/maybe-intern-component raw-exps) exps)
+                (do
+                 
+                  (raw/maybe-intern-component raw-exps) 
+                    
+                    exps)
                 (let [exp (fqn exp)]
                   (recur (rdf) (conj raw-exps exp) (conj exps (parser exp))))))
             (finally
-              (u/safe-close reader)))))
+              (u/safe-close reader)))
+          ))
        ([file-name-or-input-stream]
         (read-expressions
          file-name-or-input-stream
          (fetch-declared-names file-name-or-input-stream))))
 
      (defn load-script
-  "Load, complile and intern the component from a script file."
+       "Load, complile and intern the component from a script file."
        ([^String component-root-path file-name-or-input-stream]
         (log/info (str "Component root path: " component-root-path))
         (log/info (str "File name: " file-name-or-input-stream))
@@ -156,8 +181,6 @@
                   file-name-or-input-stream))
               names (fetch-declared-names file-ident)
               component-name (:component names)]
-          (when (and component-name (cn/component-exists? component-name))
-            (cn/remove-component component-name))
           (let [exprs (binding [*ns* *ns*]
                         (read-expressions
                          (if input-reader?
@@ -349,4 +372,3 @@
        (let [continuation (fn [_]
                             (load-components-from-model model (partial callback :comp)))]
          (load-model-dependencies model (partial callback :deps continuation))))))
-

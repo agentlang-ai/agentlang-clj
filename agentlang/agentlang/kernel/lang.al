@@ -59,13 +59,27 @@
 
 (entity
  :Timer
- {:Expiry :Int
+ {:Name {:type :String :guid true}
+  :Expiry :Int
   :ExpiryUnit {:oneof ["Seconds" "Minutes" "Hours" "Days"]
                :default "Seconds"}
   :ExpiryEvent :Map
-  ;; :TaskHandle is set by the runtime, represents the
-  ;; thread that execute the event after timer expiry.
-  :TaskHandle {:type :Any :optional true}})
+  :Status {:oneof ["ready" "running" "terminating" "term-cancel" "term-ok" "term-error" "term-abnormal"]
+           :default "ready" :indexed true}
+  :Restart {:type :Boolean :default false}
+  :Retries {:type :Int :default 0}
+  :CreatedTimeSecs {:type :Int :default dt/unix-timestamp}
+  :LastHeartbeatSecs {:type :Int :default dt/unix-timestamp}})
+
+(event :SetTimerStatus {:TimerName :String :Status :String})
+(event :SetTimerHeartbeat {:TimerName :String})
+(dataflow :SetTimerStatus {:Timer {:Name? :SetTimerStatus.TimerName :Status :SetTimerStatus.Status}})
+(dataflow :SetTimerHeartbeat {:Timer {:Name? :SetTimerHeartbeat.TimerName :LastHeartbeatSecs '(agentlang.lang.datetime/unix-timestamp)}})
+(dataflow :CancelTimer {:SetTimerStatus {:TimerName :CancelTimer.TimerName :Status "term-cancel"}})
+
+(dataflow
+ :FindRunnableTimers
+ {:Timer? {:where [:or [:= :Status "ready"] [:= :Status "running"]]}})
 
 (dataflow
  :LoadPolicies
@@ -123,7 +137,7 @@
    :paths [:Agentlang.Kernel.Lang/LoadModelFromMeta]}
   {:name :timer
    :type :timer
-   :compose? false
+   :compose? true
    :paths [:Agentlang.Kernel.Lang/Timer]}
   (when (u/host-is-jvm?)
     {:name :data-sync

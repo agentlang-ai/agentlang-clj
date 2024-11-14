@@ -1,8 +1,8 @@
 {:name :Library
  :agentlang-version "current"
- :components [:Test.Sample/Library/Identity
-              :Test.Sample/Library/Catalog
-              :Test.Sample/Library/Ledger]
+ :components [:Library.Identity
+              :Library.Catalog
+              :Library.Ledger]
  :config {:service {:port 8000}
           :zero-trust-rbac false
           :store {:type :mem}}}

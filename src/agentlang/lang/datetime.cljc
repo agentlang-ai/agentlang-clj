@@ -139,6 +139,11 @@
 (defn difference-in-seconds [dt1 dt2]
   (cu/between cu/seconds dt1 dt2))
 
-#?(:clj
-   (defn unix-timestamp []
-     (quot (System/currentTimeMillis) 1000)))
+(defn current-time-millis []
+  #?(:clj
+     (System/currentTimeMillis)
+     :cljs
+     (. (js/Date.) (getTime))))
+
+(defn unix-timestamp []
+  (quot (current-time-millis) 1000))

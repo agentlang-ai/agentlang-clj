@@ -7,6 +7,7 @@
     [agentlang.util :as u]
     [agentlang.util.seq :as su]
     [agentlang.util.logger :as log]
+    [agentlang.resolver.timer :as timer]
     [agentlang.resolver.registry :as rr]
     [agentlang.compiler :as c]
     [agentlang.component :as cn]
@@ -94,6 +95,7 @@
 
 (defn maybe-read-model [args]
   (when-let [n (and args (model-name-from-args args))]
+    
     (loader/read-model n)))
 
 (defn log-app-init-result! [result]
@@ -138,14 +140,39 @@
                          (merge {:Name llm-name} llm-attrs)})}})))]
       (when (not= :ok (:status r))
         (log/error (str "failed to initialize LLM - " llm-name)))))
-  (doseq [[conn-name conn-attrs] (:connections config)]
-    (cc/configure-new-connection conn-name conn-attrs)))
+  (when-let [cm-config (:connection-manager config)]
+    (doseq [integ-name (:integrations cm-config)]
+      (cc/create-new-integration integ-name))
+    (doseq [[integ-name cfgs] (:configurations cm-config)]
+      (doseq [[conn-name conn-attrs] cfgs]
+        (cc/configure-new-connection integ-name conn-name conn-attrs)))
+    (doseq [conn (:connections cm-config)]
+      (let [[conn-name conn-config-name]
+            (cond
+              (vector? conn) conn
+              (keyword? conn) [conn conn]
+              (string? conn) (let [conn (keyword? conn)] [conn conn])
+              :else (u/throw-ex (str "Invalid connection config: " conn)))]
+        (cc/cache-connection! conn-config-name conn-name)))))
+
+(defn- run-pending-timers! []
+  (when (:timer-manager (gs/get-app-config))
+    (future
+      (loop []
+        (doseq [timer (seq (timer/restart-all-runnable))]
+          (when (= "running" (:Status timer))
+            (log/info (str "Started timer " (:Name timer)))))
+        (try
+          (Thread/sleep 15000)
+          (catch InterruptedException _ nil))
+        (recur)))))
 
 (defn run-appinit-tasks! [evaluator init-data]
   (e/save-model-config-instances)
   (run-configuration-patterns! evaluator (gs/get-app-config))
   (run-standalone-patterns! evaluator)
-  (trigger-appinit-event! evaluator init-data))
+  (trigger-appinit-event! evaluator init-data)
+  (run-pending-timers!))
 
 (defn merge-resolver-configs [app-config resolver-configs]
   (let [app-resolvers (:resolvers app-config)]
@@ -189,6 +216,8 @@
 (defn- runtime-inited-with [value]
   (reset! runtime-inited value)
   value)
+
+(defn get-runtime-init-result [] @runtime-inited)
 
 (defn init-runtime [model config]
   (let [store (store-from-config config)
@@ -318,16 +347,34 @@
   (let [basic-config (load-config options)]
     [basic-config (assoc options config-data-key basic-config)]))
 
+(def ^:private loaded-models (u/make-cell #{}))
+
 (defn call-after-load-model
+  ([model-name f ignore-load-error]
+   (gs/in-script-mode!)
+   (if (some #{model-name} @loaded-models)
+     (f)
+     (when (try
+             (when (build/load-model model-name)
+               (u/safe-set loaded-models (conj @loaded-models model-name)))
+             (catch Exception ex
+               (if ignore-load-error true (throw ex))))
+       (f))))
+  ([model-name f]
+   (call-after-load-model model-name f false)))
+
+(defn call-after-load-model-migrate
   ([model-name f ignore-load-error]
    (gs/in-script-mode!)
    (when (try
            (build/load-model model-name)
+           (build/load-model-migration model-name)
            (catch Exception ex
              (if ignore-load-error true (throw ex))))
      (f)))
   ([model-name f]
-   (call-after-load-model model-name f false)))
+   (call-after-load-model-migrate model-name f false)))
+
 
 (defn force-call-after-load-model [model-name f]
   (try
