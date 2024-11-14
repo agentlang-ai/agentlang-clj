@@ -548,9 +548,13 @@
    (defn async-evaluate-pattern [pat result-chan]
      (async/go
        (try
-        (async/>! result-chan (evaluate-pattern pat))
-        (catch Exception e
-          (async/>! result-chan
-                    (str "Error during evaluation:"
-                         (.getMessage e)))))
+         (let [evaluation-result (evaluate-pattern pat)]
+           (log/info (str "Evaluation result from async-evaluate-pattern is: " evaluation-result))
+           (async/>! result-chan evaluation-result))
+         (catch Exception e
+           (do
+             (log/warn (str "Exception during evaluation on async-evaluate-pattern: " (.getMessage e)))
+             (async/>! result-chan
+                       (str "Error during evaluation:"
+                            (.getMessage e))))))
        (async/close! result-chan))))
