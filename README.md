@@ -10,7 +10,11 @@ AgentLang is the **easiest way** to build AI Agents, Chatbots and Apps - build *
 
 ### **Open | Enterprise-grade | Production-ready**
 
-The AgentLang language specification, its compiler and runtime are open source. AgentLang programs can run anywhere - **avoiding the vendor lock-in** of other AI agent/programming platforms. AgentLang runtime has native integration with databases, vector databases, auth stores, etc. AgentLang programs run on the JVM and can make use of any of the millions of existing Java/Clojure and other JVM libraries out there. AgentLang comes with all the modern tooling, dependency management and REPL needed to build production-grade agents and apps.
+The AgentLang language specification, its compiler and runtime are open source. AgentLang programs can run anywhere - **avoiding the vendor lock-in** of other AI agent/programming platforms. 
+
+AgentLang runtime has native integration with databases, vector databases, auth stores, etc. AgentLang programs run on the JVM and can make use of any of the millions of existing Java/Clojure and other JVM libraries out there. 
+
+AgentLang comes with all the modern tooling, dependency management and REPL needed to build production-grade agents and apps.
 
 [Website](https://agentlang-ai.github.io/agentlang/) - [Examples](#examples) - [Documentation](/docs/#readme)
 
