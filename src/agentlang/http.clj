@@ -1206,6 +1206,7 @@
   [[auth-config maybe-unauth] nrepl-handler request]
   (or (maybe-unauth request)
       (let [parsed-request (params/params-request request)
+            _ (log/info (str "Parsed-request in nrepl-http-handler is: " parsed-request))
             code (get-in parsed-request [:form-params "code"])
             pattern (edn/read-string code)
             handler (drawbridge/ring-handler :nrepl-handler nrepl-handler)
@@ -1217,11 +1218,17 @@
             ;; Then wait for async result
             [result port] (async/alts!! [result-chan timeout])]
         (async/close! timeout)
+        (log/info (str "The result from evaluation is: " result))
         (if (= port timeout)
           (do
             (async/close! result-chan)
             {:status 408 :body "Request timeout"})
-          {:status 200 :body result}))))
+          (let [cleaned-result (if (map? result)
+                                (-> result
+                                   (dissoc :env)
+                                   (json/encode))
+                                result)]
+            {:status 200 :body cleaned-result})))))
 
 (defn wrap-nrepl-middleware [handler]
   (-> handler
