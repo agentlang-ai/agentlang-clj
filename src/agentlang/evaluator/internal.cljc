@@ -17,6 +17,15 @@
 (def not-found (partial make-result opc/not-found-tag))
 (def declined (partial make-result opc/declined-tag))
 
+(defn suspend [result]
+  (assoc result opc/result-status-tag opc/suspend-tag))
+
+(defn suspend? [result]
+  (= opc/suspend-tag (opc/result-status-tag result)))
+
+(defn as-suspended [result suspension-id]
+  (assoc result opc/result-status-tag opc/ok-tag :suspension-id suspension-id))
+
 (defn error [message]
   (make-result opc/error-tag nil nil message))
 

@@ -1257,6 +1257,12 @@
           (env/active-error-result env)
           result)))
 
+    (do-suspend [self env [body]]
+      (let [result (eval-opcode self env body)]
+        (if (ok-result result)
+          (i/suspend result)
+          result)))
+
     (do-await_ [self env [body continuation]]
       (do
         (go

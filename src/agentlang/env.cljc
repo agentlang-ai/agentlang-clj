@@ -8,25 +8,29 @@
             [agentlang.component :as cn]))
 
 (def ^:private env-tag :-*-env-*-)
+(def ^:private store-tag :-*-store-*-)
+(def ^:private resolver-tag :-*-resolver-*-)
+(def ^:private dirty-tag :-*-dirty-*-)
+(def ^:private objstack-tag :-*-objstack-*-)
 
 (def EMPTY {env-tag true})
 
 (defn make
   [store resolver]
   (assoc EMPTY
-         :store store
-         :resolver resolver))
+         store-tag store
+         resolver-tag resolver))
 
 (defn maybe-enrich [env store resolver]
-  (let [env0 (if-not (:store env) (assoc env :store store) env)]
-    (if-not (:resolver env0) (assoc env0 :resolver resolver) env0)))
+  (let [env0 (if-not (store-tag env) (assoc env store-tag store) env)]
+    (if-not (resolver-tag env0) (assoc env0 resolver-tag resolver) env0)))
 
 (defn env? [x]
   (and (map? x)
        (env-tag x)))
 
-(def get-store :store)
-(def get-resolver :resolver)
+(def get-store store-tag)
+(def get-resolver resolver-tag)
 
 ;; !!NOTE!! This assertion may be removed once the
 ;; pattern-match algorithm is fully implemented.
@@ -172,13 +176,13 @@
    (lookup-instances-by-attributes env rec-name query-attrs false)))
 
 (defn- objstack [env]
-  (get env :objstack (list)))
+  (get env objstack-tag (list)))
 
 (defn push-obj
   "Push a single object or a sequence of objects to the stack"
   ([env rec-name x]
    (let [stack (objstack env)]
-     (assoc env :objstack (conj stack [rec-name x]))))
+     (assoc env objstack-tag (conj stack [rec-name x]))))
   ([env rec-name] (push-obj env rec-name {})))
 
 (defn peek-obj [env]
@@ -190,11 +194,11 @@
   [env]
   (when-let [s (seq (objstack env))]
     (let [[_ obj :as x] (peek s)]
-      [(assoc env :objstack (pop s))
+      [(assoc env objstack-tag (pop s))
        (map? obj) x])))
 
 (defn reset-objstack [env]
-  (dissoc env :objstack))
+  (dissoc env objstack-tag))
 
 (defn can-pop? [env rec-name]
   (when-let [s (seq (objstack env))]
@@ -209,13 +213,13 @@
   "Turn on or off the `dirty` flag for the given instances.
   Instances marked dirty will be later flushed to store."
   [flag env insts]
-  (loop [insts insts, ds (get env :dirty {})]
+  (loop [insts insts, ds (get env dirty-tag {})]
     (if-let [inst (first insts)]
       (let [id-attr (identity-attribute inst)]
         (if-let [id (id-attr inst)]
           (recur (rest insts) (assoc ds id flag))
           (recur (rest insts) ds)))
-      (assoc env :dirty ds))))
+      (assoc env dirty-tag ds))))
 
 (def mark-all-dirty (partial dirty-flag-switch true))
 
@@ -224,7 +228,7 @@
   return false."
   [env insts]
   (if (cn/entity-instance? (first insts))
-    (if-let [ds (:dirty env)]
+    (if-let [ds (dirty-tag env)]
       (loop [insts insts]
         (if-let [inst (first insts)]
           (let [id-attr (identity-attribute inst)
@@ -238,7 +242,7 @@
 (defn mark-all-mint [env insts]
   (let [env (dirty-flag-switch false env insts)]
     (if-not (any-dirty? env insts)
-      (dissoc env :dirty)
+      (dissoc env dirty-tag)
       env)))
 
 (def as-map identity)
@@ -342,21 +346,23 @@
   (let [rfs (rule-futures env)]
     (assoc env rule-futures (concat rfs fs))))
 
-(defn cleanup [env]
-  (let [env (dissoc env :dirty :store :resolver :objstack)
-        df-vals (filter (fn [[k _]]
-                          (if (keyword? k)
-                            (not (s/starts-with? (name k) "-*-"))
-                            true))
-                        env)
-        norm-vals (mapv (fn [[k v]]
-                          [(if (vector? k)
-                             (li/make-path k)
-                             k)
-                           (cond
-                             (map? v) (cn/unmake-instance v)
-                             (string? v) v
-                             (seqable? v) (mapv cn/unmake-instance v)
-                             :else v)])
-                        df-vals)]
-    (into {} norm-vals)))
+(defn cleanup
+  ([env unmake-insts?]
+   (let [env (dissoc env dirty-tag store-tag resolver-tag objstack-tag)
+         df-vals (filter (fn [[k _]]
+                           (if (keyword? k)
+                             (not (s/starts-with? (name k) "-*-"))
+                             true))
+                         env)
+         norm-vals (mapv (fn [[k v]]
+                           [(if (vector? k)
+                              (li/make-path k)
+                              k)
+                            (cond
+                              (map? v) (if unmake-insts? (cn/unmake-instance v) v)
+                              (string? v) v
+                              (seqable? v) (if unmake-insts? (mapv cn/unmake-instance v) v)
+                              :else v)])
+                         df-vals)]
+     (into {} norm-vals)))
+  ([env] (cleanup env true)))

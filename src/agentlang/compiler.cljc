@@ -772,6 +772,10 @@
      (emit-try rethrow? body handlers alias-name)))
   ([ctx pat] (compile-try false ctx pat)))
 
+(defn- compile-suspend [ctx pat]
+  (let [body (compile-pattern ctx (preproc-patterns pat))]
+    (op/suspend [body])))
+
 (defn- valid-alias-name? [alias]
   (if (vector? alias)
     (every? #(if (vector? %)
@@ -1002,6 +1006,7 @@
    :delete compile-delete
    :await compile-await
    :eval compile-eval
+   :suspend compile-suspend
    :? compile-path-query})
 
 (defn- compile-special-form

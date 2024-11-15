@@ -25,19 +25,30 @@
             [agentlang.evaluator.state :as es]
             [agentlang.evaluator.internal :as i]
             [agentlang.evaluator.root :as r]
+            [agentlang.evaluator.suspend :as sp]
             [agentlang.evaluator.intercept.core :as interceptors]))
 
+(declare eval-all-dataflows evaluator-with-env safe-eval-pattern)
+
+(defn- suspend-dataflow [result env opcc]
+  (let [event (env/active-event env)]
+    (if (zero? opcc)
+      (i/as-suspended result nil)
+      (if-let [sid (sp/save-suspension eval-all-dataflows event opcc (env/cleanup env false))]
+        (i/as-suspended result sid)
+        (u/throw-ex (str "failed to suspend dataflow for " (cn/instance-type-kw event)))))))
+
 (defn- dispatch-an-opcode [evaluator env opcode]
-  (((opc/op opcode) i/dispatch-table)
-   evaluator env (opc/arg opcode)))
+  (((opc/op opcode) i/dispatch-table) evaluator env (opc/arg opcode)))
 
 (defn dispatch [evaluator env {opcode :opcode}]
   (if (map? opcode)
     (dispatch-an-opcode evaluator env opcode)
     (loop [opcs opcode, env env, result nil]
       (if-let [opc (first opcs)]
-        (let [r (dispatch-an-opcode evaluator env opc)]
-          (recur (rest opcs) (or (:env r) env) r))
+        (let [r (dispatch-an-opcode evaluator env opc)
+              env (or (:env r) env)]
+          (recur (rest opcs) env r))
         result))))
 
 (def ok? i/ok?)
@@ -50,7 +61,10 @@
       (if (or (ok? result)
               (cn/future-object? result))
         (if-let [opcode (first dc)]
-          (recur (rest dc) (dispatch evaluator (:env result) opcode))
+          (let [r (dispatch evaluator (:env result) opcode)]
+            (if (i/suspend? r)
+              (suspend-dataflow r (:env r) (count dc))
+              (recur (rest dc) r)))
           result)
         result))))
 
@@ -73,8 +87,6 @@
 (defn internal-event? [event-instance]
   (when (identical? internal-event-flag (internal-event-key event-instance))
     true))
-
-(declare eval-all-dataflows evaluator-with-env safe-eval-pattern)
 
 (defn trigger-rules [tag insts]
   (loop [insts insts, env nil, result nil]
@@ -157,7 +169,9 @@
         (gs/set-active-txn! txn)
         (reset! txn-set true))
       (try
-        (let [is-internal (or (internal-event? event-instance) internal-post-events)
+        (let [{susp-env :env susp-opcc :opcc} sp/suspension-info
+              env (if susp-env (merge env susp-env) env)
+              is-internal (or (internal-event? event-instance) internal-post-events)
               event-instance0 (if is-internal
                                 (dissoc event-instance internal-event-key)
                                 event-instance)
@@ -178,6 +192,7 @@
                                    [_ dc] (cn/dataflow-opcode
                                            df (or (env/with-types env)
                                                   cn/with-default-types))
+                                   dc (if susp-opcc (nthrest dc susp-opcc) dc)
                                    result (deref-futures (let [r (dispatch-opcodes evaluator env dc)]
                                                            (if (and (map? r) (not= :ok (:status r)))
                                                              (throw (ex-info "eval failed" {:eval-result r}))

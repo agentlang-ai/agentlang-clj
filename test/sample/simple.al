@@ -98,3 +98,9 @@
          {:X [:uq# :Sample.Simple/StartTimer.X]}}]}})
 
 (dataflow :OnTimer [:eval '(println :OnTimer.X)])
+
+(dataflow
+ :SuspensionTest
+ {:T {:X 100} :as :T1}
+ [:suspend {:U {:Y 200}}]
+ {:T {:X '(+ :T1.X 10)}})
