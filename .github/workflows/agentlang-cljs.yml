@@ -12,7 +12,7 @@ on:
 
 jobs:
   test_cljs:
-    if: ${{ false }} # remove to enable workflow
+    # if: ${{ false }} # remove to enable workflow
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
