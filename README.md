@@ -16,7 +16,7 @@ AgentLang runtime has native integration with databases, vector databases, auth 
 
 AgentLang comes with all the modern tooling, dependency management and REPL needed to build production-grade agents and apps.
 
-[Website](https://agentlang-ai/github.io/agentlang/) - [Examples](#examples) - [Documentation](/docs/#readme)
+[Website](https://agentlang-ai.github.io/agentlang/) - [Examples](#examples) - [Documentation](/docs/#readme)
 
 </div>
 
@@ -100,13 +100,9 @@ Defines the model for a simple accounting application, where the income and expe
 (entity :Income {:meta {:inherits :Entry}})
 (entity :Expense {:meta {:inherits :Entry}})
 
-(relationship
- :UserIncome
- {:meta {:contains [:User :Income]}})
+(relationship :UserIncome {:meta {:contains [:User :Income]}})
 
-(relationship
- :UserExpense
- {:meta {:contains [:User :Expense]}})
+(relationship :UserExpense {:meta {:contains [:User :Expense]}})
 ```
 
 ## Dataflow
