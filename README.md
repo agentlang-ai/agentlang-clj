@@ -24,61 +24,119 @@ AgentLang comes with all the modern tooling, dependency management and REPL need
 
 Agents are a built-in language construct - developers can choose from one of the built-in agent-types, or easily add their own agent-types.
 
-### Humor Bot
+### Example: A Humorous Chatbot
 
 ```clojure
-(component :Humor)
+(component :Chat)
 
 {:Agentlang.Core/Agent
- {:Name "Comedian"
+ {:Name :comedian
   :Input :Chat/Session
   :UserInstruction "You are an AI bot who tell jokes"}}
 ```
+
+(Save this example in a file named `chat.al`. In a later section, we will show you how to run it)
+
 ## Team of AI Agents
 
 AI Agents can delegate tasks to other specialized agents and dramatically increase the efficiency and accuracy of agentic behavior.
 
-### Expense Processor
+### Example: Expense Processor
 
-Scans expense receipts and generates expense records
+Analyse scanned images of expense receipts and generate expense records
 
 ```clojure
+;; file: expense.al
+
 (component :Expense)
 
 (entity
  :Expense
  {:Id :Identity
-  :Vendor :String
-  :Address :String
-  :Amount :Double
-  :ExpenseDate :Date
-  :CreatedAt {:default now}})
+  :Title :String
+  :Amount :Double})
 
 {:Agentlang.Core/Agent
- {:Name "OCR Agent"
-  :Type :planner
+ {:Name :ocr-agent
+  :Type :ocr
   :UserInstruction (str "Analyse the image of a receipt and return only the items and their amounts. "
-                        "No need to include sub-totals, totals and other data.")
-  :LLM "openai-4o-mini"}}
+                        "No need to include sub-totals, totals and other data.")}}
 
 {:Agentlang.Core/Agent
- {:Name "Expense Handler"
+ {:Name :expense-agent
   :Type :planner
-  :LLM "openai-4o-mini"
   :UserInstruction "Convert an expense report into individual instances of the expense entity."
-  :Tools [:Expense.Workflow/Expense]
-  :Input :Expense.Workflow/SaveExpenses
-  :Delegates {:To :receipt-ocr-agent :Preprocessor true}}}
+  :Tools [:Expense/Expense]
+  :Input :Expense/SaveExpenses
+  :Delegates {:To :ocr-agent :Preprocessor true}}}
 ```
+
 ## Data Modeling
 
 Model any business domain - from simple to complex - with the relationship graph based data modeling approach of AgentLang. Apply RBAC policies, declaratively, to the data model and secure your application data.
 
+### Example: Personal Accounting
+
+Defines the model for a simple accounting application, where the income and expense records of multiple users can be tracked separately.
+
+```clojure
+;; file: accounts.al
+
+(component :Accounts)
+
+(entity
+ :User
+ {:Email {:type :Email :guid true}
+  :Name :String
+  :Created :Now})
+
+(record
+ :Entry
+ {:Id :Identity
+  :Description :String
+  :Date :Now
+  :Amount :Double})
+
+(entity :Income {:meta {:inherits :Entry}})
+(entity :Expense {:meta {:inherits :Entry}})
+
+(relationship
+ :UserIncome
+ {:meta {:contains [:User :Income]}})
+
+(relationship
+ :UserExpense
+ {:meta {:contains [:User :Expense]}})
+```
+
 ## Dataflow
 
-Dataflow allows you to express complex business logic simply as purely-declarative [patterns of data operations](https://docs.agentlang.io/docs/concepts/declarative-dataflow).
+A dataflow allows you to express complex business logic simply as purely-declarative [patterns of data operations](https://docs.agentlang.io/docs/concepts/declarative-dataflow). The dataflow defined below creates an income and expense report, given the email of a user:
 
-# Getting Started
+```clojure
+;; file: accounts.al
+
+(defn compute-total [entries]
+ (apply + (mapv :Amount entries)))
+
+(record
+ :Report
+ {:Incomes {:listof :Income}
+  :Expenses {:listof :Expense}
+  :TotalIncome '(accounts/compute-total :Incomes)
+  :TotalExpense '(accounts/compute-total :Expenses)
+  :NetIncome '(- :TotalIncome :TotalExpense)})
+
+(dataflow
+ :GenerateReport
+ {:User {:Email? :GenerateReport.Email} :as [:U]} ; find the user
+ ; query the user's incomes and expenses:
+ {:Income? {} :-> [[:UserIncome? :U]] :as :Incomes}
+ {:Expense? {} :-> [[:UserExpense? :U]] :as :Expenses}
+ {:Report {:Incomes :Incomes :Expenses :Expenses}})
+```
+
+# Installing AgentLang
 
 ### Prerequisites
 
@@ -87,15 +145,13 @@ Dataflow allows you to express complex business logic simply as purely-declarati
 3. Download and install the [AgentLang CLI tool](https://github.com/agentlang-ai/agentlang.cli)
 4. Set the `OPENAI_API_KEY` environment variable to a valid API key from OpenAI
 
-### Running your example
-
-Save your example into a file named `chat.al`. Now you can run the chat-agent as,
+### Running the examples
 
 ```shell
 agent /path/to/chat.al
 ```
 
-Once the agent starts running, send it a message with an HTTP POST like,
+Once the agent starts running, send it a message with an HTTP POST,
 
 ```shell
 curl --header "Content-Type: application/json" \
@@ -105,6 +161,65 @@ http://localhost:8080/api/Chat/Session
 ```
 
 You should see a response from the agent with a joke about itself!
+
+Now you can try running the expenses example:
+
+```shell
+agent /path/to/expense.al
+```
+
+Send a request with a proper URL pointing to the image of a receipt or a bill:
+
+```shell
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"Expense/SaveExpenses": {"UserInstruction": "https://acme.com/receipts/r01.png"}}' \
+http://localhost:8080/api/Expense/SaveExpenses
+```
+
+Once the expenses are processed, you can execute the following `GET` request to fetch the individual expense items that were created:
+
+```shell
+curl --header "Content-Type: application/json" http://localhost:8080/api/Expense/Expense
+```
+
+Next we will try running the account example:
+
+```shell
+agent /path/to/accounts.al
+```
+
+Create a user:
+
+```shell
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"Accounts/User": {"Email": "j@acme.com", "Name": "JJ"}}' \
+http://localhost:8080/api/Accounts/User
+```
+
+Make some account entries for the user:
+
+```shell
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"Accounts/Income": {"Description": "salary", "Amount": 3450.54}}' \
+http://localhost:8080/api/Accounts/User/j@acme.com/UserIncome/Income
+
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"Accounts/Expense": {"Description": "rent", "Amount": 50.0}}' \
+http://localhost:8080/api/Accounts/User/j@acme.com/UserExpense/Expense
+```
+
+Generate the income and expense report:
+
+```shell
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"Accounts/GenerateReport": {"Email": "j@acme.com"}}' \
+http://localhost:8080/api/Accounts/GenerateReport
+```
 
 ### Contributing
 
