@@ -13,7 +13,7 @@
                  [org.clojure/test.check "1.1.1"]
                  [ch.qos.logback/logback-classic "1.5.3"]
                  [environ "1.2.0"]
-                 [commons-io/commons-io "2.11.0"]
+                 [commons-io/commons-io "2.15.1"]
                  [org.apache.commons/commons-exec "1.3"]
                  [cheshire "5.10.1"]
                  [com.github.seancorfield/next.jdbc "1.3.883"]
