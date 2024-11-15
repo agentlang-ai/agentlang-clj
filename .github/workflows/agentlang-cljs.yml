@@ -25,8 +25,6 @@ jobs:
       - name: Install dependencies
         run: lein deps
       - name: Run cljs test
-        run: lein fig:ci
-      - name: Run cljs reagent test
-        run: lein fig:rci
+        run: lein test-cljs
       - name: Clean target
         run: lein clean
