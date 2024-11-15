@@ -54,13 +54,20 @@
 
 (defn- store-cons [config]
   (if-let [t (:type config)]
-    (t @store-constructors)
+    (if-let [constructor (get @store-constructors t)]
+      constructor
+     #?(:clj h2/make
+        :cljs mem/make))
     #?(:clj h2/make
        :cljs mem/make)))
 
 (defn open-default-store
   ([store-config]
-   (let [make-store (store-cons store-config)]
+   (let [config (or store-config {:type :mem})
+         make-store (store-cons config)
+         store (make-store)]
+     (when-not store
+       (throw (ex-info "Failed to create store" {:config config})))
      #?(:clj (make-default-store store-config (make-store))
         :cljs (make-default-store store-config (make-store)))))
   ([]

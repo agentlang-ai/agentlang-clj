@@ -1,6 +1,5 @@
 (ns agentlang.test.errors
-  (:require [clojure.test :refer :all]
-            [agentlang.util.errors :refer :all]
+  (:require [agentlang.util.errors :as errors]
             [agentlang.test.util :as test-util]
             [clojure.spec.alpha :as s]
             #?(:clj [clojure.test :refer [deftest is testing]]
@@ -96,14 +95,14 @@
   - client-error-fn (optional): A function to override the default client message.
   - disabled-errors (optional): A set of error keys for which the client message should be disabled."
   [error-key args expected-internal expected-client & [client-error-fn disabled-errors]]
-  (with-redefs [client-error-functions (if client-error-fn {error-key client-error-fn} client-error-functions)
-                disabled-client-errors (or disabled-errors disabled-client-errors)]
+  (with-redefs [errors/client-error-functions (if client-error-fn {error-key client-error-fn} errors/client-error-functions)
+                errors/disabled-client-errors (or disabled-errors errors/disabled-client-errors)]
     (try
-      (raise-error error-key args)
+      (errors/raise-error error-key args)
       (catch Exception e
         (let [ex-data (ex-data e)]
           (is (= expected-internal (:message (get-in ex-data [:error]))))
-          (is (= expected-client (extract-client-message-from-ex e))))))))
+          (is (= expected-client (errors/extract-client-message-from-ex e))))))))
 
 (defn evaluate-raised-error-test-case
   "Creates a test case for a specific error scenario."
