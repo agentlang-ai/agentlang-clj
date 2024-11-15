@@ -16,7 +16,7 @@ AgentLang runtime has native integration with databases, vector databases, auth 
 
 AgentLang comes with all the modern tooling, dependency management and REPL needed to build production-grade agents and apps.
 
-[Website](https://agentlang-ai.github/io/agentlang/) - [Examples](#examples) - [Documentation](/docs/#readme)
+[Website](https://agentlang-ai/github.io/agentlang/) - [Examples](#examples) - [Documentation](/docs/#readme)
 
 </div>
 
