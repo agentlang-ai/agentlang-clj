@@ -33,8 +33,11 @@
 (def ^:private with-deleted-clause (partial with-deleted-flag true))
 
 (defn- parse-join-table [entity-table-name jquery]
-  [(entity-table-name (li/record-name jquery))
-   (li/record-attributes jquery)])
+  (let [rec-name (li/record-name jquery)
+        rec-version (li/record-version jquery rec-name)
+        rec-attr (dissoc (li/record-attributes jquery) 
+                         :meta :meta?)]
+    [(entity-table-name rec-name rec-version) rec-attr]))
 
 (defn normalize-jattr-name [a]
   (let [n (str a)]
@@ -42,12 +45,12 @@
       (subs n 1 (dec (count n)))
       a)))
 
-(defn- jattrs-as-on-clause [entity-table-name attribute-column-name main-table jtable jattrs]
+(defn- jattrs-as-on-clause [entity-table-name attribute-column-name main-table jtable jattrs entity-version]
   (let [ss (mapv (fn [[k v]]
                    (let [p (li/path-parts v)
                          c (:component p), r (:record p)
                          ref-table (if (and c r)
-                                     (entity-table-name (li/make-path c r))
+                                     (entity-table-name (li/make-path c r) entity-version)
                                      main-table)]
                      (str jtable "." (attribute-column-name (normalize-jattr-name k))
                           " = " ref-table "." (attribute-column-name (first (:refs p))))))
@@ -58,11 +61,11 @@
   (let [idx (str/last-index-of s ".")]
     [(subs s 0 idx) (subs s (inc idx))]))
 
-(defn- with-join-attributes [entity-table-name attribute-column-name attrs]
+(defn- with-join-attributes [entity-table-name attribute-column-name attrs entity-version]
   (reduce (fn [s [n k]]
             (let [[t c] (split-col-ref (str k))]
               (str s (if (seq s) ", " "")
-                   (entity-table-name t) "." (attribute-column-name c)
+                   (entity-table-name t entity-version) "." (attribute-column-name c)
                    " AS " (name n) " ")))
           "" attrs))
 
@@ -73,15 +76,17 @@
        (u/throw-ex (str "join requires with-attributes list - " query)))
      (let [j (:join query)
            lj (:left-join query)
+           first-pat (first (or j lj))
+           v (li/record-version first-pat (li/record-name first-pat))
            jinfo (mapv (partial parse-join-table entity-table-name) (or j lj))
            d (name su/deleted-flag-col-kw)
            s-join (if j " INNER JOIN " " LEFT JOIN ")
-           q (str "SELECT " (with-join-attributes entity-table-name attribute-column-name wa)
+           q (str "SELECT " (with-join-attributes entity-table-name attribute-column-name wa v)
                   " FROM " table-name
                   (reduce (fn [s [jtable jattrs]]
                             (let [on-clause (jattrs-as-on-clause
                                              entity-table-name
-                                             attribute-column-name table-name jtable jattrs)]
+                                             attribute-column-name table-name jtable jattrs v)]
                               (str s s-join " " jtable " ON " on-clause " ")))
                           "" jinfo)
                   (when check-is-deleted (str " WHERE " table-name "." d " = FALSE")))]

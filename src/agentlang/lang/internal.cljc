@@ -206,7 +206,7 @@
   (if (name? pat)
     pat
     (when (map? pat)
-      (let [pat (dissoc pat :meta :as)
+      (let [pat (dissoc pat :meta :as :meta?)
             n (ffirst (filter (fn [[_ v]] (map? v)) pat))]
         (when (or (name? n)
                   (and (string? n) (name? (keyword n))))
@@ -215,15 +215,16 @@
 (defn record-version [pat recname]
   (if (name? pat)
     nil
-    (when (map? pat) (get-in pat [recname :meta :version]))))
+    (when (map? pat) (or (get-in pat [recname :meta :version])
+                         (get-in pat [recname :meta? :version])))))
 
 (defn record-attributes [pat]
   (when (map? pat)
-    (let [pat (dissoc pat :meta :as)]
+    (let [pat (dissoc pat :meta :meta? :as)]
       (first (filter map? (vals pat))))))
 
 (defn destruct-instance-pattern [pat]
-  (let [pat (dissoc pat :meta :as)]
+  (let [pat (dissoc pat :meta :meta? :as)]
     [(first (keys pat)) (first (vals pat))]))
 
 (defn split-by-delim
