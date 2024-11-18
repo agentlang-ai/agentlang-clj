@@ -63,7 +63,7 @@
         (if-let [opcode (first dc)]
           (let [r (dispatch evaluator (:env result) opcode)]
             (if (i/suspend? r)
-              (suspend-dataflow r (:env r) (count dc))
+              (suspend-dataflow r (:env r) (count (rest dc)))
               (recur (rest dc) r)))
           result)
         result))))
@@ -192,7 +192,7 @@
                                    [_ dc] (cn/dataflow-opcode
                                            df (or (env/with-types env)
                                                   cn/with-default-types))
-                                   dc (if susp-opcc (nthrest dc susp-opcc) dc)
+                                   dc (if susp-opcc (take-last susp-opcc dc) dc)
                                    result (deref-futures (let [r (dispatch-opcodes evaluator env dc)]
                                                            (if (and (map? r) (not= :ok (:status r)))
                                                              (throw (ex-info "eval failed" {:eval-result r}))

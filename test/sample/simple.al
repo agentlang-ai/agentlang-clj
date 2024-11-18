@@ -102,5 +102,6 @@
 (dataflow
  :SuspensionTest
  {:T {:X 100} :as :T1}
- [:suspend {:U {:Y 200}}]
- {:T {:X '(+ :T1.X 10)}})
+ {:U {:Y 200} :as :U1}
+ [:suspend]
+ {:T {:X '(+ :T1.X :U1.Y)}})

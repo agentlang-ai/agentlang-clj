@@ -772,9 +772,8 @@
      (emit-try rethrow? body handlers alias-name)))
   ([ctx pat] (compile-try false ctx pat)))
 
-(defn- compile-suspend [ctx pat]
-  (let [body (compile-pattern ctx (preproc-patterns pat))]
-    (op/suspend [body])))
+(defn- compile-suspend [ctx _]
+  (op/suspend nil))
 
 (defn- valid-alias-name? [alias]
   (if (vector? alias)
