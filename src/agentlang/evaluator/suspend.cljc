@@ -45,3 +45,23 @@
   (let [r (first (evaluator {:Agentlang.Kernel.Eval/LoadSuspension {:Id id}}))]
     (when (= :ok (:status r))
       (first (:result r)))))
+
+(ln/entity
+ :Agentlang.Kernel.Eval/SuspensionResult
+ {:Id {:type :UUID :guid true}
+  :Result :Any})
+
+(defn- query-suspension-result [[_ {w :where}]]
+  (when (and (= := (first w))
+             (= :Id (second w)))
+    (when-let [suspension (load-suspension (gs/get-active-evaluator) (nth w 2))]
+      (let [r (restart-suspension suspension)]
+        [(cn/make-instance
+          :Agentlang.Kernel.Eval/SuspensionResult
+          {:Id (nth w 2)
+           :Result r})]))))
+
+(ln/resolver
+ :Agentlang.Kernel.Eval/SuspensionResultResolver
+ {:with-methods {:query query-suspension-result}
+  :paths [:Agentlang.Kernel.Eval/SuspensionResult]})
