@@ -1,6 +1,7 @@
 (ns agentlang.evaluator.suspend
   (:require [agentlang.util :as u]
             [agentlang.lang :as ln]
+            [agentlang.component :as cn]
             [agentlang.evaluator.state :as gs]))
 
 (ln/component :Agentlang.Kernel.Eval)
