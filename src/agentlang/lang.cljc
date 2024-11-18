@@ -945,7 +945,7 @@
   (let [meta (:meta attrs)]
     (if (some #{li/owner-exclusive-crud} (keys meta))
       attrs
-      (assoc attrs :meta (assoc meta li/owner-exclusive-crud true)))))
+      (assoc attrs :meta (assoc meta li/owner-exclusive-crud false)))))
 
 (defn- serializable-record
   ([rectype n attrs raw-attrs]
