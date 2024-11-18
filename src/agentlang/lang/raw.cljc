@@ -8,10 +8,12 @@
 (def ^:private raw-store (u/make-cell {}))
 
 (defn- publish-schema? [record-name]
-  (and (pubs/publish-schema?)
-       (not (s/starts-with?
-             (s/lower-case (subs (str (first (li/split-path record-name))) 1))
-             "agentlang"))))
+  #?(:clj
+     (and (pubs/publish-schema?)
+          (not (s/starts-with?
+                (s/lower-case (subs (str (first (li/split-path record-name))) 1))
+                "agentlang")))
+     :cljs false))
 
 (defn- maybe-publish-add-definition [tag record-name attrs]
   #?(:clj
