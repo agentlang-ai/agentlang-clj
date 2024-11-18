@@ -55,12 +55,12 @@
 (defn- query-suspension-result [[_ {w :where}]]
   (when (and (= := (first w))
              (= :Id (second w)))
-    (when-let [suspension (load-suspension (gs/get-active-evaluator) (nth w 2))]
-      (let [r (restart-suspension suspension)]
+    (when-let [result (first ((gs/get-active-evaluator) {:Agentlang.Kernel.Eval/RestartSuspension {:Id (nth w 2)}}))]
+      (when (= :ok (:status result))
         [(cn/make-instance
           :Agentlang.Kernel.Eval/SuspensionResult
           {:Id (nth w 2)
-           :Result r})]))))
+           :Result (:result result)})]))))
 
 (ln/resolver
  :Agentlang.Kernel.Eval/SuspensionResultResolver
