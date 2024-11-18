@@ -34,7 +34,7 @@
   (let [event (env/active-event env)]
     (if (zero? opcc)
       (i/as-suspended result nil)
-      (if-let [sid (sp/save-suspension eval-all-dataflows event opcc (env/cleanup env false))]
+      (if-let [sid (sp/save-suspension eval-all-dataflows event opcc (env/cleanup env false) (get-in result [:result :alias]))]
         (i/as-suspended result sid)
         (u/throw-ex (str "failed to suspend dataflow for " (cn/instance-type-kw event)))))))
 
