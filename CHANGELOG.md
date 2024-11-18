@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1-alpha4] - 2024-11-18
+
+- Migration join tests and fixes
+- Completely disable publish-schema for cljs
+
 ## [0.6.1-alpha3] - 2024-11-14
 
 - Add logging to nREPL requests and evaluation phases
