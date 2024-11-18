@@ -569,16 +569,23 @@
       true
       false)))
 
-(defn- filter-attribute-schemas [predic entity-schema]
-  (filter #(let [ascm (find-attribute-schema (second %))]
-             (predic ascm))
-          entity-schema))
+(defn- filter-attribute-schemas
+  ([predic entity-schema version]
+   (filter #(let [p (second %)
+                  [component aref] (li/split-path p)
+                  ascm (find-attribute-schema component version aref)]
+              (predic ascm))
+           entity-schema))
+  ([predic entity-schema]
+   (filter-attribute-schemas predic entity-schema nil)))
 
 (defn- filter-attributes
   "Filter attribute names based on the attribute schema check using the predicate."
-  [predic ent]
-  (let [entity-schema (if (keyword? ent) (fetch-entity-schema ent) ent)]
-    (map first (filter-attribute-schemas predic entity-schema))))
+  ([predic ent version]
+   (let [entity-schema (if (keyword? ent) (fetch-entity-schema ent version) ent)]
+     (map first (filter-attribute-schemas predic entity-schema version))))
+  ([predic ent]
+   (filter-attributes predic ent nil)))
 
 (defn- make-attributes-filter [predic]
   (partial filter-attributes predic))
@@ -628,9 +635,9 @@
 (defn identity-attribute-names
   "Return the name of any one of the identity attributes of the given entity."
   ([type-name-or-scm version]
-   (identity-attributes (maybe-fetch-entity-schema type-name-or-scm version)))
+   (identity-attributes (maybe-fetch-entity-schema type-name-or-scm version) version))
   ([type-name-or-scm]
-   (identity-attributes (maybe-fetch-entity-schema type-name-or-scm nil))))
+   (identity-attribute-names type-name-or-scm nil)))
 
 (defn identity-attribute-name
   ([type-name-or-scm version]
