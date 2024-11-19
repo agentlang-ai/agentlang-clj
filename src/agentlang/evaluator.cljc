@@ -21,6 +21,7 @@
             [agentlang.lang.datetime :as dt]
             ;; load kernel components
             [agentlang.model]
+            [agentlang.telemetry :as telemetry]
             [agentlang.global-state :as gs]
             [agentlang.evaluator.state :as es]
             [agentlang.evaluator.internal :as i]
@@ -203,16 +204,20 @@
          event-instance (maybe-init-event event-instance)
          f (partial eval-dataflow-in-transaction evaluator env event-instance df)]
      (try
-       (if-let [txn (gs/get-active-txn)]
-         (f txn)
-         (if-let [store (env/get-store env)]
-           (store/call-in-transaction store f)
-           (f nil)))
+       (let [result (if-let [txn (gs/get-active-txn)]
+                      (f txn)
+                      (if-let [store (env/get-store env)]
+                        (store/call-in-transaction store f)
+                        (f nil)))]
+         (telemetry/log-event event-instance result)
+         result)
        (catch #?(:clj Exception :cljs :default) ex
-         (do (store/maybe-rollback-active-txn!)
-             (if-let [r (:eval-result (ex-data ex))]
-               r
-               (throw ex)))))))
+         (let [err (ex-data ex)]
+           (store/maybe-rollback-active-txn!)
+           (telemetry/log-event event-instance (i/error (or err #?(:clj (.getMessage ex)))))
+           (if-let [r (:eval-result err)]
+             r
+             (throw ex)))))))
   ([evaluator event-instance df]
    (eval-dataflow evaluator env/EMPTY event-instance df)))
 
