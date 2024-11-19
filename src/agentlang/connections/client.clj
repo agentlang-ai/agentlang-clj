@@ -53,7 +53,7 @@
                  (log/error (str "failed to create - " ident))))
          401 (do (log/error "authentication required")
                  (reset! auth-token nil))
-         :else (log/error (str "failed to create " ident " with status " (:status response)))))
+         (log/error (str "failed to create " ident " with status " (:status response)))))
      (catch Exception ex
        (log/error ex))))
   ([api-url ident inst] (create-instance api-url ident inst identity)))
@@ -102,7 +102,6 @@
         (case (:status response)
           401 (do (log/error "authentication required")
                   (reset! auth-token nil))
-          :else
           (when (= "ok" (get (first (:body response)) "status"))
             (swap! cached-connections dissoc (:CacheKey conn))
             true)))

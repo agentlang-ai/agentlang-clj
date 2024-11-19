@@ -24,7 +24,6 @@
             [agentlang.user-session :as sess]
             [agentlang.util :as u]
             [agentlang.util.errors :refer [get-internal-error-message]]
-            [agentlang.util.hash :as hash]
             [agentlang.util.http :as uh]
             [agentlang.util.logger :as log]
             [org.httpkit.server :as h]
@@ -47,25 +46,6 @@
 (def graphql-schema (atom {}))
 (def contains-graph (atom {}))
 (def graphql-entity-metas (atom {}))
-
-(defn- sanitize-secrets [obj]
-  (let [r (mapv (fn [[k v]]
-                  [k (if (hash/crypto-hash? v)
-                       "*********"
-                       v)])
-                obj)]
-    (into {} r)))
-
-(defn- cleanup-inst [obj]
-  (cond
-    (cn/an-instance? obj)
-    (let [r (cn/instance-attributes (sanitize-secrets obj))]
-      (into {} (mapv (fn [[k v]] [k (if (or (map? v) (vector? v))
-                                      (cleanup-inst v)
-                                      v)])
-                     r)))
-    (vector? obj) (mapv cleanup-inst obj)
-    :else obj))
 
 (defn- headers
   ([data-fmt]
@@ -113,7 +93,7 @@
            {:body
             ((uh/encoder data-fmt)
              (let [[t r] (if (and (map? body) (cn/an-instance? body))
-                           [(cn/instance-type-kw body) [(cleanup-inst body)]]
+                           [(cn/instance-type-kw body) [(cn/cleanup-inst body)]]
                            [nil body])]
                    (merge
                     {:status (http-status-as-code status)
@@ -195,8 +175,8 @@
       (maybe-assoc-root-type
        mode result
        (assoc rs :result (case mode
-                           :single (cleanup-inst result)
-                           :seq (mapv cleanup-inst result)
+                           :single (cn/cleanup-inst result)
+                           :seq (mapv cn/cleanup-inst result)
                            result))))
     rs))
 
@@ -542,10 +522,10 @@
                (if (= :ok (:status rs))
                  (let [result (maybe-merge-child-uris
                                evaluator evt-context data-fmt
-                               c child-entity (cleanup-inst (:result rs)))
+                               c child-entity (cn/cleanup-inst (:result rs)))
                        rels (li/rel-tag parent-inst)]
-                   (assoc (cleanup-inst parent-inst) li/rel-tag (assoc rels relname result)))
-                 (cleanup-inst parent-inst))))
+                   (assoc (cn/cleanup-inst parent-inst) li/rel-tag (assoc rels relname result)))
+                 (cn/cleanup-inst parent-inst))))
            r children))
         parent-insts))
 

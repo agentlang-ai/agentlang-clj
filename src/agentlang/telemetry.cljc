@@ -31,7 +31,6 @@
        (when api-url
          (try
            (let [evt-name (cn/instance-type-kw event-instance)
-                 _ (println "#######################" event-instance event-result)
                  event-result (extract-first-map event-result)
                  error? (not= :ok (:status event-result))
                  inst {:TelemetryService.Core/WebIngest
@@ -39,18 +38,18 @@
                         {:AppUuid (u/get-app-uuid)
                          :Timestamp (dt/unix-timestamp)
                          :EventName evt-name
-                         :EventData {evt-name (cn/user-attributes event-instance)}
+                         :EventData (cn/cleanup-inst event-instance)
                          :ResultType (if error? "ERROR" "VALUE")
-                         :ResultValue (when-not error? (:result event-result))
+                         :ResultValue (when-not error? (cn/cleanup-inst (:result event-result)))
                          :IsPartialValue false
                          :ResultError (when error? (or (:message event-result) (:result event-result)))}}}
                  response (http/do-post api-url (when auth auth) inst :json post-handler)]
-             (println "##$" response)
              (case (:status response)
                200 (let [r (first (:body response))]
                      (when (not= "ok" (:status r))
                        (log/error (str "failed to log-event - " event-instance))))
                401 (log/error "authentication required")
-               :else (log/error (str "failed to log-event " event-instance " with status " (:status response)))))
+               (log/error (str "failed to log-event " event-instance " with status " (:status response)
+                               " - " (or (:body response) (:message response))))))
            (catch Exception ex
              (log/error ex)))))))
