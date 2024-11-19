@@ -19,13 +19,14 @@
           (cn/remove-component (first c)))
         (recur (rest c))))))
 
-(defn- load-model 
+(defn- load-model
   ([model-name model-path reset-state]
-   (when reset-state 
+   (when reset-state
      (reset-models-state))
-   (let [[model model-root] (loader/read-model model-path)]
-     (loader/load-components-from-model model model-root)
-     (ur/init-runtime model-name nil)))
+   (binding [gs/migration-mode true]
+     (let [[model model-root] (loader/read-model model-path)]
+       (loader/load-components-from-model model model-root)
+       (ur/init-runtime model-name nil))))
   ([model-name model-path]
    (load-model model-name model-path false)))
 
