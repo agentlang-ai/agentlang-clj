@@ -1288,23 +1288,24 @@
 
 (defn- handle-request-auth [auth-config request]
   (try
-    (if-let [user (get-in request [:identity :sub])]
-      (when-not (and (buddy/authenticated? request)
-                     (sess/is-logged-in user))
-        (log-request "unauthorized request" request)
-        (unauthorized (find-data-format request)))
-      (let [cookie (get (:headers request) "cookie")
-            sid (auth/cookie-to-session-id auth-config cookie)
-            [data ttl] (sess/lookup-session-cookie-user-data sid)
-            verification (auth/verify-token auth-config [[sid data] ttl])
-            user (:username verification)]
-        (if user
-          (when-not (sess/is-logged-in user)
-            (log-request "unauthorized request" request)
-            (unauthorized (find-data-format request)))
-          (when-not (:sub verification)
-            (log-request "token verification failed" request)
-            (unauthorized (find-data-format request))))))
+    (let [disable-sess (get auth-config :disable-user-sessions)]
+      (if-let [user (get-in request [:identity :sub])]
+        (when-not (and (buddy/authenticated? request)
+                       (or disable-sess (sess/is-logged-in user)))
+          (log-request "unauthorized request" request)
+          (unauthorized (find-data-format request)))
+        (let [cookie (get (:headers request) "cookie")
+              sid (auth/cookie-to-session-id auth-config cookie)
+              [data ttl] (sess/lookup-session-cookie-user-data sid)
+              verification (auth/verify-token auth-config [[sid data] ttl])
+              user (:username verification)]
+          (if user
+            (when-not (or disable-sess (sess/is-logged-in user))
+              (log-request "unauthorized request" request)
+              (unauthorized (find-data-format request)))
+            (when-not (:sub verification)
+              (log-request "token verification failed" request)
+              (unauthorized (find-data-format request)))))))
     (catch Exception ex
       (log/warn ex)
       (unauthorized (find-data-format request)))))
