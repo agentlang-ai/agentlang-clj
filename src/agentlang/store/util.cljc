@@ -35,9 +35,10 @@
 (defn entity-table-name
   ([entity-name version]
    (let [[component-name r] (li/split-path entity-name)
-         v (when version (escape-graphic-chars version))
-         v (or v (schema-version component-name))
-         en (str (db-ident r) "_" v)]
+         version-required (not= :Agentlang (cn/model-for-component component-name))
+         v (when (and version-required version) (escape-graphic-chars version))
+         v (when version-required (or v (schema-version component-name)))
+         en (str (db-ident r) (when v (str "_" v)))]
      (if (cn/entity-schema-predefined? entity-name)
        en
        (str (db-schema-for-component component-name) "__" en))))
