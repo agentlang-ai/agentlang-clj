@@ -365,13 +365,14 @@
 
 (defn call-after-load-model-migrate
   ([model-name f ignore-load-error]
-   (gs/in-script-mode!)
-   (when (try
-           (build/load-model model-name)
-           (build/load-model-migration model-name)
-           (catch Exception ex
-             (if ignore-load-error true (throw ex))))
-     (f)))
+   (binding [gs/migration-mode true]
+     (gs/in-script-mode!)
+     (when (try
+             (build/load-model model-name)
+             (build/load-model-migration model-name)
+             (catch Exception ex
+               (if ignore-load-error true (throw ex))))
+       (f))))
   ([model-name f]
    (call-after-load-model-migrate model-name f false)))
 

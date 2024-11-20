@@ -79,6 +79,7 @@
       400 :bad-request
       401 :unauthorized
       404 :not-found
+      415 :unsupported-media-type
       :error)))
 
 (defn- maybe-kernel-response [json-obj data-fmt]
@@ -99,6 +100,11 @@
                     {:status (http-status-as-code status)
                      :result r}
                     (when t {:type t}))))}))))))
+
+(defn- request-content-type [request]
+  (or (when-let [s (get-in request [:headers "content-type"])]
+        (s/lower-case s))
+      "application/json"))
 
 (defn- response
   "Create a Ring response from a map object and an HTTP status code.
@@ -123,6 +129,9 @@
    (response {:reason s :type errtype} 400 data-fmt))
   ([s errtype] (bad-request s :json errtype))
   ([s] (bad-request s :json "BAD_REQUEST")))
+
+(defn- unsupported-media-type [request]
+  (response {:reason (str "unsupported content-type in request - " (request-content-type request))} 415 :json))
 
 (defn- internal-error
   "Logs errors and constructs client-side response based on the type of input."
@@ -151,11 +160,6 @@
     (assoc result :type t)
     result))
 
-(defn- request-content-type [request]
-  (s/lower-case
-   (or (get-in request [:headers "content-type"])
-       "application/json")))
-
 (defn- find-data-format [request]
   (let [ct (request-content-type request)]
     (uh/content-types ct)))
@@ -164,7 +168,7 @@
   (if-let [data-fmt (find-data-format request)]
     [(when-let [body (:body request)]
        ((uh/decoder data-fmt) (String. (.bytes body)))) data-fmt nil]
-    [nil nil (bad-request (str "unsupported content-type in request - " (request-content-type request)) "UNSUPPORTED_CONTENT")]))
+    [nil nil (unsupported-media-type request)]))
 
 (defn- cleanup-result [rs]
   (if-let [result (:result rs)]
@@ -319,9 +323,7 @@
                 (str "cannot invoke internal event - " (cn/instance-type-kw obj))
                 data-fmt "INTERNAL_EVENT_ERROR")
                (maybe-ok #(evaluate evaluator obj) data-fmt nil))))
-         (bad-request
-          (str "unsupported content-type in request - "
-               (request-content-type request)) "UNSUPPORTED_ERROR"))))
+         (unsupported-media-type request))))
   ([evaluator auth-info request]
    (process-dynamic-eval evaluator auth-info nil request)))
 
@@ -673,8 +675,7 @@
               (log/exception ex)
               (internal-error (get-internal-error-message :query-failure (.getMessage ex))))
             (finally (cn/remove-event evn))))
-        (bad-request (str "unsupported content-type in request - "
-                          (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+        (unsupported-media-type request))))
 
 (defn- process-start-debug-session [evaluator [auth-config maybe-unauth] request]
   (log-request "Start debug request received" request)
@@ -683,8 +684,7 @@
         (let [[obj _ err-response] (request-object request)]
           (or err-response
               (ok-html (ev/debug-dataflow obj))))
-        (bad-request (str "unsupported content-type in request - "
-                          (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+        (unsupported-media-type request))))
 
 (defn- process-debug-step [evaluator [auth-config maybe-unauth] request]
   (log-request "Debug-step request received" request)
@@ -797,9 +797,7 @@
                 (let [[message errtype] (get-signup-error-message ex)]
                   (unauthorized (str "Sign up failed. " message)
                                 data-fmt errtype)))))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn decode-jwt-token-from-response [response]
   (let [res (:authentication-result response)
@@ -838,9 +836,7 @@
               (unauthorized
                (str "Login failed. "
                     (.getMessage ex)) data-fmt "LOGIN_ERROR")))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-resend-confirmation-code [auth-config request]
   (log-request "Resend confirmation code request received" request)
@@ -867,9 +863,7 @@
               (log/warn ex)
               (unauthorized (str "Resending confirmation code failed. "
                                  (.getMessage ex)) data-fmt "RESEND_FAILED")))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-confirm-sign-up [auth-config request]
   (log-request "Confirm-signup request received" request)
@@ -896,9 +890,7 @@
               (log/warn ex)
               (unauthorized (str "Verify user failed. "
                                  (.getMessage ex)) data-fmt "CONFIRM_SIGNUP_ERROR")))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-forgot-password [auth-config request]
   (log-request "Forgot-password request received" request)
@@ -925,9 +917,7 @@
               (log/warn ex)
               (unauthorized (str "Forgot Password failed. "
                                  (.getMessage ex)) data-fmt "FORGET_PASSWORD_FAILED")))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-confirm-forgot-password [auth-config request]
   (log-request "Confirm-forgot-password request received" request)
@@ -954,9 +944,7 @@
               (log/warn ex)
               (unauthorized (str "Confirm Forgot Password failed. "
                                  (.getMessage ex)) data-fmt "CONFIRM_FAILED")))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-change-password [auth-config request]
   (log-request "Change-password request received" request)
@@ -983,9 +971,7 @@
               (log/warn ex)
               (unauthorized (str "Change Password failed. "
                                  (.getMessage ex)) data-fmt "CHANGE_PASSWORD_FAILED")))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-logout [auth-config request]
   (log-request "Logout request received" request)
@@ -1008,9 +994,7 @@
           (log/warn ex)
           (unauthorized (str "logout failed. " (ex-message ex)) data-fmt "LOGOUT_FAILED")))
       (ok {:result :bye} data-fmt))
-    (bad-request
-     (str "unsupported content-type in request - "
-          (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE")))
+    (unsupported-media-type request)))
 
 (defn- process-get-user [auth-config request]
   (log-request "Get-user request" request)
@@ -1026,9 +1010,7 @@
           (log/warn ex)
           (unauthorized (str "get-user failed" (ex-message ex)) data-fmt "GET_USER_FAILED")))
       (unauthorized "get-user failed" data-fmt "GET_USER_FAILED"))
-    (bad-request
-     (str "unsupported content-type in request - "
-          (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE")))
+    (unsupported-media-type request)))
 
 (defn- process-update-user [auth-config request]
   (log-request "Update-user request" request)
@@ -1057,8 +1039,7 @@
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "update-user failed. " (ex-message ex)) data-fmt "UPDATE_USER_FAILED")))))
-      (bad-request
-       (str "unsupported content-type in request - " (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-refresh-token [auth-config request]
   (log-request "Refresh-token request" request)
@@ -1087,8 +1068,7 @@
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "refresh-token failed. " (ex-message ex)) data-fmt "REFRESH_TOKEN_FAILED")))))
-      (bad-request
-       (str "unsupported content-type in request - " (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- auth-response [result]
   (case (:status result)
@@ -1268,23 +1248,24 @@
 
 (defn- handle-request-auth [auth-config request]
   (try
-    (if-let [user (get-in request [:identity :sub])]
-      (when-not (and (buddy/authenticated? request)
-                     (sess/is-logged-in user))
-        (log-request "unauthorized request" request)
-        (unauthorized (find-data-format request)))
-      (let [cookie (get (:headers request) "cookie")
-            sid (auth/cookie-to-session-id auth-config cookie)
-            [data ttl] (sess/lookup-session-cookie-user-data sid)
-            verification (auth/verify-token auth-config [[sid data] ttl])
-            user (:username verification)]
-        (if user
-          (when-not (sess/is-logged-in user)
-            (log-request "unauthorized request" request)
-            (unauthorized (find-data-format request)))
-          (when-not (:sub verification)
-            (log-request "token verification failed" request)
-            (unauthorized (find-data-format request))))))
+    (let [disable-sess (get auth-config :disable-user-sessions)]
+      (if-let [user (get-in request [:identity :sub])]
+        (when-not (and (buddy/authenticated? request)
+                       (or disable-sess (sess/is-logged-in user)))
+          (log-request "unauthorized request" request)
+          (unauthorized (find-data-format request)))
+        (let [cookie (get (:headers request) "cookie")
+              sid (auth/cookie-to-session-id auth-config cookie)
+              [data ttl] (sess/lookup-session-cookie-user-data sid)
+              verification (auth/verify-token auth-config [[sid data] ttl])
+              user (:username verification)]
+          (if user
+            (when-not (or disable-sess (sess/is-logged-in user))
+              (log-request "unauthorized request" request)
+              (unauthorized (find-data-format request)))
+            (when-not (:sub verification)
+              (log-request "token verification failed" request)
+              (unauthorized (find-data-format request)))))))
     (catch Exception ex
       (log/warn ex)
       (unauthorized (find-data-format request)))))

@@ -44,6 +44,8 @@
 
 (def ^:dynamic audit-trail-mode nil)
 
+(def ^:dynamic migration-mode nil)
+
 #?(:clj
    (def ^ThreadLocal error-code (ThreadLocal.))
    :cljs

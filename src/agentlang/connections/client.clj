@@ -22,19 +22,22 @@
 (def ^:private auth-token (atom nil))
 
 (defn- reset-auth-token []
-  (let [conn-config (connection-manager-config)
-        username (:username conn-config)
-        password (:password conn-config)]
-    (when (and username password)
-      (let [response (http/do-post
-                      (str (connections-api-host) "/login")
-                      nil {:Agentlang.Kernel.Identity/UserLogin
-                           {:Username username :Password password}}
-                      :json post-handler)]
-        (when (= 200 (:status response))
-          (let [token (get-in (:body response) [:result :authentication-result :id-token])]
-            (reset! auth-token token)
-            token))))))
+  (let [conn-config (connection-manager-config)]
+    (if-let [token (:token conn-config)]
+      (do (reset! auth-token token)
+          token)
+      (let [username (:username conn-config)
+            password (:password conn-config)]
+        (when (and username password)
+          (let [response (http/do-post
+                          (str (connections-api-host) "/login")
+                          nil {:Agentlang.Kernel.Identity/UserLogin
+                               {:Username username :Password password}}
+                          :json post-handler)]
+            (when (= 200 (:status response))
+              (let [token (get-in (:body response) [:result :authentication-result :id-token])]
+                (reset! auth-token token)
+                token))))))))
 
 (defn- with-auth-token []
   (if-let [token @auth-token]
