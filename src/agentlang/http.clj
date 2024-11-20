@@ -122,9 +122,9 @@
                     (when t {:type t}))))}))))))
 
 (defn- request-content-type [request]
-  (s/lower-case
-   (or (get-in request [:headers "content-type"])
-       "application/json")))
+  (or (when-let [s (get-in request [:headers "content-type"])]
+        (s/lower-case s))
+      "application/json"))
 
 (defn- response
   "Create a Ring response from a map object and an HTTP status code.
