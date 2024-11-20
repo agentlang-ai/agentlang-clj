@@ -2,6 +2,7 @@
   (:require [clojure.string :as s]
             [agentlang.util :as u]
             [agentlang.evaluator :as ev]
+            [agentlang.global-state :as gs]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
@@ -14,11 +15,15 @@
         obj (if (= s :ok) (first (:result r)) (:result r))]
     [s obj]))
 
+(defn- shared-session? []
+  (get-in (gs/get-app-config) [:authentication :shared-session?]))
+
 (defn is-logged-in [user]
-  (let [[status session] (session-lookup user)]
-    (if (= :ok status)
-      (:LoggedIn session)
-      (u/throw-ex (str "failed to lookup session for user " user)))))
+  (or (shared-session?)
+      (let [[status session] (session-lookup user)]
+        (if (= :ok status)
+          (:LoggedIn session)
+          (u/throw-ex (str "failed to lookup session for user " user))))))
 
 (defn not-found? [session]
   (= :not-found (first session)))
