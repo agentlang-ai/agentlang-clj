@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1-alpha5] - 2024-11-20
+
+- Support shared cognito tokens across apps
+- Return 415 on unsupported content-type
+- Option to disable local user sessions
+- Telemetry integration
+
 ## [0.6.1-alpha4] - 2024-11-18
 
 - Migration join tests and fixes
