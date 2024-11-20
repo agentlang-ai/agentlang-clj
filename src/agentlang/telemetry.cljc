@@ -21,6 +21,14 @@
     {:status (:status response)
      :body (json/decode (:body response))}))
 
+(def ^:private result-cap 10)
+
+(defn- trim-result [event-result]
+  (let [rs (:result event-result)]
+    (if (and (vector? rs) (> (count rs) result-cap))
+      [(assoc event-result :result (vec (take rs result-cap))) true]
+      [event-result false])))
+
 (def ^:private connection-name (u/uuid-string))
 
 (defn log-event [event-instance event-result]
@@ -35,6 +43,7 @@
              (let [conn-params (cc/connection-parameter conn)
                    auth (when conn-params (dissoc conn-params :host))
                    api-url (str (:host conn-params) "/api/TelemetryService.Core/WebIngest")
+                   [event-result is-partial] (if error? [event-result false] (trim-result event-result))
                    inst {:TelemetryService.Core/WebIngest
                          {:Data
                           {:AppUuid (u/get-app-uuid)
@@ -43,7 +52,7 @@
                            :EventData (cn/cleanup-inst event-instance)
                            :ResultType (if error? "ERROR" "VALUE")
                            :ResultValue (when-not error? (cn/cleanup-inst (:result event-result)))
-                           :IsPartialValue false
+                           :IsPartialValue is-partial
                            :ResultError (when error? (or (:message event-result) (:result event-result)))}}}
                    response (http/do-post api-url auth inst :json post-handler)]
                (case (:status response)
