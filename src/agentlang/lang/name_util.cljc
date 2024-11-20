@@ -34,7 +34,8 @@
       (map? v)
       (string? v)
       (number? v)
-      (boolean? v)))
+      (boolean? v)
+      (nil? v)))
 
 (defn- vals-sanitizer [attrs]
   (into
