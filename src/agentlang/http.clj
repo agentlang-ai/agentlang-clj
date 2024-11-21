@@ -107,8 +107,10 @@
       "application/json"))
 
 (defn- maybe-not-found-as-ok [status json-obj]
-  (if (and (= 404 status) json-obj)
-    [200 []]
+  (if (= 404 status)
+    (if (if (map? json-obj) (:result json-obj) (:result (first json-obj)))
+      [200 [{:status :ok :result []}]]
+      [status json-obj])
     [status json-obj]))
 
 (defn- response
