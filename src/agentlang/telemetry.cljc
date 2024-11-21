@@ -1,12 +1,13 @@
 (ns agentlang.telemetry
   (:require [agentlang.util :as u]
-            [agentlang.util.logger :as log]
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])
             [agentlang.util.http :as http]
             [agentlang.lang.datetime :as dt]
             [agentlang.datafmt.json :as json]
             [agentlang.component :as cn]
             [agentlang.global-state :as gs]
-            [agentlang.connections.client :as cc]))
+            #?(:clj [agentlang.connections.client :as cc])))
 
 (def has-connections? (memoize (fn [] (:connection-manager (gs/get-app-config)))))
 
