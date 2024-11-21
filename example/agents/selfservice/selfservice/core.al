@@ -8,9 +8,7 @@
   :Email :Email
   :Id :String})
 
-(event
- :InvokeResponseClassifierAgent
- {:UserInstruction :String})
+(event :InvokeResponseClassifierAgent {:UserInstruction :String})
 
 {:Agentlang.Core/Agent
  {:Name :ResponseClassifierAgent
@@ -47,6 +45,8 @@ Now please classify the following text based on these rules.\n\n"
    If the `result` is \"reject\", then create a ticket comment - \"rejected\"."
   :LLM :llm01}}
 
+(event :InvokeSelfService {:UserInstruction :String})
+
 {:Agentlang.Core/Agent
  {:Name :SelfServiceAgent
   :Type :planner
@@ -60,15 +60,11 @@ github org, email and ticket id as attributes. If the org or email is empty, ign
   :Integrations ["ticket" "slack"]
   :Input :Selfservice.Core/InvokeSelfService}}
 
+(event :ProcessTickets {})
+
 (dataflow
  :ProcessTickets
  {:Ticket.Core/Ticket? {} :as :Result}
  [:eval (quote (ticket.core/as-json :Result)) :as :S]
- [:eval '(println "Processing tickets:" :S)]
- {:Selfservice.Core/InvokeSelfService {:UserInstruction :S}})
-
-(dataflow
- :ProcessWebhook
- [:eval (quote (ticket.core/as-json :ProcessWebhook.Tickets)) :as :S]
  [:eval '(println "Processing tickets:" :S)]
  {:Selfservice.Core/InvokeSelfService {:UserInstruction :S}})
