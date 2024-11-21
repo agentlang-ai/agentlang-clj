@@ -8,10 +8,6 @@
   :Email :Email
   :Id :String})
 
-{:Agentlang.Core/LLM
- {:Type :openai
-  :Name :llm01}}
-
 (event
  :InvokeResponseClassifierAgent
  {:UserInstruction :String})
@@ -61,6 +57,7 @@ Now please classify the following text based on these rules.\n\n"
 Tickets will be passed to you as a JSON payload. Analyze the tickets and return instances of Request with the
 github org, email and ticket id as attributes. If the org or email is empty, ignore that ticket."
   :Delegates {:To :WorkflowAgent}
+  :Integrations ["ticket" "slack"]
   :Input :Selfservice.Core/InvokeSelfService}}
 
 (dataflow

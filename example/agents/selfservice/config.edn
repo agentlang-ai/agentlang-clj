@@ -1,4 +1,5 @@
-{:connection-manager
+{:llms {:llm01 {:Type :openai}}
+ :connection-manager
  {;; :username #$ CM_USERNAME
   ;; :password #$ CM_PASSWORD
   ;; :token #$ CM_TOKEN
