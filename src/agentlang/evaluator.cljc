@@ -550,10 +550,16 @@
             (fetch-model-config-declaration ent))))))
 
 #?(:clj
-   (defn async-evaluate-pattern [pat result-chan]
+   (defn async-evaluate-pattern [op-code pat result-chan]
      (async/go
        (try
-         (let [evaluation-result (evaluate-pattern pat)]
+         (let [evaluation-result (case op-code
+                                   "eval" (cond
+                                            (map? pat) (evaluate-pattern pat)
+                                            (list? pat) (eval pat)
+                                            :else (println "Cannot evaluate this pattern: " pat))
+                                   "add" (eval pat)
+                                   (println "Wrong op-code for the pattern - op-code: " op-code))]
            (log/info (str "Evaluation result from async-evaluate-pattern is: " evaluation-result))
            (async/>! result-chan evaluation-result))
          (catch Exception e
