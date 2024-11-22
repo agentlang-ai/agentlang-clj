@@ -54,11 +54,14 @@
            result)))
       result)))
 
+(defn- model-dep? [[tag _ model-name]]
+  (and model-name (or (= tag :git) (= tag :fs))))
+
 (defn dependency-model-name [dep]
   (cond
     (or (string? dep) (keyword? dep)) dep
-    (vector? dep) (last dep)
-    :else (u/throw-ex (str "invalid dependency spec " dep))))
+    (model-dep? dep) (last dep)
+    :else nil))
 
 (defn dependency-model-version [dep]
   (when (vector? dep)
@@ -293,8 +296,9 @@
        (when-let [deps (:dependencies model)]
          (let [rdm (partial read-model true (conj model-paths "deps/git"))]
            (doseq [d deps]
-             (let [[m mr] (rdm (dependency-model-name d))]
-               (load-model m mr model-paths from-resource))))))
+             (when-let [model-name (dependency-model-name d)]
+               (let [[m mr] (rdm model-name)]
+                 (load-model m mr model-paths from-resource)))))))
 
      (defn load-model
        ([model model-root model-paths from-resource]
