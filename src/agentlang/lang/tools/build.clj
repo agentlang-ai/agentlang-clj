@@ -439,10 +439,9 @@
 
 (defn load-model [model-name]
   (log/info (str "loading model " model-name))
-  (let [{model :model model-root :root} (loader/load-all-model-info nil model-name nil)]
-    (if (loader/load-components-from-model model model-root)
-      (:name model)
-      (log/error (str "failed to load components from " model-name)))))
+  (if-let [r (loader/load-model model-name)]
+    r
+    (log/error (str "failed to load components from " model-name))))
 
 (defn load-model-migration [model-name]
   (log/info (str "loading model " model-name))

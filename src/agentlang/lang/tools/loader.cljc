@@ -56,13 +56,9 @@
 
 (defn dependency-model-name [dep]
   (cond
-    (keyword? dep) dep
-    (vector? dep) (if (> (count dep) 1)
-                    dep
-                    (if (map? (first dep))
-                      (dependency-model-name (first dep))
-                      (first dep)))
-    (map? dep) dep))
+    (or (string? dep) (keyword? dep)) dep
+    (vector? dep) (last dep)
+    :else (u/throw-ex (str "invalid dependency spec " dep))))
 
 (defn dependency-model-version [dep]
   (when (vector? dep)
@@ -126,7 +122,7 @@
            (do-clj-imports (:clj-import spec))
            (doseq [dep (:refer spec)]
              (let [dep-ns (component-name-as-ns dep)]
-               (use [dep-ns])))))
+               (require [dep-ns])))))
        (eval exp))
 
      (defn read-expressions
@@ -168,29 +164,31 @@
        ([^String component-root-path file-name-or-input-stream]
         (log/info (str "Component root path: " component-root-path))
         (log/info (str "File name: " file-name-or-input-stream))
-        (let [input-reader? (not (string? file-name-or-input-stream))
-              file-ident
-              (if input-reader?
-                (InputStreamReader. (io/input-stream file-name-or-input-stream))
-                (if (and
-                     component-root-path
-                     (not (.startsWith
-                           file-name-or-input-stream
-                           component-root-path)))
-                  (str component-root-path u/path-sep file-name-or-input-stream)
-                  file-name-or-input-stream))
-              names (fetch-declared-names file-ident)
-              component-name (:component names)]
-          (let [exprs (binding [*ns* *ns*]
-                        (read-expressions
-                         (if input-reader?
-                           file-name-or-input-stream
-                           file-ident)
-                         names))]
-            (if *parse-expressions*
-              (when (and component-name (cn/component-exists? component-name))
-                component-name)
-              (vec exprs)))))
+        (try
+          (let [input-reader? (not (string? file-name-or-input-stream))
+                file-ident
+                (if input-reader?
+                  (InputStreamReader. (io/input-stream file-name-or-input-stream))
+                  (if (and
+                       component-root-path
+                       (not (.startsWith
+                             file-name-or-input-stream
+                             component-root-path)))
+                    (str component-root-path u/path-sep file-name-or-input-stream)
+                    file-name-or-input-stream))
+                names (fetch-declared-names file-ident)
+                component-name (:component names)]
+            (let [exprs (binding [*ns* *ns*]
+                          (read-expressions
+                           (if input-reader?
+                             file-name-or-input-stream
+                             file-ident)
+                           names))]
+              (if *parse-expressions*
+                (when (and component-name (cn/component-exists? component-name))
+                  component-name)
+                (vec exprs))))
+          (catch Exception ex (.printStackTrace ex))))
        ([file-name-or-input-stream]
         (load-script nil file-name-or-input-stream)))
 
@@ -232,9 +230,9 @@
          model-script-name root-dir nil)))
 
      (defn read-model
-       ([model-paths model-name]
+       ([dependent? model-paths model-name]
         (let [fpath (partial verified-model-file-path u/model-script-name)]
-          (if-let [p (fpath ".")]
+          (if-let [p (and (not dependent?) (fpath "."))]
             (read-model p)
             (let [s (if (keyword? model-name)
                       (s/lower-case (name model-name))
@@ -247,6 +245,7 @@
                   (u/throw-ex
                    (str model-name " - model not found in any of "
                         model-paths))))))))
+       ([model-paths model-name] (read-model false model-paths model-name))
        ([model-file]
         (let [model (read-model-expressions model-file)
               root (java.io.File. (.getParent (java.io.File. model-file)))]
@@ -292,9 +291,8 @@
 
      (defn load-model-dependencies [model model-paths from-resource]
        (when-let [deps (:dependencies model)]
-         (let [rdm (partial read-model model-paths)]
+         (let [rdm (partial read-model true (conj model-paths "deps/git"))]
            (doseq [d deps]
-             (tu/maybe-clone-model d model-paths)
              (let [[m mr] (rdm (dependency-model-name d))]
                (load-model m mr model-paths from-resource))))))
 
@@ -303,7 +301,7 @@
         (load-model-dependencies model model-paths from-resource)
         (load-components-from-model model model-root from-resource))
        ([model-name model-paths]
-        (when-let [[model model-root] (read-model model-paths model-name )]
+        (when-let [[model model-root] (read-model model-paths model-name)]
           (load-model model model-root model-paths false)))
        ([model-name]
         (load-model model-name (tu/get-system-model-paths)))))
