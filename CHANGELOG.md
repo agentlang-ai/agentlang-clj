@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1-alpha8] - 2024-11-22
+
+- Fix dependency loading for `agent run`
+
 ## [0.6.1-alpha7] - 2024-11-22
 
 - Add code evaluation support for nREPL to add functionalities to running nREPL session
