@@ -106,15 +106,23 @@
         (s/lower-case s))
       "application/json"))
 
+(defn- maybe-not-found-as-ok [status json-obj]
+  (if (= 404 status)
+    (if (if (map? json-obj) (:result json-obj) (:result (first json-obj)))
+      [200 [{:status :ok :result []}]]
+      [status json-obj])
+    [status json-obj]))
+
 (defn- response
   "Create a Ring response from a map object and an HTTP status code.
    The map object will be encoded as JSON in the response.
    Also see: https://github.com/ring-clojure/ring/wiki/Creating-responses"
   [json-obj status data-fmt]
-  (or (maybe-kernel-response json-obj data-fmt)
-      {:status status
-       :headers (headers data-fmt)
-       :body ((uh/encoder data-fmt) json-obj)}))
+  (let [[status json-obj] (maybe-not-found-as-ok status json-obj)]
+    (or (maybe-kernel-response json-obj data-fmt)
+        {:status status
+         :headers (headers data-fmt)
+         :body ((uh/encoder data-fmt) json-obj)})))
 
 (defn- unauthorized
   ([msg data-fmt errtype]
