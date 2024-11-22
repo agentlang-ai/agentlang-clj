@@ -96,10 +96,10 @@
              (let [[t r] (if (and (map? body) (cn/an-instance? body))
                            [(cn/instance-type-kw body) [(cn/cleanup-inst body)]]
                            [nil body])]
-                   (merge
-                    {:status (http-status-as-code status)
-                     :result r}
-                    (when t {:type t}))))}))))))
+                  (merge
+                   {:status (http-status-as-code status)
+                    :result r}
+                   (when t {:type t}))))}))))))
 
 (defn- request-content-type [request]
   (or (when-let [s (get-in request [:headers "content-type"])]
@@ -1158,16 +1158,16 @@
 
 (defn graphql-handler
   [[auth-config maybe-unauth] request]
-  (if (not (empty? @graphql-schema))
+  (if (seq @graphql-schema)
     (or (maybe-unauth request)
-          (let [body-as-string (slurp (:body request))
-          body (json/decode body-as-string)
-          query (:query body)
-          variables (:variables body)
-          operation-name (:operationName body)
-          context {:request request :auth-config auth-config :core-component @core-component :contains-graph @contains-graph :entity-metas @graphql-entity-metas}
-          result (execute @graphql-schema query variables context operation-name)]
-      (response result 200 :json)))
+        (let [body-as-string (slurp (:body request))
+              body (json/decode body-as-string)
+              query (:query body)
+              variables (:variables body)
+              operation-name (:operationName body)
+              context {:request request :auth-config auth-config :core-component @core-component :contains-graph @contains-graph :entity-metas @graphql-entity-metas}
+              result (execute @graphql-schema query variables context operation-name)]
+         (response result 200 :json)))
     (response {:error "GraphQL schema compilation failed"} 500 :json)))
 
 (defn nrepl-http-handler
@@ -1175,13 +1175,14 @@
   (or (maybe-unauth request)
       (let [parsed-request (params/params-request request)
             _ (log/info (str "Parsed-request in nrepl-http-handler is: " parsed-request))
+            op (get-in parsed-request [:form-params "op"])
             code (get-in parsed-request [:form-params "code"])
             pattern (edn/read-string code)
             handler (drawbridge/ring-handler :nrepl-handler nrepl-handler)
             result-chan (async/chan)
             ;; First handle the request
             _ (handler request)
-            _ (ev/async-evaluate-pattern pattern result-chan)
+            _ (ev/async-evaluate-pattern op pattern result-chan)
             timeout (async/timeout (or (System/getenv "NREPL_TIMEOUT") 10000))
             ;; Then wait for async result
             [result port] (async/alts!! [result-chan timeout])]
@@ -1195,7 +1196,7 @@
                                 (-> result
                                    (dissoc :env)
                                    (json/encode))
-                                result)]
+                                (str result))]
             {:status 200 :body cleaned-result})))))
 
 (defn wrap-nrepl-middleware [handler]
