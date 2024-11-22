@@ -186,8 +186,9 @@
     (let [final-result
           (cond
             (map? result)
-            (when-let [a (async-result-key result)]
-              [(merge (dissoc result async-result-key) (<! a))])
+            (if-let [a (async-result-key result)]
+              [(merge (dissoc result async-result-key) (<! a))]
+              result)
 
             (seqable? result)
             (loop [xs result, r []]
@@ -199,7 +200,8 @@
                      (conj r (if (i/ok? (first ar))
                                (merge (dissoc x async-result-key) (:result ar))
                                (dissoc x async-result-key))))
-                   (conj r x)))))
+                   (conj r x)))
+                r))
             :else (<! result))
 
           updated-env (env/bind-instances env final-result)]

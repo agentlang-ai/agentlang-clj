@@ -24,7 +24,6 @@
             [agentlang.user-session :as sess]
             [agentlang.util :as u]
             [agentlang.util.errors :refer [get-internal-error-message]]
-            [agentlang.util.hash :as hash]
             [agentlang.util.http :as uh]
             [agentlang.util.logger :as log]
             [org.httpkit.server :as h]
@@ -47,25 +46,6 @@
 (def graphql-schema (atom {}))
 (def contains-graph (atom {}))
 (def graphql-entity-metas (atom {}))
-
-(defn- sanitize-secrets [obj]
-  (let [r (mapv (fn [[k v]]
-                  [k (if (hash/crypto-hash? v)
-                       "*********"
-                       v)])
-                obj)]
-    (into {} r)))
-
-(defn- cleanup-inst [obj]
-  (cond
-    (cn/an-instance? obj)
-    (let [r (cn/instance-attributes (sanitize-secrets obj))]
-      (into {} (mapv (fn [[k v]] [k (if (or (map? v) (vector? v))
-                                      (cleanup-inst v)
-                                      v)])
-                     r)))
-    (vector? obj) (mapv cleanup-inst obj)
-    :else obj))
 
 (defn- headers
   ([data-fmt]
@@ -99,6 +79,7 @@
       400 :bad-request
       401 :unauthorized
       404 :not-found
+      415 :unsupported-media-type
       :error)))
 
 (defn- maybe-kernel-response [json-obj data-fmt]
@@ -113,22 +94,35 @@
            {:body
             ((uh/encoder data-fmt)
              (let [[t r] (if (and (map? body) (cn/an-instance? body))
-                           [(cn/instance-type-kw body) [(cleanup-inst body)]]
+                           [(cn/instance-type-kw body) [(cn/cleanup-inst body)]]
                            [nil body])]
                    (merge
                     {:status (http-status-as-code status)
                      :result r}
                     (when t {:type t}))))}))))))
 
+(defn- request-content-type [request]
+  (or (when-let [s (get-in request [:headers "content-type"])]
+        (s/lower-case s))
+      "application/json"))
+
+(defn- maybe-not-found-as-ok [status json-obj]
+  (if (= 404 status)
+    (if (if (map? json-obj) (:result json-obj) (:result (first json-obj)))
+      [200 [{:status :ok :result []}]]
+      [status json-obj])
+    [status json-obj]))
+
 (defn- response
   "Create a Ring response from a map object and an HTTP status code.
    The map object will be encoded as JSON in the response.
    Also see: https://github.com/ring-clojure/ring/wiki/Creating-responses"
   [json-obj status data-fmt]
-  (or (maybe-kernel-response json-obj data-fmt)
-      {:status status
-       :headers (headers data-fmt)
-       :body ((uh/encoder data-fmt) json-obj)}))
+  (let [[status json-obj] (maybe-not-found-as-ok status json-obj)]
+    (or (maybe-kernel-response json-obj data-fmt)
+        {:status status
+         :headers (headers data-fmt)
+         :body ((uh/encoder data-fmt) json-obj)})))
 
 (defn- unauthorized
   ([msg data-fmt errtype]
@@ -143,6 +137,9 @@
    (response {:reason s :type errtype} 400 data-fmt))
   ([s errtype] (bad-request s :json errtype))
   ([s] (bad-request s :json "BAD_REQUEST")))
+
+(defn- unsupported-media-type [request]
+  (response {:reason (str "unsupported content-type in request - " (request-content-type request))} 415 :json))
 
 (defn- internal-error
   "Logs errors and constructs client-side response based on the type of input."
@@ -171,11 +168,6 @@
     (assoc result :type t)
     result))
 
-(defn- request-content-type [request]
-  (s/lower-case
-   (or (get-in request [:headers "content-type"])
-       "application/json")))
-
 (defn- find-data-format [request]
   (let [ct (request-content-type request)]
     (uh/content-types ct)))
@@ -184,7 +176,7 @@
   (if-let [data-fmt (find-data-format request)]
     [(when-let [body (:body request)]
        ((uh/decoder data-fmt) (String. (.bytes body)))) data-fmt nil]
-    [nil nil (bad-request (str "unsupported content-type in request - " (request-content-type request)) "UNSUPPORTED_CONTENT")]))
+    [nil nil (unsupported-media-type request)]))
 
 (defn- cleanup-result [rs]
   (if-let [result (:result rs)]
@@ -195,8 +187,8 @@
       (maybe-assoc-root-type
        mode result
        (assoc rs :result (case mode
-                           :single (cleanup-inst result)
-                           :seq (mapv cleanup-inst result)
+                           :single (cn/cleanup-inst result)
+                           :seq (mapv cn/cleanup-inst result)
                            result))))
     rs))
 
@@ -339,9 +331,7 @@
                 (str "cannot invoke internal event - " (cn/instance-type-kw obj))
                 data-fmt "INTERNAL_EVENT_ERROR")
                (maybe-ok #(evaluate evaluator obj) data-fmt nil))))
-         (bad-request
-          (str "unsupported content-type in request - "
-               (request-content-type request)) "UNSUPPORTED_ERROR"))))
+         (unsupported-media-type request))))
   ([evaluator auth-info request]
    (process-dynamic-eval evaluator auth-info nil request)))
 
@@ -542,10 +532,10 @@
                (if (= :ok (:status rs))
                  (let [result (maybe-merge-child-uris
                                evaluator evt-context data-fmt
-                               c child-entity (cleanup-inst (:result rs)))
+                               c child-entity (cn/cleanup-inst (:result rs)))
                        rels (li/rel-tag parent-inst)]
-                   (assoc (cleanup-inst parent-inst) li/rel-tag (assoc rels relname result)))
-                 (cleanup-inst parent-inst))))
+                   (assoc (cn/cleanup-inst parent-inst) li/rel-tag (assoc rels relname result)))
+                 (cn/cleanup-inst parent-inst))))
            r children))
         parent-insts))
 
@@ -693,8 +683,7 @@
               (log/exception ex)
               (internal-error (get-internal-error-message :query-failure (.getMessage ex))))
             (finally (cn/remove-event evn))))
-        (bad-request (str "unsupported content-type in request - "
-                          (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+        (unsupported-media-type request))))
 
 (defn- process-start-debug-session [evaluator [auth-config maybe-unauth] request]
   (log-request "Start debug request received" request)
@@ -703,8 +692,7 @@
         (let [[obj _ err-response] (request-object request)]
           (or err-response
               (ok-html (ev/debug-dataflow obj))))
-        (bad-request (str "unsupported content-type in request - "
-                          (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+        (unsupported-media-type request))))
 
 (defn- process-debug-step [evaluator [auth-config maybe-unauth] request]
   (log-request "Debug-step request received" request)
@@ -817,9 +805,7 @@
                 (let [[message errtype] (get-signup-error-message ex)]
                   (unauthorized (str "Sign up failed. " message)
                                 data-fmt errtype)))))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn decode-jwt-token-from-response [response]
   (let [res (:authentication-result response)
@@ -858,9 +844,7 @@
               (unauthorized
                (str "Login failed. "
                     (.getMessage ex)) data-fmt "LOGIN_ERROR")))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-resend-confirmation-code [auth-config request]
   (log-request "Resend confirmation code request received" request)
@@ -887,9 +871,7 @@
               (log/warn ex)
               (unauthorized (str "Resending confirmation code failed. "
                                  (.getMessage ex)) data-fmt "RESEND_FAILED")))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-confirm-sign-up [auth-config request]
   (log-request "Confirm-signup request received" request)
@@ -916,9 +898,7 @@
               (log/warn ex)
               (unauthorized (str "Verify user failed. "
                                  (.getMessage ex)) data-fmt "CONFIRM_SIGNUP_ERROR")))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-forgot-password [auth-config request]
   (log-request "Forgot-password request received" request)
@@ -945,9 +925,7 @@
               (log/warn ex)
               (unauthorized (str "Forgot Password failed. "
                                  (.getMessage ex)) data-fmt "FORGET_PASSWORD_FAILED")))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-confirm-forgot-password [auth-config request]
   (log-request "Confirm-forgot-password request received" request)
@@ -974,9 +952,7 @@
               (log/warn ex)
               (unauthorized (str "Confirm Forgot Password failed. "
                                  (.getMessage ex)) data-fmt "CONFIRM_FAILED")))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-change-password [auth-config request]
   (log-request "Change-password request received" request)
@@ -1003,9 +979,7 @@
               (log/warn ex)
               (unauthorized (str "Change Password failed. "
                                  (.getMessage ex)) data-fmt "CHANGE_PASSWORD_FAILED")))))
-      (bad-request
-       (str "unsupported content-type in request - "
-            (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-logout [auth-config request]
   (log-request "Logout request received" request)
@@ -1028,9 +1002,7 @@
           (log/warn ex)
           (unauthorized (str "logout failed. " (ex-message ex)) data-fmt "LOGOUT_FAILED")))
       (ok {:result :bye} data-fmt))
-    (bad-request
-     (str "unsupported content-type in request - "
-          (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE")))
+    (unsupported-media-type request)))
 
 (defn- process-get-user [auth-config request]
   (log-request "Get-user request" request)
@@ -1046,9 +1018,7 @@
           (log/warn ex)
           (unauthorized (str "get-user failed" (ex-message ex)) data-fmt "GET_USER_FAILED")))
       (unauthorized "get-user failed" data-fmt "GET_USER_FAILED"))
-    (bad-request
-     (str "unsupported content-type in request - "
-          (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE")))
+    (unsupported-media-type request)))
 
 (defn- process-update-user [auth-config request]
   (log-request "Update-user request" request)
@@ -1077,8 +1047,7 @@
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "update-user failed. " (ex-message ex)) data-fmt "UPDATE_USER_FAILED")))))
-      (bad-request
-       (str "unsupported content-type in request - " (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- process-refresh-token [auth-config request]
   (log-request "Refresh-token request" request)
@@ -1107,8 +1076,7 @@
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "refresh-token failed. " (ex-message ex)) data-fmt "REFRESH_TOKEN_FAILED")))))
-      (bad-request
-       (str "unsupported content-type in request - " (request-content-type request)) "UNSUPPORTED_CONTENT_TYPE"))))
+      (unsupported-media-type request))))
 
 (defn- auth-response [result]
   (case (:status result)
@@ -1288,23 +1256,24 @@
 
 (defn- handle-request-auth [auth-config request]
   (try
-    (if-let [user (get-in request [:identity :sub])]
-      (when-not (and (buddy/authenticated? request)
-                     (sess/is-logged-in user))
-        (log-request "unauthorized request" request)
-        (unauthorized (find-data-format request)))
-      (let [cookie (get (:headers request) "cookie")
-            sid (auth/cookie-to-session-id auth-config cookie)
-            [data ttl] (sess/lookup-session-cookie-user-data sid)
-            verification (auth/verify-token auth-config [[sid data] ttl])
-            user (:username verification)]
-        (if user
-          (when-not (sess/is-logged-in user)
-            (log-request "unauthorized request" request)
-            (unauthorized (find-data-format request)))
-          (when-not (:sub verification)
-            (log-request "token verification failed" request)
-            (unauthorized (find-data-format request))))))
+    (let [disable-sess (get auth-config :disable-user-sessions)]
+      (if-let [user (get-in request [:identity :sub])]
+        (when-not (and (buddy/authenticated? request)
+                       (or disable-sess (sess/is-logged-in user)))
+          (log-request "unauthorized request" request)
+          (unauthorized (find-data-format request)))
+        (let [cookie (get (:headers request) "cookie")
+              sid (auth/cookie-to-session-id auth-config cookie)
+              [data ttl] (sess/lookup-session-cookie-user-data sid)
+              verification (auth/verify-token auth-config [[sid data] ttl])
+              user (:username verification)]
+          (if user
+            (when-not (or disable-sess (sess/is-logged-in user))
+              (log-request "unauthorized request" request)
+              (unauthorized (find-data-format request)))
+            (when-not (:sub verification)
+              (log-request "token verification failed" request)
+              (unauthorized (find-data-format request)))))))
     (catch Exception ex
       (log/warn ex)
       (unauthorized (find-data-format request)))))

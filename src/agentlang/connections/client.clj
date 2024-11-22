@@ -22,19 +22,22 @@
 (def ^:private auth-token (atom nil))
 
 (defn- reset-auth-token []
-  (let [conn-config (connection-manager-config)
-        username (:username conn-config)
-        password (:password conn-config)]
-    (when (and username password)
-      (let [response (http/do-post
-                      (str (connections-api-host) "/login")
-                      nil {:Agentlang.Kernel.Identity/UserLogin
-                           {:Username username :Password password}}
-                      :json post-handler)]
-        (when (= 200 (:status response))
-          (let [token (get-in (:body response) [:result :authentication-result :id-token])]
-            (reset! auth-token token)
-            token))))))
+  (let [conn-config (connection-manager-config)]
+    (if-let [token (:token conn-config)]
+      (do (reset! auth-token token)
+          token)
+      (let [username (:username conn-config)
+            password (:password conn-config)]
+        (when (and username password)
+          (let [response (http/do-post
+                          (str (connections-api-host) "/login")
+                          nil {:Agentlang.Kernel.Identity/UserLogin
+                               {:Username username :Password password}}
+                          :json post-handler)]
+            (when (= 200 (:status response))
+              (let [token (get-in (:body response) [:result :authentication-result :id-token])]
+                (reset! auth-token token)
+                token))))))))
 
 (defn- with-auth-token []
   (if-let [token @auth-token]
@@ -53,7 +56,7 @@
                  (log/error (str "failed to create - " ident))))
          401 (do (log/error "authentication required")
                  (reset! auth-token nil))
-         :else (log/error (str "failed to create " ident " with status " (:status response)))))
+         (log/error (str "failed to create " ident " with status " (:status response)))))
      (catch Exception ex
        (log/error ex))))
   ([api-url ident inst] (create-instance api-url ident inst identity)))
@@ -102,7 +105,6 @@
         (case (:status response)
           401 (do (log/error "authentication required")
                   (reset! auth-token nil))
-          :else
           (when (= "ok" (get (first (:body response)) "status"))
             (swap! cached-connections dissoc (:CacheKey conn))
             true)))

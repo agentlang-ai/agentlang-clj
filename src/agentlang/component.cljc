@@ -2537,3 +2537,23 @@
   (if (keyword? attr-name-or-scm)
     (extension-attribute? (find-attribute-schema attr-name-or-scm))
     (and (:relationship attr-name-or-scm) (:extend attr-name-or-scm))))
+
+(defn- sanitize-secrets [obj]
+  (let [r (mapv (fn [[k v]]
+                  [k (if (sh/crypto-hash? v)
+                       "*********"
+                       v)])
+                obj)]
+    (into {} r)))
+
+(defn cleanup-inst [obj]
+  (cond
+    (an-instance? obj)
+    (let [r (instance-attributes (sanitize-secrets obj))]
+      (into {} (mapv (fn [[k v]] [k (if (or (map? v) (vector? v))
+                                      (cleanup-inst v)
+                                      v)])
+                     r)))
+    (or (map? obj) (string? obj)) obj
+    (seqable? obj) (mapv cleanup-inst obj)
+    :else obj))
