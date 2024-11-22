@@ -8,13 +8,7 @@
   :Email :Email
   :Id :String})
 
-{:Agentlang.Core/LLM
- {:Type :openai
-  :Name :llm01}}
-
-(event
- :InvokeResponseClassifierAgent
- {:UserInstruction :String})
+(event :InvokeResponseClassifierAgent {:UserInstruction :String})
 
 {:Agentlang.Core/Agent
  {:Name :ResponseClassifierAgent
@@ -51,6 +45,8 @@ Now please classify the following text based on these rules.\n\n"
    If the `result` is \"reject\", then create a ticket comment - \"rejected\"."
   :LLM :llm01}}
 
+(event :InvokeSelfService {:UserInstruction :String})
+
 {:Agentlang.Core/Agent
  {:Name :SelfServiceAgent
   :Type :planner
@@ -61,17 +57,14 @@ Now please classify the following text based on these rules.\n\n"
 Tickets will be passed to you as a JSON payload. Analyze the tickets and return instances of Request with the
 github org, email and ticket id as attributes. If the org or email is empty, ignore that ticket."
   :Delegates {:To :WorkflowAgent}
+  :Integrations ["ticket" "slack"]
   :Input :Selfservice.Core/InvokeSelfService}}
+
+(event :ProcessTickets {})
 
 (dataflow
  :ProcessTickets
  {:Ticket.Core/Ticket? {} :as :Result}
  [:eval (quote (ticket.core/as-json :Result)) :as :S]
- [:eval '(println "Processing tickets:" :S)]
- {:Selfservice.Core/InvokeSelfService {:UserInstruction :S}})
-
-(dataflow
- :ProcessWebhook
- [:eval (quote (ticket.core/as-json :ProcessWebhook.Tickets)) :as :S]
  [:eval '(println "Processing tickets:" :S)]
  {:Selfservice.Core/InvokeSelfService {:UserInstruction :S}})
