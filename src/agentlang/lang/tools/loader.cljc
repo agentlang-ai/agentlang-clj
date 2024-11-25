@@ -104,8 +104,9 @@
      (def ^:dynamic *parse-expressions* true)
 
      (defn model-name-as-dir [model-name]
-       (let [n (s/lower-case (s/replace (name model-name) "." "_"))]
-         (csk/->snake_case_string n)))
+       (when model-name
+         (let [n (s/lower-case (s/replace (name model-name) "." "_"))]
+           (csk/->snake_case_string n))))
 
      (defn use-lang []
        (use '[agentlang.lang]))
@@ -154,10 +155,8 @@
             (loop [exp (rdf), raw-exps [], exps []]
               (if (= exp :done)
                 (do
-                 
                   (raw/maybe-intern-component raw-exps) 
-                    
-                    exps)
+                  exps)
                 (let [exp (fqn exp)]
                   (recur (rdf) (conj raw-exps exp) (conj exps (parser exp))))))
             (finally
@@ -222,7 +221,7 @@
 
      (defn read-model-expressions [model-file]
        (try
-         (binding [*ns* *ns*]
+         (binding [*ns* *ns*, *parse-expressions* false]
            (last (read-expressions model-file nil)))
          (catch Exception ex
            (.printStackTrace ex))))
