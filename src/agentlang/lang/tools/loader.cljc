@@ -54,13 +54,15 @@
            result)))
       result)))
 
-(defn- model-dep? [[tag _ model-name]]
-  (and model-name (or (= tag :git) (= tag :fs))))
+(defn- model-dep? [[tag _ model-info]]
+  (and
+   (or (= tag :git) (= tag :fs))
+   (and (map? model-info) {:model model-info})))
 
 (defn dependency-model-name [dep]
   (cond
     (or (string? dep) (keyword? dep)) dep
-    (model-dep? dep) (last dep)
+    (model-dep? dep) (:model (last dep))
     :else nil))
 
 (defn dependency-model-version [dep]
@@ -100,6 +102,11 @@
 #?(:clj
    (do
      (def ^:dynamic *parse-expressions* true)
+
+     (defn model-name-as-dir [model-name]
+       (when model-name
+         (let [n (s/lower-case (s/replace (name model-name) "." "_"))]
+           (csk/->snake_case_string n))))
 
      (defn use-lang []
        (use '[agentlang.lang]))
@@ -148,10 +155,8 @@
             (loop [exp (rdf), raw-exps [], exps []]
               (if (= exp :done)
                 (do
-                 
                   (raw/maybe-intern-component raw-exps) 
-                    
-                    exps)
+                  exps)
                 (let [exp (fqn exp)]
                   (recur (rdf) (conj raw-exps exp) (conj exps (parser exp))))))
             (finally
@@ -216,7 +221,7 @@
 
      (defn read-model-expressions [model-file]
        (try
-         (binding [*ns* *ns*]
+         (binding [*ns* *ns*, *parse-expressions* false]
            (last (read-expressions model-file nil)))
          (catch Exception ex
            (.printStackTrace ex))))
@@ -237,9 +242,7 @@
         (let [fpath (partial verified-model-file-path u/model-script-name)]
           (if-let [p (and (not dependent?) (fpath "."))]
             (read-model p)
-            (let [s (if (keyword? model-name)
-                      (s/lower-case (name model-name))
-                      (csk/->snake_case_string model-name))]
+            (let [s (model-name-as-dir model-name)]
               (loop [mps model-paths]
                 (if-let [mp (first mps)]
                   (if-let [p (fpath mp s)]
@@ -294,9 +297,9 @@
 
      (defn load-model-dependencies [model model-paths from-resource]
        (when-let [deps (:dependencies model)]
-         (let [rdm (partial read-model true (conj model-paths "deps/git"))]
+         (let [rdm (partial read-model true model-paths)]
            (doseq [d deps]
-             (when-let [model-name (dependency-model-name d)]
+             (when-let [model-name (model-name-as-dir (dependency-model-name d))]
                (let [[m mr] (rdm model-name)]
                  (load-model m mr model-paths from-resource)))))))
 
