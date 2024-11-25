@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1-alpha9] - 2024-11-25
+
+- nrepl current-component bug fix
+- Syntax update for :git dependencies
+
 ## [0.6.1-alpha8] - 2024-11-22
 
 - Fix dependency loading for `agent run`
