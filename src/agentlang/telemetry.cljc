@@ -9,7 +9,12 @@
             [agentlang.global-state :as gs]
             #?(:clj [agentlang.connections.client :as cc])))
 
-(def has-connections? (memoize (fn [] (:connection-manager (gs/get-app-config)))))
+(def telemetry-enabled?
+  (memoize
+   (fn []
+     (let [config (gs/get-app-config)]
+       (and (get-in config [:telemetry :enabled?])
+            (:connection-manager config))))))
 
 (defn- extract-first-map [r]
   (if (map? r)
@@ -34,7 +39,7 @@
 
 (defn log-event [event-instance event-result]
   #?(:clj
-     (when (has-connections?)
+     (when (telemetry-enabled?)
        (try
          (let [evt-name (cn/instance-type-kw event-instance)
                event-result (extract-first-map event-result)
