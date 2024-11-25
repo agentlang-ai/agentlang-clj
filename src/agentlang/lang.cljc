@@ -846,7 +846,9 @@
 
 (defn- crud-event-inst-accessor
   ([evtname cname inst-attr]
-   (let [r (crud-event-subattr-accessor evtname :Instance inst-attr)]
+   (let [r (crud-event-subattr-accessor evtname :Instance inst-attr)
+         cname (let [[c n] (li/split-path evtname)]
+                 (if (and c n) c cname))]
      (if cname
        (if (keyword? cname)
          (cn/canonical-type-name cname r)
@@ -856,8 +858,11 @@
   ([evtname] (crud-event-inst-accessor evtname true nil)))
 
 (defn- direct-id-accessor [evtname id-attr]
-  (cn/canonical-type-name
-   (keyword (str (name evtname) "." (name id-attr)))))
+  (let [[c n] (li/split-path evtname)
+        cname (and n c)]
+    (cn/canonical-type-name
+     cname
+     (keyword (str (name evtname) "." (name id-attr))))))
 
 (defn- identity-attribute-name [recname]
   (or (cn/identity-attribute-name recname)
