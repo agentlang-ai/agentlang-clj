@@ -229,13 +229,14 @@
   (println "  publish MODEL-NAME TARGET  Publish the model to the target - local, clojars or github")
   (println "  exec MODEL-NAME            Build and run the model as a standalone application")
   (println "  repl MODEL-NAME            Launch the Agentlang REPL")
+  (println "  migrate MODEL-NAME [git/local] [branch/path]          Migrate database given previous version of the app")
   (println)
   (println "The model will be searched in the local directory or under the paths pointed-to by")
   (println "the `AGENTLANG_MODEL_PATHS` environment variable. If `MODEL-NAME` is not provided,")
   (println "the agentlang command will try to load a model available in the current directory.")
   (println)
   (println "The command-line arguments accepted by agentlang are:")
-  (println "  -c --config CONFIG          Configuration file")
+  (println "  -c --config CONFIG         Configuration file")
   (println "  -s --doc MODEL             Generate HTML documentation")
   (println "  -i --interactive 'desc'    Use AI to generate a model from the textual description")
   (println "  -h --help                  Print this help and quit")
@@ -296,11 +297,18 @@
                                                    (run-service
                                                     (ur/read-model-and-config options)
                                                     (agentlang-nrepl-handler (first %) options))))
-                  :custom:migrate    #(ur/call-after-load-model-migrate
-                                       (first %) (fn []
-                                                   (run-migrations
-                                                    (ur/read-model-and-config options)
-                                                    (agentlang-nrepl-handler (first %) options))))
+                  :migrate           (fn [args]
+                                       (if (and (= 3 (count args))
+                                                (contains? #{"git" "local"} (second args)))
+                                         (ur/call-after-load-model-migrate
+                                          (first args) (second args) (last args) options
+                                          (fn []
+                                            (run-migrations
+                                             (ur/read-model-and-config options)
+                                             (agentlang-nrepl-handler (first args) options))))
+                                         (do
+                                           (println "Correct usage:\n")
+                                           (print-help))))
                   :compile           #(println (build/compile-model (first %)))
                   :build             #(println (build/standalone-package (first %)))
                   :install           #(println (build/install-model nil (first %)))

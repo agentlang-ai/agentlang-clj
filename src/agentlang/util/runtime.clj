@@ -2,29 +2,33 @@
   (:require
     clojure.main
     clojure.test
-    [clojure.java.io :as io]
-    [clojure.string :as s]
-    [agentlang.util :as u]
-    [agentlang.util.seq :as su]
-    [agentlang.util.logger :as log]
-    [agentlang.resolver.timer :as timer]
-    [agentlang.resolver.registry :as rr]
-    [agentlang.compiler :as c]
-    [agentlang.component :as cn]
-    [agentlang.evaluator :as e]
-    [agentlang.evaluator.intercept :as ei]
-    [agentlang.store :as store]
-    [agentlang.global-state :as gs]
-    [agentlang.lang :as ln]
-    [agentlang.lang.rbac :as lr]
-    [agentlang.lang.tools.loader :as loader]
-    [agentlang.lang.tools.build :as build]
-    [agentlang.auth :as auth]
-    [agentlang.rbac.core :as rbac]
-    [agentlang.connections.client :as cc]
-    [agentlang.inference.embeddings.core :as ec]
-    [agentlang.inference.service.core :as isc]
-    [fractl-config-secrets-reader.core :as sr]))
+   [clojure.java.io :as io]
+   [clojure.string :as s]
+   [agentlang.util :as u]
+   [agentlang.util.seq :as su]
+   [agentlang.util.logger :as log]
+   [agentlang.util.runtime :as ur]
+   [agentlang.store.util :as sfu]
+   [agentlang.store :as as]
+   [agentlang.store.db-common :as dbc]
+   [agentlang.resolver.timer :as timer]
+   [agentlang.resolver.registry :as rr]
+   [agentlang.compiler :as c]
+   [agentlang.component :as cn]
+   [agentlang.evaluator :as e]
+   [agentlang.evaluator.intercept :as ei]
+   [agentlang.store :as store]
+   [agentlang.global-state :as gs]
+   [agentlang.lang :as ln]
+   [agentlang.lang.rbac :as lr]
+   [agentlang.lang.tools.loader :as loader]
+   [agentlang.lang.tools.build :as build]
+   [agentlang.auth :as auth]
+   [agentlang.rbac.core :as rbac]
+   [agentlang.connections.client :as cc]
+   [agentlang.inference.embeddings.core :as ec]
+   [agentlang.inference.service.core :as isc]
+   [fractl-config-secrets-reader.core :as sr]))
 
 (def ^:private repl-mode-key :-*-repl-mode-*-)
 (def ^:private repl-mode? repl-mode-key)
@@ -363,18 +367,58 @@
   ([model-name f]
    (call-after-load-model model-name f false)))
 
+(defn- clear-model-init [model-name]
+  (as/remove-inited-component model-name)
+  (cn/unregister-model model-name))
+
+(defn- get-entities-and-versions []
+  (reduce (fn [entities c]
+            (merge
+             entities
+             (apply
+              merge
+              (map #(do {% (cn/get-model-version c)})
+                   (cn/entity-names c)))))
+          {}
+          (cn/component-names)))
+
+(defn- rename-old-entities [new-entities old-entities config connection]
+  (let [no-auto-migration (get config :no-auto-migration #{})]
+    (loop [ne (into [] old-entities)]
+      (when (seq ne)
+        (let [[k v] (first ne)]
+          (when-let [new-version (get new-entities k)]
+            (when (and (not= v new-version)
+                       (not (contains? no-auto-migration k)))
+              (dbc/rename-db-table!
+               connection
+               (sfu/entity-table-name k new-version)
+               (sfu/entity-table-name k v)))))
+        (recur (rest ne))))))
+
 (defn call-after-load-model-migrate
-  ([model-name f ignore-load-error]
+  ([model-name type path options f ignore-load-error] 
    (binding [gs/migration-mode true]
      (gs/in-script-mode!)
      (when (try
-             (build/load-model model-name)
-             (build/load-model-migration model-name)
+             (let [[_ config] (read-model-and-config options)
+                   model (build/load-model-migration model-name type path)
+                   old-entities (get-entities-and-versions)
+                   connection (as/connection-info (store-from-config config))]
+               (ur/init-runtime model config)
+               (clear-model-init model)
+               (build/load-model model-name)
+
+               (let [new-entities (get-entities-and-versions)]
+                 (rename-old-entities new-entities old-entities config connection))
+
+               (ur/init-runtime model config)
+               false) 
              (catch Exception ex
                (if ignore-load-error true (throw ex))))
        (f))))
-  ([model-name f]
-   (call-after-load-model-migrate model-name f false)))
+  ([model-name type path options f]
+   (call-after-load-model-migrate model-name type path options f false)))
 
 
 (defn force-call-after-load-model [model-name f]

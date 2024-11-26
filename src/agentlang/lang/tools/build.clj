@@ -11,6 +11,7 @@
             [agentlang.lang.tools.util :as tu]
             [agentlang.util :as u]
             [agentlang.util.logger :as log]
+            [clj-jgit.porcelain :as git]
             [agentlang.util.seq :as su])
   (:import (java.io File)
            (org.apache.commons.io FileUtils)
@@ -443,12 +444,20 @@
     r
     (log/error (str "failed to load components from " model-name))))
 
-(defn load-model-migration [model-name]
-  (log/info (str "loading model " model-name))
-  (let [{model :model model-root :root} (loader/load-all-model-info ["old"] model-name nil)]
-    (if (loader/load-components-from-model model model-root)
-      (:name model)
-      (log/error (str "failed to load components from " model-name)))))
+(defn load-model-migration [model-name migration-type migration-path]
+  (log/info (str "loading model for migration " migration-type " - " type " - " migration-path))
+  (case migration-type
+    "git"
+    (let [r (git/load-repo model-name)
+          current-branch (git/git-branch-current r)]
+      (git/git-checkout r :name migration-path)
+      (load-model model-name)
+      (git/git-checkout r :name current-branch))
+    "local"
+    (let [{model :model model-root :root} (loader/load-all-model-info [migration-path] model-name nil)]
+      (if (loader/load-components-from-model model model-root)
+        (:name model)
+        (log/error (str "failed to load components from " model-name))))))
 
 (defn- config-file-path [model-name]
   (str (project-dir model-name) config-edn))
