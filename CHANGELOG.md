@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1-alpha10] - 2024-11-26
+
+- Clickhouse query fix
+- Telemetry flag in config
+
 ## [0.6.1-alpha9] - 2024-11-25
 
 - nrepl current-component bug fix
