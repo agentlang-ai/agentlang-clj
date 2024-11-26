@@ -128,12 +128,14 @@
   (cond
     (or (:join query) (:left-join query))
     [(sql/format-join-sql as-table-name name false (as-table-name (:from query)) query)
+     []
      format-raw-results]
 
     (or (= w :*) (nil? (seq w)))
     (let [wa (:with-attributes query)
           clause (if wa (make-select-clause wa) "*")]
       [(str "SELECT " clause " FROM " (as-table-name entity-name))
+       []
        (partial stu/results-as-instances entity-name name)])
 
     :else
