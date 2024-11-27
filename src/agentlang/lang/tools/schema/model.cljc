@@ -1,6 +1,7 @@
 (ns agentlang.lang.tools.schema.model
   (:require [clojure.string :as s]
-            [malli.core :as m]))
+            [malli.core :as m]
+            [agentlang.global-state :as gs]))
 
 (def service-spec
   [:map
@@ -66,25 +67,29 @@
   (or (string? n) (keyword? n)))
 
 (def model-spec
-  [:map
-   [:description {:optional true} :string]
-   [:tags {:optional true} [:set :keyword]]
-   [:workspace {:optional true} :string]
-   [:config {:optional true} config-spec]
-   [:agentlang-version :string]
-   [:name [:fn model-name?]]
-   [:git-hub-url {:optional true} [:fn git-hub-url?]]
-   [:components [:vector :keyword]]
-   [:config-entity {:optional true} :keyword]
-   [:github-org {:optional true} :string]
-   [:version {:optional true} :string]
-   [:branch {:optional true} :string]
-   [:created-at {:optional true} :string]
-   [:dependencies {:optional true} [:fn dependencies?]]
-   [:owner {:optional true} :string]])
+  {(gs/agentlang-version)
+   [:map
+    [:description {:optional true} :string]
+    [:tags {:optional true} [:set :keyword]]
+    [:workspace {:optional true} :string]
+    [:config {:optional true} config-spec]
+    [:agentlang-version :string]
+    [:name [:fn model-name?]]
+    [:git-hub-url {:optional true} [:fn git-hub-url?]]
+    [:components [:vector :keyword]]
+    [:config-entity {:optional true} :keyword]
+    [:github-org {:optional true} :string]
+    [:version {:optional true} :string]
+    [:branch {:optional true} :string]
+    [:created-at {:optional true} :string]
+    [:dependencies {:optional true} [:fn dependencies?]]
+    [:owner {:optional true} :string]]})
 
-(def validate (partial m/validate model-spec))
-(def explain (partial m/explain model-spec))
+(defn get-current-model-spec []
+  (get model-spec (gs/agentlang-version)))
+
+(def validate (partial m/validate (get-current-model-spec)))
+(def explain (partial m/explain (get-current-model-spec)))
 
 (defn explain-errors [spec]
   (:errors (explain spec)))
