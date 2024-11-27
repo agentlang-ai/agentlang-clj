@@ -54,15 +54,33 @@
            result)))
       result)))
 
-(defn- model-dep? [[tag _ model-info]]
-  (and
-   (or (= tag :git) (= tag :fs))
-   (and (map? model-info) {:model model-info})))
+(defn- model-dep? [[tag url model-info]]
+  (or (= tag :git) (= tag :fs)))
+
+(defn extract-model-name-from-url [tag url]
+  (case tag
+    :git
+    (let [root (cond
+                 (s/index-of url "#") (first (s/split url #"#"))
+                 (s/index-of url "?") (first (s/split url #"\?"))
+                 :else url)]
+      (let [i0 (s/last-index-of url "/")
+            i1 (s/last-index-of url ".git")]
+        (when (and i0 i1)
+          (subs url (inc i0) i1))))
+    :fs
+    (when-let [i0 (s/last-index-of url "/")]
+      (subs url (inc i0)))
+    nil))
+
+(defn- extract-model-name-from-dep [[tag url model-info]]
+  (or (:model model-info)
+      (extract-model-name-from-url tag url)))
 
 (defn dependency-model-name [dep]
   (cond
     (or (string? dep) (keyword? dep)) dep
-    (model-dep? dep) (:model (last dep))
+    (model-dep? dep) (extract-model-name-from-dep dep)
     :else nil))
 
 (defn dependency-model-version [dep]
@@ -105,8 +123,10 @@
 
      (defn model-name-as-dir [model-name]
        (when model-name
-         (let [n (s/lower-case (s/replace (name model-name) "." "_"))]
-           (csk/->snake_case_string n))))
+         (if (string? model-name)
+           model-name
+           (let [n (s/lower-case (s/replace (name model-name) "." "_"))]
+             (csk/->snake_case_string n)))))
 
      (defn use-lang []
        (use '[agentlang.lang]))
@@ -369,7 +389,7 @@
          (callback intern-component c)))
 
      (defn load-model-dependencies [model callback]
-       (let [deps (mapv dependency-model-name (:dependencies model))]
+       (let [deps (:dependencies model)]
          (callback deps)))
 
      (defn load-model [model callback]
