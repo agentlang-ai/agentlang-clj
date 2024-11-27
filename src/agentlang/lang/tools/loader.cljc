@@ -369,7 +369,7 @@
          (callback intern-component c)))
 
      (defn load-model-dependencies [model callback]
-       (let [deps (mapv dependency-model-name (:dependencies model))]
+       (let [deps (:dependencies model)]
          (callback deps)))
 
      (defn load-model [model callback]
