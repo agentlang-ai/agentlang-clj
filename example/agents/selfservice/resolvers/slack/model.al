@@ -1,6 +1,7 @@
 {:name :Slack
  :agentlang-version "current"
  :components [:Slack.Core]
+ :channel {:tools [:Slack.Core/Chat :Slack.Core/ManagerSlackChannel]}
  :connection-types
  [{:Slack/Connection
    {:type :ApiKey

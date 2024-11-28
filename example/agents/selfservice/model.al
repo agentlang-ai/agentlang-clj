@@ -1,5 +1,5 @@
 {:name :Selfservice
- :agentlang-version "0.6.1-alpha10"
- :dependencies [[:git "https://github.com/fractl-dev/slack.git"]
-                [:git "https://github.com/fractl-dev/ticket.git"]]
+ :agentlang-version "0.6.1-alpha11"
+ :dependencies [[:fs "resolvers/slack"]
+                [:fs "resolvers/ticket"]]
  :components [:Selfservice.Core]}

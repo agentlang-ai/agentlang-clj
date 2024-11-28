@@ -26,14 +26,13 @@ Now please classify the following text based on these rules.\n\n"
 {:Agentlang.Core/Agent
  {:Name :WorkflowAgent
   :Type :planner
+  :Channels [:Slack]
   :Tools [:Selfservice.Core/Request
           :Selfservice.Core/InvokeResponseClassifierAgent
-          :Slack.Core/Chat
           :Ticket.Core/Ticket
           :Ticket.Core/TicketComment
           :Ticket.Core/GithubMember
-          :Ticket.Core/TicketManager
-          :Ticket.Core/ManagerSlackChannel]
+          :Ticket.Core/TicketManager]
   :UserInstruction "You'll receive some tickets with requests from users to join GitHub organizations. Follow the following steps:
 1. Find the manager for the ticket, you can query on the ticket Id.
 2. Find the slack-channel for the manager.

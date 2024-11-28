@@ -128,6 +128,7 @@
   :Context {:type :Map :optional true}
   :Response {:type :Any :read-only true}
   :Integrations {:listof :String :optional true}
+  :Channels {:listof :Any :optional true}
   :CacheChatSession {:type :Boolean :default true}})
 
 (defn- agent-of-type? [typ agent-instance]
@@ -192,6 +193,10 @@
     (u/throw-ex (str "Invalid name " n ", cannot contain `/` or `.`")))
   n)
 
+(defn- fetch-channel-tools [channel]
+  (when-let [tools (get-in (cn/fetch-model channel) [:channel :tools])]
+    (preproc-agent-tools-spec tools)))
+
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
  (fn [pat]
@@ -203,6 +208,8 @@
          tp (:Type attrs)
          llm (or (:LLM attrs) {:Type "openai"})
          docs (:Documents attrs)
+         channels (:Channels attrs)
+         tools (vec (concat tools (flatten (us/nonils (mapv fetch-channel-tools channels)))))
          new-attrs
          (-> attrs
              (cond->
@@ -212,6 +219,7 @@
                  delegates (assoc :Delegates delegates)
                  docs (assoc :Documents (preproc-agent-docs docs))
                  tp (assoc :Type (u/keyword-as-string tp))
+                 channels (assoc :Channels (mapv name channels))
                  llm (assoc :LLM (u/keyword-as-string llm))))]
      (assoc pat :Agentlang.Core/Agent
             (cond

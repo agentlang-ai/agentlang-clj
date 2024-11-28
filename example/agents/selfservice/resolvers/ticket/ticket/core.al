@@ -171,11 +171,6 @@
  {:TicketId {:type :Any :optional true}
   :Manager :String})
 
-(entity
- :ManagerSlackChannel
- {:Manager {:type :String :optional true}
-  :SlackChannelId {:type :String :optional true}})
-
 (event
  :LookupTicketManagerByTicketId
  {:TicketId :Any})
@@ -184,47 +179,23 @@
  :LookupTicketManagerByTicketId
  {:TicketManager {:TicketId? :LookupTicketManagerByTicketId.TicketId}})
 
-(event
- :LookupManagerSlackChannel
- {:Manager :String})
-
-(dataflow
- :LookupManagerSlackChannel
- {:ManagerSlackChannel {:Manager? :LookupManagerSlackChannel.Manager}})
-
-(defn- make-slack-channel [channel-id]
-  (cn/make-instance
-   :Ticket.Core/ManagerSlackChannel
-   {:SlackChannelId channel-id}))
-
 (defn- make-ticket-manager [n]
   (cn/make-instance
    :Ticket.Core/TicketManager
    {:Manager n}))
 
 (def default-manager (make-ticket-manager "admin@acme.com"))
-(def default-slack-channel (make-slack-channel
-                            (if test-mode
-                              "approval-requests"
-                              (or (System/getenv "SLACK_CHANNEL_ID") "C07L51XJULV"))))
 
 (def manager-db {"10000" (make-ticket-manager "mgr01@acme.com")})
-(def slack-channel-db {"mgr01@acme.com" default-slack-channel})
 
 (defn- get-manager-info [[[_ n] {where :where}]]
   (let [[_ _ v] where]
-    (case n
-      :TicketManager
+    (when (= n :TicketManager)
       (when-let [mgr (get manager-db (str v) default-manager)]
-        [(assoc mgr :TicketId v)])
-
-      :ManagerSlackChannel
-      (when-let [ch (get slack-channel-db v default-slack-channel)]
-        [(assoc ch :Manager v)]))))
+        [(assoc mgr :TicketId v)]))))
 
 (resolver
  :ManagerResolver
  {:with-methods
   {:query get-manager-info}
-  :paths [:Ticket.Core/TicketManager
-          :Ticket.Core/ManagerSlackChannel]})
+  :paths [:Ticket.Core/TicketManager]})
