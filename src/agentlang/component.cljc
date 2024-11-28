@@ -57,6 +57,11 @@
                     (some #{component-name} (:components spec)))
                   @models)))
 
+(defn add-component-to-model [model-name component-name]
+  (when-let [spec (get @models model-name)]
+    (let [cns (vec (set (conj (:components spec) component-name)))]
+      (register-model model-name (assoc spec :components cns)))))
+
 (defn get-model-version [component]
   (or (model-version (model-for-component component)) "0.0.1"))
 
