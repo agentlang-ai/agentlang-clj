@@ -5,8 +5,9 @@
 (def generic-agent-gen-instructions
   (str "Consider this generation of agent in Agentlang in `core.al` file.\n"
        (u/pretty-str
-        '(component :Joke.Core)
+        '(component :Joke.Core))
         "\n\n"
+        (u/pretty-str
         '{:Agentlang.Core/Agent
           {:Name :joke-agent
            :UserInstruction "I am an AI bot who tell jokes"
