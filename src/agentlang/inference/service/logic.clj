@@ -140,7 +140,8 @@
           delegates (model/find-agent-post-delegates agent-instance)
           ins (:UserInstruction agent-instance)]
       (log/debug (str "Response from agent " (:Name agent-instance) " - " response))
-      (if-let [agent-name (when (model/classifier-agent? agent-instance) response)]
+      (if-let [agent-name (when (or (model/classifier-agent? agent-instance)
+                                    (model/agent-gen-agent? agent-instance)) response)]
         (respond-with-agent agent-name delegates (or (get-in agent-instance [:Context :UserInstruction]) ins))
         (if (seq delegates)
           (let [n (:Name agent-instance)
@@ -198,6 +199,10 @@
           final-instruction (maybe-add-docs docs ins)
           instance (assoc instance :UserInstruction final-instruction)]
       (compose-agents instance (provider/make-completion instance)))))
+
+(defn handle-agent-gen-agent [instance]
+  (let [s (str (:UserInstruction instance) "\nGenerate an agent with `core.al` file contents and `model.al` file contents.\n")]
+    (handle-chat-agent (assoc instance :UserInstruction s))))
 
 (defn handle-classifier-agent [instance]
   (let [s (str (:UserInstruction instance) "\nReturn only the category name and nothing else.\n")]
