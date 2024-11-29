@@ -4,13 +4,13 @@
             [agentlang.util :as u]))
 
 (defn- make-internal []
-  (let [datasource (u/make-cell)]
+  (let [datasource (u/make-cell {})]
     (reify p/Store
-      (open-connection [store connection-info]
+      (open-connection [this connection-info]
         (u/safe-set
          datasource
          connection-info)
-        true)
+        this)
       (close-connection [_]
         true)
       (parse-connection-info [_ connection-info]
@@ -19,9 +19,12 @@
         (if @datasource
           @datasource
           {}))
-      (create-schema [_ component-name])
-      (drop-schema [_ component-name])
-      (drop-entity [_ entity-name])
+      (create-schema [_ component-name]
+        true)
+      (drop-schema [_ component-name]
+        true)
+      (drop-entity [_ entity-name]
+        true)
       (create-instance [_ entity-name instance]
         (i/upsert-instance entity-name instance))
       (update-instance [_ entity-name instance]

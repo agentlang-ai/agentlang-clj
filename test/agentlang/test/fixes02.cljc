@@ -8,7 +8,7 @@
             [agentlang.lang.raw :as lr]
             [agentlang.evaluator :as e]
             [agentlang.lang.datetime :as dt]
-            [clojure.java.io :as io]
+            #?(:clj [clojure.java.io :as io])
             #?(:clj [agentlang.datafmt.csv :as csv])
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))

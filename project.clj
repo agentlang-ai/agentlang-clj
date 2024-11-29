@@ -13,7 +13,7 @@
                  [org.clojure/test.check "1.1.1"]
                  [ch.qos.logback/logback-classic "1.5.3"]
                  [environ "1.2.0"]
-                 [commons-io/commons-io "2.11.0"]
+                 [commons-io/commons-io "2.15.1"]
                  [org.apache.commons/commons-exec "1.3"]
                  [cheshire "5.10.1"]
                  [com.github.seancorfield/next.jdbc "1.3.883"]
@@ -78,7 +78,20 @@
             [lein-ancient "1.0.0-RC3"]
             [cider/cider-nrepl "0.37.1"]
             [refactor-nrepl "3.10.0"]
-            [lein-classpath-jar "0.1.0"]]
+            [lein-classpath-jar "0.1.0"]
+            [lein-shell "0.5.0"]]
+
+  :cljsbuild {:builds
+              {:test {:source-paths ["src" "test"]
+                      :compiler {:main agentlang.test-runner
+                                 :output-to "target/test/test.js"
+                                 :output-dir "target/test"
+                                 :target :nodejs
+                                 :optimizations :none
+                                 :source-map true
+                                 :closure-warnings {:check-types :off}
+                                 :npm-deps false}}}}
+
 
   :middleware [lein-git-down.plugin/inject-properties]
 
@@ -115,7 +128,11 @@
                               "fig:test"  ["run" "-m" "figwheel.main" "-co" "test/ci/test.cljs.edn" "-m" "agentlang.test-runner"]
                               "fig:rtest"  ["run" "-m" "figwheel.main" "-co" "test/ci/test.cljs.edn" "-m" "agentlang.reagent-test-runner"]
                               "fig:ci"  ["run" "-m" "figwheel.main" "-co" "test/ci/ci.cljs.edn" "-m" "agentlang.test-runner"]
-                              "fig:rci"  ["run" "-m" "figwheel.main" "-co" "test/ci/ci.cljs.edn" "-m" "agentlang.reagent-test-runner"]}
+                              "fig:rci"  ["run" "-m" "figwheel.main" "-co" "test/ci/ci.cljs.edn" "-m" "agentlang.reagent-test-runner"]
+                              "test-cljs" ["do"
+                                           ["clean"]
+                                           ["cljsbuild" "once" "test"]
+                                           ["shell" "node" "target/test/test.js"]]}
                    :clean-targets  ^{:protect false} ["target" "out"]}
              :with-model {:javac-options ["-target" "11" "-source" "11" "-Xlint:-options"]
                           :resource-paths ["app"]}})

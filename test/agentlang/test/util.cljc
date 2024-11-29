@@ -120,13 +120,18 @@
      :cljs false))
 
 (store/open-default-store
- #?(:clj (when test-with-postgres
+ #?(:clj (if test-with-postgres
            {:type     :postgres
             :host     (or (System/getenv "POSTGRES_HOST") "localhost")
             :dbname   (or (System/getenv "POSTGRES_DB") "postgres")
             :username (or (System/getenv "POSTGRES_USER") "postgres")
-            :password (System/getenv "POSTGRES_PASSWORD")})
-    :cljs {:type :alasql}))
+            :password (System/getenv "POSTGRES_PASSWORD")}
+           {:type :mem
+            :always-init true
+            :dbname "test-db"})
+    :cljs {:type :mem
+           :always-init true
+           :dbname "test-db"}))
 
 (s/def ::past-and-future-date-time (s/int-in (local-date-time/to-epoch-second (local-date-time/of 2011 month/january 1 0 00 00) utc)
                                              (local-date-time/to-epoch-second (local-date-time/of 2030 month/december 31 23 59 59) utc)))

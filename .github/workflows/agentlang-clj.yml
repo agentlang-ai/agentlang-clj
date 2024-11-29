@@ -1,4 +1,4 @@
-name: "Fractl clj CI"
+name: "Agentlang clj CI"
 
 on:
   push:

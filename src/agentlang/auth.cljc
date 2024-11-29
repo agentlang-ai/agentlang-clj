@@ -3,10 +3,10 @@
             [agentlang.util :as u]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
-            [agentlang.auth.cognito]
-            [agentlang.auth.okta]
-            [agentlang.auth.keycloak]
-            [agentlang.auth.df]
+            #?(:clj [agentlang.auth.cognito])
+            #?(:clj [agentlang.auth.okta])
+            #?(:clj [agentlang.auth.keycloak])
+            #?(:clj [agentlang.auth.df])
             [agentlang.resolver.registry :as rr]
             [agentlang.resolver.authentication :as authn]
             #?(:clj [agentlang.resolver.redis :as cache])))

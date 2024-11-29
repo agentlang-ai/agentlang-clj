@@ -1,7 +1,8 @@
 (ns agentlang.auth.core
   (:require [agentlang.evaluator :as ev]
             [agentlang.component :as cn]
-            [agentlang.util.logger :as log]))
+            #?(:clj [agentlang.util.logger :as log])
+            #?(:cljs [agentlang.util.jslogger :as log])))
 
 (def service-tag :service)
 
@@ -11,7 +12,7 @@
 (defmulti make-authfn service-tag)
 (defmulti user-login service-tag)
 (defmulti verify-token service-tag)
-;; Return user details that you want to attach in EventContext. 
+;; Return user details that you want to attach in EventContext.
 ;; Include `username` and `sub`.
 (defmulti session-user service-tag)
 ;; Can be same as `session-user`.

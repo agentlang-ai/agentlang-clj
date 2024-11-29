@@ -1,25 +1,23 @@
 (ns agentlang.auth.jwt
-  (:require [buddy.core.keys.jwk.proto :as buddy-jwk]
+  (:require [clojure.string :as str]
+            [buddy.core.keys.jwk.proto :as buddy-jwk]
             [buddy.sign.jwt :as jwt]
             [clojure.algo.generic.functor :refer [fmap]]
-            [clojure.string :as str]
-            #?(:clj [agentlang.util.logger :as log]
-               :cljs [agentlang.util.jslogger :as log])
+            [agentlang.util.logger :as log]
             [agentlang.datafmt.json :as json])
-  #?(:clj (:import [org.jose4j.jwt JwtClaims]
-                   [org.jose4j.jwt.consumer JwtConsumer JwtConsumerBuilder])))
+  (:import [org.jose4j.jwt JwtClaims]
+           [org.jose4j.jwt.consumer JwtConsumer JwtConsumerBuilder]))
 
 (defn decode [token]
-  #?(:clj
-     (let [^JwtConsumer consumer (-> (JwtConsumerBuilder.)
-                                     (.setSkipAllValidators)
-                                     (.setDisableRequireSignature)
-                                     (.setSkipSignatureVerification)
-                                     (.build))
-           ^JwtClaims claims (.processToClaims consumer token)]
-       (json/decode (.getRawJson claims)))))
+  (let [^JwtConsumer consumer (-> (JwtConsumerBuilder.)
+                                  (.setSkipAllValidators)
+                                  (.setDisableRequireSignature)
+                                  (.setSkipSignatureVerification)
+                                  (.build))
+        ^JwtClaims claims (.processToClaims consumer token)]
+    (json/decode (.getRawJson claims))))
 
-;; Copied from `https://github.com/sikt-no/clj-jwt/blob/main/src/no/nsd/clj_jwt.clj` 
+;; Copied from `https://github.com/sikt-no/clj-jwt/blob/main/src/no/nsd/clj_jwt.clj`
 ;; because not able to add it as a dependency in `project.clj`.
 ;; Opened an issue for that: https://github.com/sikt-no/clj-jwt/issues/2
 ;; Will remove this code once the issue is resolved.

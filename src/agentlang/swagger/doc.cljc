@@ -1,7 +1,7 @@
 (ns agentlang.swagger.doc
   (:require [agentlang.component :as cn]
             [agentlang.util.http :as uh]
-            [cheshire.core :as json]
+            #?(:clj [cheshire.core :as json])
             [clojure.string :as str]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
@@ -296,4 +296,5 @@
                      {:type "string",
                       :nullable true,
                       :example nil}}}}}}}) entities)))}}]
-    (json/generate-string swag-spec)))
+    #?(:clj (json/generate-string swag-spec)
+       :cljs (.stringify js/JSON (clj->js swag-spec)))))

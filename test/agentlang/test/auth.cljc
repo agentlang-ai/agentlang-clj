@@ -1,7 +1,8 @@
 (ns agentlang.test.auth
   (:require #?(:clj [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
-            [agentlang.util.logger :as log]
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])
             [agentlang.util :as u]
             [agentlang.auth.oauth2 :as auth]))
 

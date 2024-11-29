@@ -6,6 +6,7 @@
             #?(:clj [clojure.java.io :as io])
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
+            #?(:cljs [cljs.reader :as reader])
             [agentlang.datafmt.json :as json])
   #?(:clj
      (:require [net.cgrand.macrovich :as macros])
@@ -314,7 +315,7 @@
 
 (def parse-string
   #?(:clj read-string
-     :cljs cljs.reader/read-string))
+     :cljs reader/read-string))
 
 (defn safe-read-string [s]
   (try
