@@ -489,52 +489,27 @@
               [rs]
               rs)
          env env, values []]
-    (if-let [r (first rs)]
-      (cond
-        (fn? r)
-        (let [x (r env nil)
-              [v new-env]
-              (if (result-with-env? x)
-                x
-                [x env])]
-          (recur
-           (rest rs)
-           new-env
-           (conj values v)))
+    (let [r (first rs)]
+      (if (nil? r)
+        [values env]
+        (cond
+          (fn? r)
+          (let [x (r env nil)
+                [v new-env]
+                (if (result-with-env? x)
+                  x
+                  [x env])]
+            (recur
+             (rest rs)
+             new-env
+             (conj values v)))
 
-        (vector? r)
-        (let [[v new-env] (evaluate-id-result env r)]
-          (recur (rest rs) new-env (conj values v)))
+          (vector? r)
+          (let [[v new-env] (evaluate-id-result env r)]
+            (recur (rest rs) new-env (conj values v)))
 
-        :else
-        (recur (rest rs) env (conj values r)))
-      [values env])))
-
-(defn- evaluate-id-query [env store query params running-result merge-operator]
-  (let [[p env] (evaluate-id-result env params)
-        rs (store/do-query store query p)
-        all-ids (mapv su/first-val rs)]
-    (if (and (seq running-result) (= :and merge-operator))
-      [(set/intersection (set running-result) (set all-ids)) env]
-      [(concat running-result all-ids) env])))
-
-(defn- evaluate-id-queries
-  "Evaluate unique IDs from queries into index tables. Each entry in the sequence id-queries will
-   be a map with two possible keys - :result and :query. If there is a :result, that will be
-   bound to an ID statically evaluated by the compiler. Otherwise, execute the query and find the ID.
-   Return the final sequence of IDs. Merge operator is either :and or :or. This is used to build intersections
-   or unions of ids."
-  [env store id-queries merge-operator]
-  (loop [idqs id-queries, env env, result []]
-    (if-let [idq (first idqs)]
-      (if-let [r (:result idq)]
-        (let [[obj env] (evaluate-id-result env [r])]
-          (recur (rest idqs) env (conj result (first obj))))
-        (let [query (:query idq)
-              [q p] [(first query) (seq (rest query))]
-              [rs env] (evaluate-id-query env store q p result merge-operator)]
-          (recur (rest idqs) env rs)))
-      [result env])))
+          :else
+          (recur (rest rs) env (conj values r)))))))
 
 (defn- normalize-raw-query [env q]
   (let [[wc env] (let [where-clause (:where q)]
