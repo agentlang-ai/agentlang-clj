@@ -448,16 +448,20 @@
   (log/info (str "loading model for migration " migration-type " - " type " - " migration-path))
   (case migration-type
     "git"
-    (let [r (git/load-repo model-name)
+    (let [paths (tu/get-system-model-paths)
+          r (git/load-repo (or model-name (first paths)))
           current-branch (git/git-branch-current r)]
       (git/git-checkout r :name migration-path)
       (load-model model-name)
-      (git/git-checkout r :name current-branch))
+      (let [{model :model} (loader/load-all-model-info paths model-name nil)]
+        (git/git-checkout r :name current-branch)
+        model))
     "local"
-    (let [{model :model model-root :root} (loader/load-all-model-info [migration-path] model-name nil)]
+    (let [[model model-root] (loader/read-model (loader/verified-model-file-path
+                                                 u/model-script-name migration-path nil))]
       (if (loader/load-components-from-model model model-root)
-        (:name model)
-        (log/error (str "failed to load components from " model-name))))))
+        model
+        (log/error (str "failed to load components from " migration-path))))))
 
 (defn- config-file-path [model-name]
   (str (project-dir model-name) config-edn))

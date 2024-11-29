@@ -8,6 +8,7 @@
    [agentlang.util.seq :as su]
    [agentlang.util.logger :as log]
    [agentlang.util.runtime :as ur]
+   [agentlang.store :as store]
    [agentlang.store.util :as sfu]
    [agentlang.store :as as]
    [agentlang.store.db-common :as dbc]
@@ -17,7 +18,6 @@
    [agentlang.component :as cn]
    [agentlang.evaluator :as e]
    [agentlang.evaluator.intercept :as ei]
-   [agentlang.store :as store]
    [agentlang.global-state :as gs]
    [agentlang.lang :as ln]
    [agentlang.lang.rbac :as lr]
@@ -367,10 +367,6 @@
   ([model-name f]
    (call-after-load-model model-name f false)))
 
-(defn- clear-model-init [model-name]
-  (as/remove-inited-component model-name)
-  (cn/unregister-model model-name))
-
 (defn- get-entities-and-versions []
   (reduce (fn [entities c]
             (merge
@@ -382,44 +378,50 @@
           {}
           (cn/component-names)))
 
-(defn- rename-old-entities [new-entities old-entities config connection]
+(defn- rename-entity-table [connection entity-name old-version new-version]
+  (try
+    (let [old-table-name (sfu/entity-table-name entity-name old-version)
+          new-table-name (sfu/entity-table-name entity-name new-version)]
+      (dbc/rename-db-table! connection new-table-name old-table-name)
+      (println "Table renamed: " old-table-name "to" new-table-name))
+    (catch Exception e
+      (log/error
+       (str "Table not renamed - " entity-name " - " old-version " - " new-version))
+      (log/error e))))
+
+(defn- rename-old-entities [new-entities old-entities old-agentlang-version config connection]
   (let [no-auto-migration (get config :no-auto-migration #{})]
     (loop [ne (into [] old-entities)]
       (when (seq ne)
         (let [[k v] (first ne)]
-          (when-let [new-version (get new-entities k)]
-            (when (and (not= v new-version)
-                       (not (contains? no-auto-migration k)))
-              (dbc/rename-db-table!
-               connection
-               (sfu/entity-table-name k new-version)
-               (sfu/entity-table-name k v)))))
+          (when (and (not (contains? no-auto-migration k))
+                     (not (contains? no-auto-migration (keyword (namespace k)))))
+            (when-let [new-version (get new-entities k)]
+              (if (contains? (set (cn/internal-component-names)) (keyword (namespace k)))
+                (when (not= old-agentlang-version new-version)
+                  (rename-entity-table connection k old-agentlang-version new-version))
+                (when (not= v new-version)
+                  (rename-entity-table connection k v new-version))))))
         (recur (rest ne))))))
 
 (defn call-after-load-model-migrate
   ([model-name type path options f ignore-load-error] 
    (binding [gs/migration-mode true]
      (gs/in-script-mode!)
-     (when (try
-             (let [[_ config] (read-model-and-config options)
-                   model (build/load-model-migration model-name type path)
-                   old-entities (get-entities-and-versions)
-                   connection (as/connection-info (store-from-config config))]
-               (ur/init-runtime model config)
-               (clear-model-init model)
-               (build/load-model model-name)
-
-               (let [new-entities (get-entities-and-versions)]
-                 (rename-old-entities new-entities old-entities config connection))
-
-               (ur/init-runtime model config)
-               false) 
-             (catch Exception ex
-               (if ignore-load-error true (throw ex))))
-       (f))))
+     (try
+       (let [[_ config] (read-model-and-config options)
+             model (build/load-model-migration model-name type path)
+             old-entities (get-entities-and-versions)
+             connection (as/connection-info (store-from-config config))]
+         (cn/unregister-model (:name model))
+         (build/load-model model-name)
+         (let [new-entities (get-entities-and-versions)]
+           (rename-old-entities new-entities old-entities (:agentlang-version model) config connection))
+         (f))
+       (catch Exception ex
+         (if ignore-load-error true (throw ex))))))
   ([model-name type path options f]
    (call-after-load-model-migrate model-name type path options f false)))
-
 
 (defn force-call-after-load-model [model-name f]
   (try

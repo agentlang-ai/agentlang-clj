@@ -298,17 +298,18 @@
                                                     (ur/read-model-and-config options)
                                                     (agentlang-nrepl-handler (first %) options))))
                   :migrate           (fn [args]
-                                       (if (and (= 3 (count args))
-                                                (contains? #{"git" "local"} (second args)))
-                                         (ur/call-after-load-model-migrate
-                                          (first args) (second args) (last args) options
-                                          (fn []
-                                            (run-migrations
-                                             (ur/read-model-and-config options)
-                                             (agentlang-nrepl-handler (first args) options))))
-                                         (do
-                                           (println "Correct usage:\n")
-                                           (print-help))))
+                                       (let [args (if (= 3 (count args)) args (cons nil args))]
+                                         (if (and (= 3 (count args))
+                                                  (contains? #{"git" "local"} (second args)))
+                                           (ur/call-after-load-model-migrate
+                                            (first args) (second args) (last args) options
+                                            (fn []
+                                              (run-migrations
+                                               (ur/read-model-and-config options)
+                                               (agentlang-nrepl-handler (first args) options))))
+                                           (do
+                                             (println "Correct usage:\n")
+                                             (print-help)))))
                   :compile           #(println (build/compile-model (first %)))
                   :build             #(println (build/standalone-package (first %)))
                   :install           #(println (build/install-model nil (first %)))
