@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1-alpha12] - 2024-11-29
+
+- Support kernel model version for Agentlang.Core component
+- Resolver query preprocessor bug fix for boolean values
+
 ## [0.6.1-alpha11] - 2024-11-27
 
 - Model name in git dependencies made optional
