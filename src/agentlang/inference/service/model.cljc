@@ -19,7 +19,7 @@
             [agentlang.global-state :as gs]
             [agentlang.inference.service.planner :as planner]))
 
-(component :Agentlang.Core)
+(component :Agentlang.Core {:model :Agentlang})
 
 (entity
  :Agentlang.Core/LLM
