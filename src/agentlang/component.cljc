@@ -30,8 +30,7 @@
     :raw
     :-*-containers-*-
     :Agentlang.Kernel.UserApp
-    :Agentlang.Kernel.Repl
-    :Agentlang.Core})
+    :Agentlang.Kernel.Repl})
 
 (def non-instance-user-attr-keys
   #{type-tag-key id-attr type-key dirty-key})
@@ -870,7 +869,8 @@
     attributes))
 
 (defn- validated-attribute-values [recname recversion schema attributes]
-  (let [r (check-attribute-names recname schema attributes)]
+  (let [r (check-attribute-names recname schema attributes)
+        icns (set (internal-component-names))]
     (or (error? r)
         (loop [schema schema, attributes attributes]
           (if-let [[aname atype] (first schema)]
@@ -880,10 +880,8 @@
                     [component aref] (li/split-path typname)]
                 (recur
                  (rest schema)
-                 (if-let [ascm (find-attribute-schema 
-                                component 
-                                (if (contains? (set (internal-component-names)) component)
-                                  nil recversion)
+                 (if-let [ascm (find-attribute-schema
+                                component (when-not (contains? icns component) recversion)
                                 aref)]
                    (apply-attribute-validation
                     aname ascm (preproc-attribute-value attributes aname typname))
