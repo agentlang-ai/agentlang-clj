@@ -63,14 +63,14 @@
      (when-not gs/migration-mode
        (when (cn/component-exists? ns-name)
          (cn/remove-component ns-name)))
+     (when-let [model-name (:model spec)]
+       (cn/add-component-to-model model-name n))
      (let [r (cn/create-component
               ns-name
               (when spec
                 (validate-component-spec spec)))]
        (when-let [imps (:clj-import spec)]
          (li/do-clj-import imps))
-       (when-let [model-name (:model spec)]
-         (cn/add-component-to-model model-name n))
        (and (raw/component n spec)
             r))))
   ([n] (component n nil)))
