@@ -88,13 +88,12 @@
 (defn get-current-model-spec []
   (get model-spec (gs/agentlang-version)))
 
-(defn- call-validation
-  ([vfn runtime-version model]
-   (vfn (or (when runtime-version
-              (get model-spec runtime-version))
-            (get-current-model-spec))
-        model))
-  ([vfn model] (call-validation vfn nil model)))
+(defn- call-validation [vfn model]
+  (let [rv (:agentlang-version model)
+        runtime-version (if (or (not rv) (= rv "current"))
+                          (gs/agentlang-version)
+                          rv)]
+    (vfn (get model-spec runtime-version) model)))
 
 (def validate (partial call-validation m/validate))
 (def explain (partial call-validation m/explain))
