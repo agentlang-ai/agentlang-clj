@@ -21,5 +21,5 @@
   :LLM :llm01
   :Input :EmailAnalyzer.Core/InvokeEmailHandler}}
 
-;; {:EmailAnalyzer.Core/Company {:Name "acme"}}
-;; {:EmailAnalyzer.Core/Company {:Name "abc"}}
+{:EmailAnalyzer.Core/Company {:Name "acme"}}
+{:EmailAnalyzer.Core/Company {:Name "abc"}}
