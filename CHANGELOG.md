@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1-alpha13] - 2024-12-02
+
+- Ability to pass runtime version to schema validator
+- Fix model version for components with explicit model-name in spec
+
 ## [0.6.1-alpha12] - 2024-11-29
 
 - Support kernel model version for Agentlang.Core component
