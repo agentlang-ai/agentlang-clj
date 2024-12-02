@@ -18,3 +18,6 @@
     (if has-type?
       `[:map ~@new-schema]
       new-schema)))
+
+(defn apply-diffs [schema diffs]
+  (reduce (fn [s d] (apply-diff s d)) schema diffs))

@@ -89,10 +89,13 @@
     [:owner {:optional true} :string]]})
 
 (def diffs {})
-
 ;;;; example diff entry
-;; {"0.6.1-alpha13"
+;; {"0.6.1"
 ;;  [[:- :tags] [:- :workspace] [:workspace :string]]}
+
+(defn- find-preceding-diffs [vers]
+  (let [ks (filter #(pos? (compare vers %)) (keys diffs))]
+    (vals (into (sorted-map) (select-keys diffs ks)))))
 
 (defn- get-model-spec [runtime-version model]
   (let [spec (get model-spec runtime-version)]
@@ -100,7 +103,7 @@
         (if-let [diff (get diffs runtime-version)]
           (if-let [root-spec (or (get model-spec (:root-agentlang-version model))
                                  spec)]
-            (diff/apply-diff root-spec diff)
+            (diff/apply-diffs root-spec (concat (find-preceding-diffs runtime-version) [diff]))
             (u/throw-ex (str "Failed to load a root-specification for model schema diffm, version is " runtime-version)))
           (u/throw-ex (str "No model schema or diff for version: " runtime-version))))))
 
