@@ -6,20 +6,25 @@
 
 (entity
  :AccountEntry
- {:Company :String
-  :Id :Identity
+ {:Id :Identity
   :Description :String
   :Type {:oneof ["income" "expense"]}
   :Amount :Decimal
   :Date :String})
 
+(relationship
+ :CompanyAccountEntry
+ {:meta {:contains [:Company :AccountEntry]}})
+
 {:Agentlang.Core/Agent
  {:Name :EmailHandlingAgent
   :Type :planner
-  :Tools [:EmailAnalyzer.Core/AccountEntry]
-  :UserInstruction "Convert an email message to instances of account entry."
+  :Tools [:EmailAnalyzer.Core/AccountEntry
+          :EmailAnalyzer.Core/CompanyAccountEntry]
+  :UserInstruction (str "Convert an email message to instances of account entry under a specific company. "
+                        "The company already exists, do not try to create it.")
   :LLM :llm01
   :Input :EmailAnalyzer.Core/InvokeEmailHandler}}
 
 {:EmailAnalyzer.Core/Company {:Name "acme"}}
-{:EmailAnalyzer.Core/Company {:Name "abc"}}
+{:EmailAnalyzer.Core/Company {:Name "abc ltd"}}
