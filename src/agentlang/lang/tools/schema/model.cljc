@@ -1,7 +1,9 @@
 (ns agentlang.lang.tools.schema.model
   (:require [clojure.string :as s]
             [malli.core :as m]
-            [agentlang.global-state :as gs]))
+            [agentlang.util :as u]
+            [agentlang.global-state :as gs]
+            [agentlang.lang.tools.schema.diff :as diff]))
 
 (def service-spec
   [:map
@@ -74,6 +76,7 @@
     [:workspace {:optional true} :string]
     [:config {:optional true} config-spec]
     [:agentlang-version :string]
+    [:root-agentlang-version {:optional true} :string]
     [:name [:fn model-name?]]
     [:git-hub-url {:optional true} [:fn git-hub-url?]]
     [:components [:vector :keyword]]
@@ -85,15 +88,31 @@
     [:dependencies {:optional true} [:fn dependencies?]]
     [:owner {:optional true} :string]]})
 
-(defn get-current-model-spec []
-  (get model-spec (gs/agentlang-version)))
+(def diffs {})
+;;;; example diff entry
+;; {"0.6.1"
+;;  [[:- :tags] [:- :workspace] [:workspace :string]]}
+
+(defn- find-preceding-diffs [vers]
+  (let [ks (filter #(pos? (compare vers %)) (keys diffs))]
+    (vals (into (sorted-map) (select-keys diffs ks)))))
+
+(defn- get-model-spec [runtime-version model]
+  (let [spec (get model-spec runtime-version)]
+    (or spec
+        (if-let [diff (get diffs runtime-version)]
+          (if-let [root-spec (or (get model-spec (:root-agentlang-version model))
+                                 spec)]
+            (diff/apply-diffs root-spec (concat (find-preceding-diffs runtime-version) [diff]))
+            (u/throw-ex (str "Failed to load a root-specification for model schema diffm, version is " runtime-version)))
+          (u/throw-ex (str "No model schema or diff for version: " runtime-version))))))
 
 (defn- call-validation [vfn model]
   (let [rv (:agentlang-version model)
         runtime-version (if (or (not rv) (= rv "current"))
                           (gs/agentlang-version)
                           rv)]
-    (vfn (get model-spec runtime-version) model)))
+    (vfn (get-model-spec runtime-version model) model)))
 
 (def validate (partial call-validation m/validate))
 (def explain (partial call-validation m/explain))
