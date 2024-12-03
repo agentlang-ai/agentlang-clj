@@ -6,8 +6,8 @@
   (str "Consider this generation of agent in Agentlang in `core.al` file.\n"
        (u/pretty-str
         '(component :Joke.Core))
-        "\n\n"
-        (u/pretty-str
+       "\n\n"
+       (u/pretty-str
         '{:Agentlang.Core/Agent
           {:Name :joke-agent
            :UserInstruction "I am an AI bot who tell jokes"
@@ -32,7 +32,124 @@
        "For simplicity, you can always keep `:agentlang-version` as \"current\"."
        "The `:components` must be a vector of the component name, hence `[:Joke.Core]`"
        "\n\n When a prompt asks you to generate an agent, you must understand the use case of the agent and"
-       "generate these two files."))
+       "generate these two files."
+       "\n\n\n Remember, you don't need to provide description, you just provide this: {:core-file <generated-core.al-file> :model-file <generated-model.al-file>}"
+       "\n\n Also, don't provide any backticks."
+       "\n\n Let's try another example."
+       "\nFollowing is an example of an expense report generator agent with support of reading bill image using ocr agent provided with agentlang."
+       "\n\n This is the `core.al` for `Expense`.\n"
+       (u/pretty-str
+        '(component :Expense.Core))
+       "\n\n"
+       (u/pretty-str
+        '(entity
+          :Expense.Core/Expense
+          {:Id :Identity
+           :Title :String
+           :Amount :Double}))
+       "\n\n"
+       (u/pretty-str
+         '{:Agentlang.Core/Agent
+           {:Name :receipt-ocr-agent
+            :Type :ocr
+            :UserInstruction (str "Analyse the image of a receipt and return only the items and their amounts. "
+                                  "No need to include sub-totals, totals and other data.")}})
+       "\n\n"
+       (u/pretty-str
+        '{:Agentlang.Core/Agent
+          {:Name :expense-agent
+           :Type :planner
+           :UserInstruction "Convert an expense report into individual instances of the expense entity."
+           :Tools [:Expense.Core/Expense]
+           :Input :Expense.Core/SaveExpenses
+           :Delegates {:To :receipt-ocr-agent :Preprocessor true}}})
+       "\n\n\n"
+       "Now let's see the `model.al` file.\n"
+       (u/pretty-str
+        '{:name :Expense
+          :agentlang-version "current"
+          :components [:Expense.Core]})
+       "\n\n"
+       "\n This is a slighly more complicated example which has multiple agents and also, has Agentlang entity defined.\n"
+       "First, we have an `:Expense.Core/Expense` entity to store `Expense` information, it contains `:Id`, `:Title` and `:Amount` attributes.\n"
+       "Then, an `Agent` is defined with `:receipt-ocr-agent` which is of type `:ocr` which can analyze the image of a receipt and return items and amounts.\n"
+       "There are following types of `Agent` that is supported on `Agentlang`: `:ocr`, `:classifier`, `:planner`, `:eval`, `:chat`.\n"
+       "\n Next there is another `Agent` named `:expense-agent` which is of type `:planner`, a `:planner` agent can have tools.\n"
+       "The `:Tools` used here is the entity `:Expense.Core/Expense`, the input is `:Expense.Core/SaveExpenses`.\n"
+       "It delegeates to `:receipt-ocr-agent` for generating items and amounts from image and then, it converts the expense report into individual instances of expense entity.\n"
+       "\n The entry of `Agent` and POST request will be sent to `:Expense.Core/SaveExpenses` and it will trigger the `receipt-ocr-agent` for the operation.\n\n"
+       "\n Let's look at another example of an agent that can generate weather info for any city.\n"
+       "This is the `core.al` for `Weather.Service`.\n\n"
+       (u/pretty-str
+        '(component :Weather.Service.Core))
+       "\n\n"
+       (u/pretty-str
+        '(entity
+          :Weather.Service.Core/Weather
+          {:Id :Identity
+           :Date :Now
+           :City {:type :String :indexed true}
+           :Temperature :Double
+           :Description {:type :String :optional true}}))
+       "\n\n"
+       (u/pretty-str
+        '(event
+          :Weather.Service.Core/GetWeatherForCity
+          {:meta {:doc "Get the latest weather report for a given city."}
+           :City :String}))
+       "\n\n"
+       (u/pretty-str
+        '(dataflow
+          :Weather.Service.Core/GetWeatherForCity
+          {:Weather?
+           {:where [:= :City :Weather.Service.Core/GetWeatherForCity.City]
+            :order-by [:Date]}
+           :as [:Result]}
+          :Result))
+       "\n\n"
+       (u/pretty-str
+        '{:Agentlang.Core/LLM
+          {:Type "openai"
+           :Name "llm01"
+           :Config {:ApiKey (agentlang.util/getenv "OPENAI_API_KEY")
+                    :EmbeddingApiEndpoint "https://api.openai.com/v1/embeddings"
+                    :EmbeddingModel "text-embedding-3-small"
+                    :CompletionApiEndpoint "https://api.openai.com/v1/chat/completions"
+                    :CompletionModel "gpt-3.5-turbo"}}})
+       "\n\n"
+       (u/pretty-str
+        '{:Agentlang.Core/Agent
+          {:Name "weather-planner-agent"
+           :Type "planner"
+           :ToolComponents ["Weather.Service.Core"]
+           :UserInstruction "You are an agent that figures out which tool to use to answer a user query."
+           :LLM "llm01"}})
+       "\n\n\n\n"
+       "Now, let's see the `model.al` file.\n"
+       (u/pretty-str
+        '{:name :Weather.Service
+          :agentlang-version "current"
+          :components [:Weather.Service.Core]})
+       "\n\n"
+       "\n There are more things happening here than previous examples.\n"
+       "First, we define an entity like, previous example. We also define an agentlang event, which has `:City` attributes\n"
+       "Now, if there is event, means there will be dataflow, in this dataflow, we find the weather of a city and order it by Date.\n"
+       "There's new description of `Agentlang.Core/LLM`, we can use this to define a custom name for llm and supply that to `Agent` like, we did.\n"
+       "\n This helps us customize the LLM models and APIs\n"
+       "Finally, we define, an `Agent` called, `weather-planner-agent` which is of type `planner`, this uses, the `:ToolComponents` which means it can use the whole component as tool.\n"
+       "It also, uses the custom LLM defined as llm01.\n"
+       "\n\n Finally, we have the simple model.al."
+       "\n\n Remember to just return, a proper clojure map with `{:core-file <core.al-contents> :model-file <model.al-contents>}`\n"
+       "The `core.al` contents must be a properly formatted data with `(do ...)` wrapper which must be valid clojure structure, you learned above.\n"
+       "For `model.al` you don't need to wrap it in `(do ...)` structure, as it is just a simple map."
+       "Do not reutrn any plain text in your response, if required only have clojure comments."
+       "Read the information and don't try to deviate from the above described structures of agents."))
+
+
+
+
+
+
 
 (defn with-instructions [instance]
   (assoc instance :UserInstruction
