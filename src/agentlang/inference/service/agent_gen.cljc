@@ -145,12 +145,6 @@
        "Do not reutrn any plain text in your response, if required only have clojure comments."
        "Read the information and don't try to deviate from the above described structures of agents."))
 
-
-
-
-
-
-
 (defn with-instructions [instance]
   (assoc instance :UserInstruction
          (str generic-agent-gen-instructions
