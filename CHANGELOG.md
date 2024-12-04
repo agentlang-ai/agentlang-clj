@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1-alpha14] - 2024-12-04
+- Schema diff support
+- Agent generation support using `:agent-gen` type of agent
+
 ## [0.6.1-alpha13] - 2024-12-02
 
 - Ability to pass runtime version to schema validator
