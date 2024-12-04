@@ -151,7 +151,8 @@
        "For `model.al` you don't need to wrap it in `(do ...)` structure, as it is just a simple map.\n"
        "Do not reutrn any plain text in your response, if required only have clojure comments.\n"
        "Read the information and don't try to deviate from the above described structures of agents.\n"
-       "Remeber the format should be a clojure format and must be a clojure map. It should be validated. Don't generate YAML format or any other language code, it should be Agentlang agent described above and don't deviate from the format and example provided."))
+       "Remeber the format should be a clojure format and must be a clojure map. It should be validated. Don't generate YAML format or any other language code, it should be Agentlang agent described above and don't deviate from the format and example provided.\n\n"
+       "Don't have the response with string \"No delegate with name\", just provide a proper clojure map with {:core-file <core.al-contents> :model-file <model.al-contents>}"))
 
 (defn with-instructions [instance]
   (assoc instance :UserInstruction
