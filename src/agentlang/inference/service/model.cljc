@@ -17,7 +17,8 @@
             [agentlang.evaluator :as e]
             [agentlang.lang.internal :as li]
             [agentlang.global-state :as gs]
-            [agentlang.inference.service.planner :as planner]))
+            [agentlang.inference.service.planner :as planner]
+            [agentlang.inference.service.agent-gen :as agent-gen]))
 
 (component :Agentlang.Core {:model :Agentlang})
 
@@ -136,6 +137,7 @@
 (def ocr-agent? (partial agent-of-type? "ocr"))
 (def classifier-agent? (partial agent-of-type? "classifier"))
 (def planner-agent? (partial agent-of-type? "planner"))
+(def agent-gen-agent? (partial agent-of-type? "agent-gen"))
 (def eval-agent? (partial agent-of-type? "eval"))
 
 (defn- preproc-agent-tools-spec [tools]
@@ -216,6 +218,7 @@
      (assoc pat :Agentlang.Core/Agent
             (cond
               (planner-agent? new-attrs) (planner/with-instructions new-attrs)
+              (agent-gen-agent? new-attrs) (agent-gen/with-instructions new-attrs)
               (classifier-agent? new-attrs) (classifier-with-instructions new-attrs)
               :else new-attrs)))))
 
