@@ -21,6 +21,15 @@
 
 (component :Agentlang.Core {:model :Agentlang})
 
+(def subscription-events (atom {}))
+
+(defn register-subscription-event [resolver-model input-event]
+  (swap! subscription-events assoc resolver-model input-event)
+  resolver-model)
+
+(defn get-subscription-event [resolver-model]
+  (get @subscription-events resolver-model))
+
 (entity
  :Agentlang.Core/LLM
  {:Type {:type :String :default "openai"} ; e.g "openai"
@@ -197,6 +206,11 @@
   (when-let [tools (get-in (cn/fetch-model channel) [:channel :tools])]
     (preproc-agent-tools-spec tools)))
 
+(defn- maybe-register-subscription-handlers! [channels input]
+  (doseq [channel channels]
+    (when (get-in (cn/fetch-model channel) [:channel :subscriptions])
+      (register-subscription-event channel input))))
+
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
  (fn [pat]
@@ -221,6 +235,8 @@
                  tp (assoc :Type (u/keyword-as-string tp))
                  channels (assoc :Channels (mapv name channels))
                  llm (assoc :LLM (u/keyword-as-string llm))))]
+     (when (seq channels)
+       (maybe-register-subscription-handlers! channels (keyword input)))
      (assoc pat :Agentlang.Core/Agent
             (cond
               (planner-agent? new-attrs) (planner/with-instructions new-attrs)
