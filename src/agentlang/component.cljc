@@ -1154,6 +1154,17 @@
        result)))
   ([component] (entity-names component true)))
 
+(defn all-entity-names-and-versions []
+  (reduce
+   (fn [entities c]
+     (merge
+      entities
+      (apply
+       merge
+       (map #(do {% (get-model-version c)})
+            (entity-names c false)))))
+   {} (component-names)))
+
 (def event-names (partial record-names-by-type :event))
 
 (defn relationship-names [component]

@@ -50,21 +50,6 @@
        (h/run-server evaluator server-cfg nrepl-handler))))
   ([model-info nrepl-handler] (run-service nil model-info nrepl-handler)))
 
-(defn run-migrations
-  [model-info _]
-  (let [[[_ _] config] (ur/prepare-runtime nil model-info)]
-    (when-let [server-cfg (ur/make-server-config config)]
-      (try
-        (let
-         [r (ev/eval-all-dataflows
-             (cn/make-instance
-              {:Agentlang.Kernel.Lang/Migrations {}}))]
-          (log/info (str "migrations result: " r))
-          r)
-        (catch Exception ex
-          (log/error (str "migrations event failed: " (.getMessage ex)))
-          (log/error ex)))
-      (log/info (str "Migrations config - " server-cfg)))))
 
 (defn generate-swagger-doc [model-name args]
   (let [model-path (first args)]
@@ -302,11 +287,7 @@
                                          (if (and (= 3 (count args))
                                                   (contains? #{"git" "local"} (second args)))
                                            (ur/call-after-load-model-migrate
-                                            (first args) (second args) (last args) options
-                                            (fn []
-                                              (run-migrations
-                                               (ur/read-model-and-config options)
-                                               (agentlang-nrepl-handler (first args) options))))
+                                            (first args) (second args) (last args) options)
                                            (do
                                              (println "Correct usage:\n")
                                              (print-help)))))

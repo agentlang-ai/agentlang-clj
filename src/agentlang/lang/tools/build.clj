@@ -12,7 +12,8 @@
             [agentlang.util :as u]
             [agentlang.util.logger :as log]
             [clj-jgit.porcelain :as git]
-            [agentlang.util.seq :as su])
+            [agentlang.util.seq :as su]
+            [agentlang.component :as cn])
   (:import (java.io File)
            (org.apache.commons.io FileUtils)
            (org.apache.commons.io.filefilter IOFileFilter WildcardFileFilter)))
@@ -444,24 +445,33 @@
     r
     (log/error (str "failed to load components from " model-name))))
 
-(defn load-model-migration [model-name migration-type migration-path]
-  (log/info (str "loading model for migration " migration-type " - " type " - " migration-path))
-  (case migration-type
-    "git"
-    (let [paths (tu/get-system-model-paths)
-          r (git/load-repo (or model-name (first paths)))
-          current-branch (git/git-branch-current r)]
-      (git/git-checkout r :name migration-path)
-      (load-model model-name)
-      (let [{model :model} (loader/load-all-model-info paths model-name nil)]
-        (git/git-checkout r :name current-branch)
-        model))
-    "local"
-    (let [[model model-root] (loader/read-model (loader/verified-model-file-path
-                                                 u/model-script-name migration-path nil))]
-      (if (loader/load-components-from-model model model-root)
-        model
-        (log/error (str "failed to load components from " migration-path))))))
+(defn load-model-migration 
+  ([model-name migration-type path-or-branch model-paths]
+   (log/info (str "loading model for migration " migration-type " - " type " - " path-or-branch))
+   (let [paths (or model-paths (tu/get-system-model-paths))
+         model
+         (case migration-type
+           nil
+           (load-model model-name)
+           "git"
+           (let [r (git/load-repo (or model-name (first paths)))
+                 current-branch (git/git-branch-current r)]
+             (git/git-checkout r :name path-or-branch)
+             (load-model model-name)
+             (let [{model :model} (loader/load-all-model-info paths model-name nil)]
+               (git/git-checkout r :name current-branch)
+               model))
+           "local"
+           (let [[model model-root] (loader/read-model (loader/verified-model-file-path
+                                                        u/model-script-name path-or-branch nil))]
+             (loader/load-model-dependencies model paths false)
+             (if (loader/load-components-from-model model model-root)
+               model
+               (log/error (str "failed to load components from " path-or-branch)))))
+         entity-names (cn/all-entity-names-and-versions)]
+     [model entity-names]))
+     ([model-name migration-type path-or-branch]
+      (load-model-migration model-name migration-type path-or-branch nil)))
 
 (defn- config-file-path [model-name]
   (str (project-dir model-name) config-edn))
