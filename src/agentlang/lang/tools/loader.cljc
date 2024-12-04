@@ -13,9 +13,14 @@
             [agentlang.lang.name-util :as nu]
             [agentlang.lang.internal :as li]
             [agentlang.lang.tools.util :as tu]
+            [agentlang.lang.tools.schema.model :as sm]
             [agentlang.evaluator.state :as es])
   #?(:clj
      (:import [java.io FileInputStream InputStreamReader PushbackReader])))
+
+(defn- validate-model! [model]
+  (when-not (sm/validate model)
+    (u/throw-ex (str "There are schema error(s) in the model - " (sm/explain-errors model)))))
 
 (defn- record-name [obj]
   (let [n (cond
@@ -112,7 +117,6 @@
   (if (li/maybe-upsert-instance-pattern? pat)
     `(~'pattern ~pat)
     pat))
-
 
 (defn- component-name-as-ns [cn]
   (symbol (s/lower-case (subs (str cn) 1))))
@@ -329,6 +333,7 @@
         (load-components-from-model model model-root from-resource))
        ([model-name model-paths]
         (when-let [[model model-root] (read-model model-paths model-name)]
+          (validate-model! model)
           (load-model model model-root model-paths false)))
        ([model-name]
         (load-model model-name (tu/get-system-model-paths)))))
@@ -393,6 +398,7 @@
          (callback deps)))
 
      (defn load-model [model callback]
+       (validate-model! model)
        (cn/register-model (:name model) model)
        (let [continuation (fn [_]
                             (load-components-from-model model (partial callback :comp)))]

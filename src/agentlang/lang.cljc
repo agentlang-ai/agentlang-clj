@@ -63,6 +63,8 @@
      (when-not gs/migration-mode
        (when (cn/component-exists? ns-name)
          (cn/remove-component ns-name)))
+     (when-let [model-name (:model spec)]
+       (cn/add-component-to-model model-name n))
      (let [r (cn/create-component
               ns-name
               (when spec

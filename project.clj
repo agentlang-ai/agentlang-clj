@@ -1,4 +1,4 @@
-(defproject com.github.agentlang-ai/agentlang "0.6.1-alpha11"
+(defproject com.github.agentlang-ai/agentlang "0.6.1-alpha13"
   :dependencies [[org.clojure/clojure "1.12.0"]
                  [org.clojure/clojurescript "1.11.132"
                   :exclusions [com.google.code.findbugs/jsr305]]
@@ -47,6 +47,7 @@
                  [org.clojure/algo.generic "0.1.3"]
                  [metosin/ring-swagger "0.26.2"]
                  [cheshire "5.11.0"]
+                 [metosin/malli "0.16.4"]
                  [com.github.scribejava/scribejava-core "8.3.3"]
                  [com.github.scribejava/scribejava-apis "8.3.3"]
                  [org.apache.kafka/kafka-clients "3.6.1"]
