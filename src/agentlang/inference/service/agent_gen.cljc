@@ -74,6 +74,12 @@
        "First, we have an `:Expense.Core/Expense` entity to store `Expense` information, it contains `:Id`, `:Title` and `:Amount` attributes.\n"
        "Then, an `Agent` is defined with `:receipt-ocr-agent` which is of type `:ocr` which can analyze the image of a receipt and return items and amounts.\n"
        "There are following types of `Agent` that is supported on `Agentlang`: `:ocr`, `:classifier`, `:planner`, `:eval`, `:chat`.\n"
+       "The descriptions for these various types of agents that you can create are: \n"
+       "`ocr` - agents that can extract text from images \n"
+       "`classifier` - agents that can return the classification of provided text and no additional descriptions\n"
+       "`planner` - an agent that can generate dataflow patterns using tools and text.\n"
+       "`eval` - agents that can evaluate dataflow patterns\n"
+       "`chat` - simple text chat agents that answer based on user instruction\n"
        "\n Next there is another `Agent` named `:expense-agent` which is of type `:planner`, a `:planner` agent can have tools.\n"
        "The `:Tools` used here is the entity `:Expense.Core/Expense`, the input is `:Expense.Core/SaveExpenses`.\n"
        "It delegeates to `:receipt-ocr-agent` for generating items and amounts from image and then, it converts the expense report into individual instances of expense entity.\n"
@@ -141,9 +147,104 @@
        "\n\n Finally, we have the simple model.al."
        "\n\n Remember to just return, a proper clojure map with `{:core-file <core.al-contents> :model-file <model.al-contents>}`\n"
        "The `core.al` contents must be a properly formatted data with `(do ...)` wrapper which must be valid clojure structure, you learned above.\n"
-       "For `model.al` you don't need to wrap it in `(do ...)` structure, as it is just a simple map."
-       "Do not reutrn any plain text in your response, if required only have clojure comments."
-       "Read the information and don't try to deviate from the above described structures of agents."))
+       "For `model.al` you don't need to wrap it in `(do ...)` structure, as it is just a simple map.\n"
+       "Do not reutrn any plain text in your response, if required only have clojure comments.\n"
+       "Read the information and don't try to deviate from the above described structures of agents.\n"
+       "\n\n Suppose the user instruction is: \"Generate an agent for recruitment which can analyse a resume and provides a summary of the skills and experience of the candidate.\"\n"
+       "You will return something similar to this, remember without any description:
+ {:core-file
+ (do
+  (component :Recruitment.Core)
+
+  (entity :InterviewSlot
+    {:Id :Identity
+     :Date :String
+     :Time :String
+     :AssignedTo {:type :Email :optional true}
+     :Candidate {:type :Email :optional true}
+     :Open {:type :Boolean :default true}})
+
+  (entity :Candidate
+    {:Email {:type :Email :guid true}
+     :Name :String
+     :Profile :String})
+
+  (event :ScheduleInterview
+    {:CandidateEmail :Email
+     :CandidateName :String
+     :CandidateProfile :String
+     :AssignedTo :Email})
+
+  (dataflow :NotifyInterviewer
+    [:eval '(println \"To: \" :NotifyInterviewer.Slot.AssignedTo)]
+    [:eval '(println \"Interview scheduled with \" :NotifyInterviewer.Candidate.Name \" on \"
+                    :NotifyInterviewer.Slot.Date \" \" :NotifyInterviewer.Slot.Time)]
+    [:eval '(println \"Candidate profile: \" :NotifyInterviewer.Candidate.Profile)])
+
+  (dataflow :NotifyCandidate
+    [:eval '(println \"To: \" :NotifyCandidate.Slot.Candidate)]
+    [:eval '(println \"Interview scheduled on \" :NotifyCandidate.Slot.Date \" \" :NotifyCandidate.Slot.Time)])
+
+  (dataflow :ScheduleInterview
+    {:InterviewSlot {:Open? true} :as [:FreeSlot]}
+    {:Candidate
+     {:Email :ScheduleInterview.CandidateEmail
+      :Name :ScheduleInterview.CandidateName
+      :Profile :ScheduleInterview.CandidateProfile}
+     :as :Candidate}
+    {:InterviewSlot
+     {:Id? :FreeSlot.Id
+      :AssignedTo :ScheduleInterview.AssignedTo
+      :Candidate :ScheduleInterview.CandidateEmail
+      :Open false} :as [:UpdatedSlot]}
+    {:NotifyInterviewer
+     {:Candidate :Candidate
+      :Slot :UpdatedSlot}}
+    {:NotifyCandidate
+     {:Candidate :Candidate
+      :Slot :UpdatedSlot}}
+    :UpdatedSlot)
+
+  (event :ProfileRejected
+    {:CandidateEmail :Email
+     :Reason :String})
+
+  (dataflow :ProfileRejected
+    [:eval '(println \"Rejected profile: \" :ProfileRejected.CandidateEmail)])
+
+  {:Agentlang.Core/LLM
+   {:Name :llm01}}
+
+  {:Agentlang.Core/Agent
+   {:Name :summary-agent
+    :UserInstruction (str \"You are a recruiter that analyses a resume and provides a summary of the \"
+                         \"skills and experience of the candidate. The summary must be in the format - \"
+                         \"Skills: <major-skills-of-the-candidate>, Experience in years: <years>, \"
+                         \"Name: <candidate-name>, Email: <candidate-email>\")
+    :LLM :llm01}}
+
+  {:Agentlang.Core/Agent
+   {:Name :interview-scheduler-agent
+    :Type :eval
+    :LLM :llm01
+    :Input :Recruitment.Core/InvokeAgent
+    :UserInstruction
+    (str \"You are an intelligent agent who schedules an interview if the profile summary of a candidate meets \"
+         \"the specified requirements. For example, if the profile summary is \"
+         \"\\\"Python programmer with 3+ years experience. Name: Sam, Email: sam@me.com\\\" and the requirement is \"
+         \"\\\"We need to hire python programmers with 2+ years experience. Possible interviewers are ravi@acme.com, \"
+         \"joe@acme.com and sally@acme.com.\\\" then schedule an interview as: \"
+         \"[{:Recruitment.Core/ScheduleInterview {:CandidateEmail \\\"sam@me.com\\\" :CandidateName \\\"Sam\\\" :CandidateProfile \\\"Python programmer with 3+ years experience.\\\" :AssignedTo \\\"ravi@acme.com\\\"}}].\"
+         \"Make sure to distribute interview assignments as evenly as possible. If the profile summary does not match \"
+         \"the requirement, the return: \"
+         \"[{:Recruitment.Core/ProfileRejected {:CandidateEmail \\\"sam@me.com\\\", :Reason \\\"not enough experience\\\"}}]\"
+         \"\\n\"
+         \"In the current application, you need to review summarized resumes of C++ programmers \"
+         \"and schedule interviews  with candidates with good experience.\")
+    :Delegates {:To :summary-agent :Preprocessor true}}})
+:model-file {:name :Recruitment
+             :agentlang-version \"current\"
+             :components [:Recruitment.Core]}}"))
 
 (defn with-instructions [instance]
   (assoc instance :UserInstruction
