@@ -4,8 +4,8 @@
             [agentlang.util.runtime :as ur]
             [agentlang.component :as cn]
             [agentlang.store :as s]
-            [agentlang.lang.tools.loader :as loader]
             [agentlang.test.util :as tu]
+            [agentlang.lang.tools.build :as build]
             [agentlang.global-state :as gs]
             [agentlang.evaluator :as ev]))
 
@@ -19,16 +19,32 @@
           (cn/remove-component (first c)))
         (recur (rest c))))))
 
-(defn- load-model
-  ([model-name model-path reset-state]
+(defn- load-model 
+  ([model-path reset-state model-paths init]
+   (when reset-state
+     (reset-models-state)) 
+   (binding [gs/migration-mode true]
+     (let [[model entities]
+           (build/load-model-migration nil "local" model-path model-paths)]
+       (when init (ur/init-runtime (:Name model) nil))
+       [model entities])))
+  ([model-path reset-state model-paths]
+   (load-model model-path reset-state model-paths true))
+  ([model-path reset-state]
+   (load-model model-path reset-state nil))
+  ([model-path]
+   (load-model model-path false)))
+
+(defn- load-model-no-init
+  ([model-path reset-state]
    (when reset-state
      (reset-models-state))
    (binding [gs/migration-mode true]
-     (let [[model model-root] (loader/read-model model-path)]
-       (loader/load-components-from-model model model-root)
-       (ur/init-runtime model-name nil))))
-  ([model-name model-path]
-   (load-model model-name model-path false)))
+     (let [[model entities]
+           (build/load-model-migration nil "local" model-path)]
+       [model entities])))
+  ([model-path]
+   (load-model-no-init model-path false)))
 
 (defn- clear-model-init [model-name]
   (s/remove-inited-component model-name)
@@ -36,10 +52,10 @@
 
 (deftest test-same-ent
   (let [model-name :Factory
-        old-model "test/sample/migrations/1-same-ent/old/factory/model.al"
-        new-model "test/sample/migrations/1-same-ent/model.al"]
-
-    (load-model model-name old-model true)
+        old-model "test/sample/migrations/1-same-ent/old/factory"
+        new-model "test/sample/migrations/1-same-ent"]
+    
+    (load-model old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:Factory/Init {}}))
 
     (let [customers (tu/fresult (ev/eval-all-dataflows
@@ -47,9 +63,8 @@
       (is (= 5 (count customers))))
 
     (clear-model-init model-name)
-    (load-model model-name new-model)
-    (ev/eval-all-dataflows
-     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (load-model new-model)
+    (ur/invoke-migrations-event)
 
     (let [customers (tu/fresult (ev/eval-all-dataflows
                                  (cn/make-instance {:Factory/LookupAll_Customer {}})))
@@ -67,10 +82,10 @@
 
 (deftest test-attr-change
   (let [model-name :Factory
-        old-model "test/sample/migrations/2-attr-change/old/factory/model.al"
-        new-model "test/sample/migrations/2-attr-change/model.al"]
+        old-model "test/sample/migrations/2-attr-change/old/factory"
+        new-model "test/sample/migrations/2-attr-change"]
     
-    (load-model model-name old-model true)
+    (load-model old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:Factory/Init {}}))
 
     (let [shipments (tu/fresult (ev/eval-all-dataflows
@@ -81,9 +96,8 @@
                (:CustomerFirstName fs) (:CustomerLastName fs))))
 
     (clear-model-init model-name)
-    (load-model model-name new-model)
-    (ev/eval-all-dataflows
-     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (load-model new-model)
+    (ur/invoke-migrations-event)
 
     (let [shipments (tu/fresult (ev/eval-all-dataflows
                                  (cn/make-instance {:Factory/LookupAll_Shipment {}})))
@@ -95,18 +109,17 @@
 
 (deftest test-rel-change
   (let [model-name :Manager
-        old-model "test/sample/migrations/3-rel-change/old/manager/model.al"
-        new-model "test/sample/migrations/3-rel-change/model.al"]
+        old-model "test/sample/migrations/3-rel-change/old/manager"
+        new-model "test/sample/migrations/3-rel-change"]
 
-    (load-model model-name old-model true)
+    (load-model old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:Manager/Init {}}))
     (let [users (tu/fresult (ev/eval-all-dataflows
                              (cn/make-instance {:Manager/LookupAll_User {}})))]
       (is (= 3 (count users))))
     (clear-model-init model-name)
-    (load-model model-name new-model)
-    (ev/eval-all-dataflows
-     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (load-model new-model)
+    (ur/invoke-migrations-event)
     (let [users (tu/fresult (ev/eval-all-dataflows
                              (cn/make-instance {:Manager/LookupAll_User {}})))
           ws (tu/fresult (ev/eval-all-dataflows
@@ -117,18 +130,17 @@
 
 (deftest test-rel-contains
   (let [model-name :Manager
-        old-model "test/sample/migrations/4-rel-contains/old/manager/model.al"
-        new-model "test/sample/migrations/4-rel-contains/model.al"]
+        old-model "test/sample/migrations/4-rel-contains/old/manager"
+        new-model "test/sample/migrations/4-rel-contains"]
     
-    (load-model model-name old-model true)
+    (load-model old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:Manager/Init {}}))
     (let [users (tu/fresult (ev/eval-all-dataflows
                              (cn/make-instance {:Manager/LookupAll_User {}})))]
       (is (= 3 (count users))))
     (clear-model-init model-name)
-    (load-model model-name new-model)
-    (ev/eval-all-dataflows
-     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (load-model new-model)
+    (ur/invoke-migrations-event)
     (let [users (tu/fresult (ev/eval-all-dataflows
                              (cn/make-instance {:Manager/LookupAll_User {}})))
           ws (tu/fresult (ev/eval-all-dataflows
@@ -143,18 +155,17 @@
 
 (deftest test-rel-rename
   (let [model-name :App
-        old-model "test/sample/migrations/5-rel-rename/old/app/model.al"
-        new-model "test/sample/migrations/5-rel-rename/model.al"]
+        old-model "test/sample/migrations/5-rel-rename/old/app"
+        new-model "test/sample/migrations/5-rel-rename"]
 
-    (load-model model-name old-model true)
+    (load-model old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:App/Init {}}))
     (let [users (tu/fresult (ev/eval-all-dataflows
                              (cn/make-instance {:App/LookupAll_User {}})))]
       (is (= 3 (count users))))
     (clear-model-init model-name)
-    (load-model model-name new-model)
-    (ev/eval-all-dataflows
-     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (load-model new-model)
+    (ur/invoke-migrations-event)
     (let [users (tu/fresult (ev/eval-all-dataflows
                              (cn/make-instance {:App/LookupAll_User {}})))
           ws (tu/fresult (ev/eval-all-dataflows
@@ -165,18 +176,17 @@
 
 (deftest test-rel-to-ref
   (let [model-name :App
-        old-model "test/sample/migrations/6-rel-to-ref/old/app/model.al"
-        new-model "test/sample/migrations/6-rel-to-ref/model.al"]
+        old-model "test/sample/migrations/6-rel-to-ref/old/app"
+        new-model "test/sample/migrations/6-rel-to-ref"]
 
-    (load-model model-name old-model true)
+    (load-model old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:App/Init {}}))
     (let [users (tu/fresult (ev/eval-all-dataflows
                              (cn/make-instance {:App/LookupAll_User {}})))]
       (is (= 3 (count users))))
     (clear-model-init model-name)
-    (load-model model-name new-model)
-    (ev/eval-all-dataflows
-     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (load-model new-model)
+    (ur/invoke-migrations-event)
     (let [users (tu/fresult (ev/eval-all-dataflows
                              (cn/make-instance {:App/LookupAll_User {}})))
           ws (tu/fresult (ev/eval-all-dataflows
@@ -189,17 +199,16 @@
 
 (deftest test-rel-between
   (let [model-name :Social
-        old-model "test/sample/migrations/7-rel-between/old/social/model.al"
-        new-model "test/sample/migrations/7-rel-between/model.al"]
-    (load-model model-name old-model true)
+        old-model "test/sample/migrations/7-rel-between/old/social"
+        new-model "test/sample/migrations/7-rel-between"]
+    (load-model old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:Social/Init {}}))
     (let [friendships (tu/fresult (ev/eval-all-dataflows
                                (cn/make-instance {:Social/LookupAll_Friendship {}})))]
       (is (= 6 (count friendships))))
     (clear-model-init model-name)
-    (load-model model-name new-model)
-    (ev/eval-all-dataflows
-     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (load-model new-model)
+    (ur/invoke-migrations-event)
     (ev/eval-all-dataflows
      (cn/make-instance {:Social/LookupAll_Person {}}))
     (let [persons (tu/fresult (ev/eval-all-dataflows
@@ -212,17 +221,16 @@
 
 (deftest test-rel-between-enh
   (let [model-name :Social
-        old-model "test/sample/migrations/8-rel-between-enh/old/social/model.al"
-        new-model "test/sample/migrations/8-rel-between-enh/model.al"]
-    (load-model model-name old-model true)
+        old-model "test/sample/migrations/8-rel-between-enh/old/social"
+        new-model "test/sample/migrations/8-rel-between-enh"] 
+    (load-model old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:Social/Init {}}))
     (let [friendships (tu/fresult (ev/eval-all-dataflows
                                (cn/make-instance {:Social/LookupAll_Friendship {}})))]
       (is (= 6 (count friendships))))
     (clear-model-init model-name)
-    (load-model model-name new-model)
-    (ev/eval-all-dataflows
-     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (load-model new-model)
+    (ur/invoke-migrations-event)
     (ev/eval-all-dataflows
      (cn/make-instance {:Social/LookupAll_Person {}}))
     (let [persons (tu/fresult (ev/eval-all-dataflows
@@ -238,18 +246,16 @@
 
 (deftest test-rel-type-change
   (let [model-name :Manager
-        old-model "test/sample/migrations/9-rel-type-change/old/manager/model.al"
-        new-model "test/sample/migrations/9-rel-type-change/model.al"]
-
-    (load-model model-name old-model true)
+        old-model "test/sample/migrations/9-rel-type-change/old/manager"
+        new-model "test/sample/migrations/9-rel-type-change"]
+    (load-model old-model true)
     (ev/eval-all-dataflows (cn/make-instance {:Manager/Init {}}))
     (let [users (tu/fresult (ev/eval-all-dataflows
                              (cn/make-instance {:Manager/LookupAll_User {}})))]
       (is (= 3 (count users))))
     (clear-model-init model-name)
-    (load-model model-name new-model)
-    (ev/eval-all-dataflows
-     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (load-model new-model)
+    (ur/invoke-migrations-event)
     (let [users (tu/fresult (ev/eval-all-dataflows
                              (cn/make-instance {:Manager/LookupAll_User {}})))
           ws (tu/fresult (ev/eval-all-dataflows
@@ -265,10 +271,10 @@
 
 (deftest test-join-entities
   (let [model-name :Manager
-        old-model "test/sample/migrations/10-join-entities/old/manager/model.al"
-        new-model "test/sample/migrations/10-join-entities/model.al"]
+        old-model "test/sample/migrations/10-join-entities/old/manager"
+        new-model "test/sample/migrations/10-join-entities"]
 
-    (load-model model-name old-model true)
+    (load-model old-model true)
      (ev/eval-all-dataflows (cn/make-instance {:Manager/Init {}}))
      (let [users (tu/fresult (ev/eval-all-dataflows
                               (cn/make-instance {:Manager/LookupAll_Customer {}})))
@@ -278,10 +284,9 @@
        (is (= 6 (count orders))))
 
     (clear-model-init model-name)
-    (load-model model-name new-model)
+    (load-model new-model)
     
-    (ev/eval-all-dataflows
-     (cn/make-instance {:Agentlang.Kernel.Lang/Migrations {}}))
+    (ur/invoke-migrations-event)
     
     (let [co (tu/fresult (ev/eval-all-dataflows
                           (cn/make-instance {:Manager/LookupAll_CustomerOrder {}})))
@@ -289,3 +294,65 @@
       (is (= 6 (count co)))
       (is (and (:CustomerName cof) (:CustomerId cof) (:OrderId cof))))
     (clear-model-init model-name)))
+
+(deftest test-auto-migrate
+  (let [model-name :Factory
+        model-name-2 :Office
+        old-model "test/sample/migrations/11-auto-migrate-entities/old/factory"
+        new-model "test/sample/migrations/11-auto-migrate-entities"
+        [_ old-entities] (load-model old-model true)]
+    (ev/eval-all-dataflows (cn/make-instance {:Factory/Init {}}))
+    (let [customers1 (tu/fresult (ev/eval-all-dataflows
+                                 (cn/make-instance {:Factory/LookupAll_Customer1 {}})))]
+      (is (= 2 (count customers1))))
+    (clear-model-init model-name)
+    (clear-model-init model-name-2)
+    (let [[_ new-entities] (load-model new-model false nil false)] 
+      (ur/rename-db-entity-tables
+       new-entities old-entities "current"
+       {:no-auto-migration
+        #{:Retail :Factory/Customer2}})
+      (ur/init-runtime model-name nil) 
+      (let [customers1 (tu/fresult (ev/eval-all-dataflows (cn/make-instance {:Factory/LookupAll_Customer1 {}})))
+            customers2 (tu/fresult (ev/eval-all-dataflows (cn/make-instance {:Factory/LookupAll_Customer2 {}})))
+            customers3 (tu/fresult (ev/eval-all-dataflows (cn/make-instance {:Factory/LookupAll_Customer3 {}})))
+            fs (first customers1)
+            persons (tu/fresult (ev/eval-all-dataflows (cn/make-instance {:Office/LookupAll_Person {}})))
+            officerel (tu/fresult (ev/eval-all-dataflows (cn/make-instance {:Office/LookupAll_OfficeRel {}})))
+            retailuser (tu/fresult (ev/eval-all-dataflows (cn/make-instance {:Retail/LookupAll_User {}})))]
+        (is (and (= 2 (count customers1)) (and (:Name fs) (:Age fs) (:Gender fs))))
+        (is (= 0 (count customers2)))
+        (is (= 1 (count customers3)))
+        (is (= 2 (count persons)))
+        (is (= 1 (count officerel)))
+        (is (= 0 (count retailuser))))
+      (clear-model-init model-name)
+      (clear-model-init model-name-2))))
+
+(deftest test-auto-migrate-dependencies
+  (let [model-name :Factory
+        model-name-2 :Office
+        old-model "test/sample/migrations/12-auto-migrate-with-dependencies/factory/old/factory"
+        new-model "test/sample/migrations/12-auto-migrate-with-dependencies/factory"
+        new-dependency ["test/sample/migrations/12-auto-migrate-with-dependencies"]
+        old-dependency ["test/sample/migrations/12-auto-migrate-with-dependencies/office/old"]
+        [_ old-entities] (load-model old-model true old-dependency)]
+    (ev/eval-all-dataflows (cn/make-instance {:Factory/Init {}}))
+    (let [customers (tu/fresult (ev/eval-all-dataflows
+                                 (cn/make-instance {:Factory/LookupAll_Customer {}})))]
+      (is (= 5 (count customers))))
+    (clear-model-init model-name)
+    (clear-model-init model-name-2)
+    (let [[_ new-entities] (load-model new-model false new-dependency false)] 
+      (ur/rename-db-entity-tables
+       new-entities old-entities "current"
+       {:no-auto-migration
+        #{}}) 
+      (ur/init-runtime model-name nil) 
+      (let [customers (tu/fresult (ev/eval-all-dataflows (cn/make-instance {:Factory/LookupAll_Customer {}})))
+            workers (tu/fresult (ev/eval-all-dataflows (cn/make-instance {:Office/LookupAll_Worker {}})))
+            fs (first customers)]
+        (is (and (= 5 (count customers)) (and (:Name fs) (:Age fs) (:Gender fs))))
+        (is (= 2 (count workers))))
+      (clear-model-init model-name)
+      (clear-model-init model-name-2))))

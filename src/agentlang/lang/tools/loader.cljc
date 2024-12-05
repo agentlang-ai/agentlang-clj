@@ -250,7 +250,7 @@
          (catch Exception ex
            (.printStackTrace ex))))
 
-     (defn- verified-model-file-path
+     (defn verified-model-file-path
        ([model-script-name root-dir model-dir]
         (let [p (str root-dir u/path-sep
                      (when model-dir
