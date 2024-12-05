@@ -54,8 +54,10 @@
                     tp (assoc :Type (u/keyword-as-string tp))
                     nm (assoc :Name (u/keyword-as-string nm))))))))
 
-;; The document must be specified using the scheme: "rs://document_name.extn",
-;; where "rs" means retrieval-service.
+;; The document must be specified using the scheme: "rs://<store>/<document_name>.<extn>",
+;; where "rs" means retrieval-service. E.g: "rs://local/Companies_new.pdf".
+;; Example entry in config.edn:
+;; {:retrieval-service {:host "https://retrieval-service.fractl.io/pratik@fractl.io" :token "<token>"}}
 (defn- read-from-retrieval-service [file-name]
   (let [config (:retrieval-service (gs/get-app-config))
         token (or (:token config)
