@@ -1,4 +1,4 @@
-(defproject com.github.agentlang-ai/agentlang "0.6.1-alpha13"
+(defproject com.github.agentlang-ai/agentlang "0.6.1-alpha14"
   :dependencies [[org.clojure/clojure "1.12.0"]
                  [org.clojure/clojurescript "1.11.132"
                   :exclusions [com.google.code.findbugs/jsr305]]
@@ -57,7 +57,8 @@
                  [nrepl "1.1.1"]
                  [camel-snake-kebab "0.4.3"]
                  [stringer "0.4.1"]
-                 [nrepl/drawbridge "0.2.1"]]
+                 [nrepl/drawbridge "0.2.1"]
+                 [clj-jgit "1.0.2"]]
 
   :license {:name "Apache2"}
 
