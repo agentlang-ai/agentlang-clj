@@ -7,75 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.6.1-alpha14] - 2024-12-04
+## [0.6.1] - 2024-12-05
+
+- Telemetry integration
 - Schema diff support
 - Agent generation support using `:agent-gen` type of agent
-
-## [0.6.1-alpha13] - 2024-12-02
-
-- Ability to pass runtime version to schema validator
-- Fix model version for components with explicit model-name in spec
-
-## [0.6.1-alpha12] - 2024-11-29
-
 - Support kernel model version for Agentlang.Core component
 - Resolver query preprocessor bug fix for boolean values
-
-## [0.6.1-alpha11] - 2024-11-27
-
-- Model name in git dependencies made optional
-
-## [0.6.1-alpha10] - 2024-11-26
-
-- Clickhouse query fix
-- Telemetry flag in config
-
-## [0.6.1-alpha9] - 2024-11-25
-
-- nrepl current-component bug fix
 - Syntax update for :git dependencies
-
-## [0.6.1-alpha8] - 2024-11-22
-
 - Fix dependency loading for `agent run`
-
-## [0.6.1-alpha7] - 2024-11-22
-
 - Add code evaluation support for nREPL to add functionalities to running nREPL session
-- Support evaluation of Clojure code
-
-## [0.6.1-alpha6] - 2024-11-21
-
 - Return `ok` status for `not-found` at the HTTP layer
-- Minor bug fixes
-
-## [0.6.1-alpha5] - 2024-11-20
-
 - Support shared cognito tokens across apps
 - Return 415 on unsupported content-type
 - Option to disable local user sessions
-- Telemetry integration
-
-## [0.6.1-alpha4] - 2024-11-18
-
 - Migration join tests and fixes
-- Completely disable publish-schema for cljs
-
-## [0.6.1-alpha3] - 2024-11-14
-
-- Add logging to nREPL requests and evaluation phases
-- nREPL now sends json response with status and result
-- Add fix for postgres `=` operator to work on parent attribute
 - Support for restarting and retries for timer
-
-## [0.6.1-alpha2] - 2024-11-13
-
-- nREPL now handles all evaluation as async evaluation
-- nREPL now doesn't depend on timeout for evaluation result
-
-## [0.6.1-alpha1] - 2024-11-08
-
-- Update timeout for nREPL drawbridge
 
 ## [0.6.0] - 2024-10-22
 
