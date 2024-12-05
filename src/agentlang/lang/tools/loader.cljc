@@ -329,11 +329,11 @@
 
      (defn load-model
        ([model model-root model-paths from-resource]
+        (validate-model! model)
         (load-model-dependencies model model-paths from-resource)
         (load-components-from-model model model-root from-resource))
        ([model-name model-paths]
         (when-let [[model model-root] (read-model model-paths model-name)]
-          (validate-model! model)
           (load-model model model-root model-paths false)))
        ([model-name]
         (load-model model-name (tu/get-system-model-paths)))))

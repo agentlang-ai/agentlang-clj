@@ -1,4 +1,6 @@
-(component :EmailAnalyzer.Core)
+(component
+ :EmailAnalyzer.Core
+ {:refer [:Email.Core]})
 
 (entity
  :Company

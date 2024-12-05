@@ -18,7 +18,7 @@
   (is (some #{:Sample.Simple/E2} (loader/read-expressions "test/sample/simple.al")))
   (let [exp (first (loader/read-expressions "test/sample/dependencies/model_1/model.al"))]
     (is [:Model1.C1] (:components exp))
-    (is [:Model2] (:dependencies exp))))
+    (is [[:fs "./model_2"]] (:dependencies exp))))
 
 (deftest test-load-dependencies
   (let [[model model-root] (loader/read-model "test/sample/dependencies/model_1/model.al")]
