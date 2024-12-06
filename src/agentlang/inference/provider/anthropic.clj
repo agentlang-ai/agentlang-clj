@@ -92,13 +92,15 @@
         max-tokens (or max-tokens (:MaxTokens anthropic-config) default-max-tokens)
         anthropic-api-key (or anthropic-api-key (:ApiKey anthropic-config) (get-anthropic-api-key))
         anthropic-version (or anthropic-version (:AnthropicVersion anthropic-config) default-anthropic-version)
-        system-message (filterv #(= (:role %) :system) messages)
+        system-message (first (filterv #(= (:role %) :system) messages))
+        messages (into [] (remove #(= % system-message) messages))
+        formatted-system-message (get system-message :content)
         options {:headers {"content-type" "application/json"
                            "x-api-key" anthropic-api-key
                            "anthropic-version" anthropic-version}
                  :body (json/generate-string
                         {:model model-name
-                         :system system-message
+                         :system formatted-system-message
                          :temperature temperature
                          :messages messages
                          :max_tokens max-tokens})}
