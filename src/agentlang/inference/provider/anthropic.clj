@@ -1,5 +1,5 @@
 (ns agentlang.inference.provider.anthropic
-  (:require [chesire.core :as json]
+  (:require [cheshire.core :as json]
             [org.httpkit.client :as http]
             [agentlang.util :as u]
             [agentlang.util.logger :as log]
