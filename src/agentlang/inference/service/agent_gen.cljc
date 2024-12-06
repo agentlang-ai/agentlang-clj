@@ -22,18 +22,9 @@
        "For, e.g. `:Joke.Core/TellAJoke`, the name suits well as, the agent is for telling a joke and the description aligns with it."
        "\n\n When all of this is in place, user, can send a POST request to `api/Joke.Core/TellAJoke` with body as, {\"Joke.Core/TellAJoke\": {\"UserInstruction\": \"OK, tell me a joke about AGI?\"}} for LLM to generate a joke."
        "\nFor this reason, you have to generate proper key and value for the data."
-       "\n\n\nNow, let's look at the `model.al` that needs to be generated along with `core.al` file above."
-       (u/pretty-str
-        '{:name :Joke
-          :agentlang-version "current"
-          :components [:Joke.Core]})
-       "\n\nThis is the `model.al` file for the Joke agent."
-       "The `:name` is, `:Joke` without the `.Core` from the component-name."
-       "For simplicity, you can always keep `:agentlang-version` as \"current\"."
-       "The `:components` must be a vector of the component name, hence `[:Joke.Core]`"
        "\n\n When a prompt asks you to generate an agent, you must understand the use case of the agent and"
-       "generate these two files."
-       "\n\n\n Remember, you don't need to provide description, you just provide this: {:core-file <generated-core.al-file> :model-file <generated-model.al-file>}"
+       "generate this file."
+       "\n\n\n Remember, you don't need to provide description, you just provide this core.al file contents."
        "\n\n Also, don't provide any backticks."
        "\n\n Let's try another example."
        "\nFollowing is an example of an expense report generator agent with support of reading bill image using ocr agent provided with agentlang."
@@ -64,12 +55,6 @@
            :Input :Expense.Core/SaveExpenses
            :Delegates {:To :receipt-ocr-agent :Preprocessor true}}})
        "\n\n\n"
-       "Now let's see the `model.al` file.\n"
-       (u/pretty-str
-        '{:name :Expense
-          :agentlang-version "current"
-          :components [:Expense.Core]})
-       "\n\n"
        "\n This is a slighly more complicated example which has multiple agents and also, has Agentlang entity defined.\n"
        "First, we have an `:Expense.Core/Expense` entity to store `Expense` information, it contains `:Id`, `:Title` and `:Amount` attributes.\n"
        "Then, an `Agent` is defined with `:receipt-ocr-agent` which is of type `:ocr` which can analyze the image of a receipt and return items and amounts.\n"
@@ -131,12 +116,6 @@
            :UserInstruction "You are an agent that figures out which tool to use to answer a user query."
            :LLM "llm01"}})
        "\n\n\n\n"
-       "Now, let's see the `model.al` file.\n"
-       (u/pretty-str
-        '{:name :Weather.Service
-          :agentlang-version "current"
-          :components [:Weather.Service.Core]})
-       "\n\n"
        "\n There are more things happening here than previous examples.\n"
        "First, we define an entity like, previous example. We also define an agentlang event, which has `:City` attributes\n"
        "Now, if there is event, means there will be dataflow, in this dataflow, we find the weather of a city and order it by Date.\n"
@@ -144,15 +123,11 @@
        "\n This helps us customize the LLM models and APIs\n"
        "Finally, we define, an `Agent` called, `weather-planner-agent` which is of type `planner`, this uses, the `:ToolComponents` which means it can use the whole component as tool.\n"
        "It also, uses the custom LLM defined as llm01.\n"
-       "\n\n Finally, we have the simple model.al."
        "\n\n Following are important things to note when you are generating agents.\n"
-       "\n\n Remember to just return, a proper clojure map with `{:core-file <core.al-contents> :model-file <model.al-contents>}` without any backticks.\n"
-       "The `core.al` contents must be a properly formatted data with `(do ...)` wrapper which must be valid clojure structure, you learned above.\n"
-       "For `model.al` you don't need to wrap it in `(do ...)` structure, as it is just a simple map.\n"
        "Do not reutrn any plain text in your response, if required only have clojure comments.\n"
        "Read the information and don't try to deviate from the above described structures of agents.\n"
-       "Remeber the format should be a clojure format and must be a clojure map. It should be validated. Don't generate YAML format or any other language code, it should be Agentlang agent described above and don't deviate from the format and example provided.\n\n"
-       "Don't have the response with string \"No delegate with name\", just provide a proper clojure map with {:core-file <core.al-contents> :model-file <model.al-contents>}"))
+       "Remeber the format should be a clojure format and must be a proper clojure code. It should be validated. Don't generate YAML format or any other language code, it should be Agentlang agent described above and don't deviate from the format and example provided.\n\n"
+       "Just provide a properly formatted agentlang core file contents which is clojure code wrapped in string without any backticks at all."))
 
 (defn with-instructions [instance]
   (assoc instance :UserInstruction
