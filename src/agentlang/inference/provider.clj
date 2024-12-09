@@ -5,6 +5,7 @@
             [agentlang.inference.service.model :as model]
             [agentlang.inference.provider.protocol :as p]
             [agentlang.inference.provider.openai]
+            [agentlang.inference.provider.anthropic]
             [agentlang.inference.provider.registry :as r]))
 
 (defn- make-provider-request [pfn spec]
