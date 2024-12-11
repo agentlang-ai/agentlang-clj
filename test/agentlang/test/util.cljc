@@ -110,17 +110,14 @@
      (str (rand-str 12) "@" domain)))
 
 ;; To test postgres in CI
-;; export POSTGRES_ENABLED=<something>
+;; export POSTGRES_ENABLED=<something> or SQLITE_ENABLED=<something>
 ;; To turn off
-;; unset POSTGRES_ENABLED
-(def test-with-postgres
-  #?(:clj (if (System/getenv "POSTGRES_ENABLED")
-            true
-            false)
-     :cljs false))
-
+;; unset POSTGRES_ENABLED / unset SQLITE_ENABLED
 (store/open-default-store
- #?(:clj (when test-with-postgres
+ #?(:clj (cond
+           #?(:clj (System/getenv "SQLITE_ENABLED") :cljs false)
+           {:type     :sqlite}
+           #?(:clj (System/getenv "POSTGRES_ENABLED") :cljs false)
            {:type     :postgres
             :host     (or (System/getenv "POSTGRES_HOST") "localhost")
             :dbname   (or (System/getenv "POSTGRES_DB") "postgres")

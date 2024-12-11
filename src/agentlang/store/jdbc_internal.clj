@@ -7,6 +7,7 @@
             [agentlang.lang.internal :as li]
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
+            [agentlang.util.logger :as log]
             [agentlang.store.util :as su])
   (:import [java.sql PreparedStatement]))
 
@@ -110,8 +111,11 @@
 (defn execute-fn! [datasource f]
   (if-let [txn (gs/get-active-txn)]
     (f txn)
-    (with-open [conn (jdbc/get-connection datasource)]
-      (f conn))))
+    (try
+      (with-open [conn (jdbc/get-connection datasource)]
+        (f conn))
+      (catch Exception ex
+        (log/error ex)))))
 
 (defn execute-sql! [conn sql]
   (jdbc/execute! conn sql))
