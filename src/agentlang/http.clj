@@ -150,12 +150,12 @@
      :else (response s 500 data-fmt)))
   ([s] (internal-error s :json)))
 
-(defn- redirect-found [location cookie cookie-domain]
+(defn- redirect-found [location cookie]
   {:status 302
    :headers
    (let [hdrs (assoc (headers) "Location" location)]
      (if cookie
-       (let [cd (or cookie-domain (get-in (gs/get-app-config) [:authentication :cookie-domain]))]
+       (let [cd (get-in (gs/get-app-config) [:authentication :cookie-domain])]
          (assoc hdrs "Set-Cookie" (str cookie "; Domain=" (if (= "NULL" cd) "" cd) "; Path=/")))
        hdrs))})
 
@@ -1080,7 +1080,7 @@
 
 (defn- auth-response [result]
   (case (:status result)
-    :redirect-found (redirect-found (:location result) (:set-cookie result) (:cookie-domain result))
+    :redirect-found (redirect-found (:location result) (:set-cookie result))
     :ok (ok (:message result))
     (bad-request (:error result))))
 
@@ -1092,7 +1092,7 @@
      (auth/authenticate-session (assoc auth-config
                                        :cookie cookie
                                        :client-url (:origin query-params)
-                                       :cookie-domain (:server_redirect_host query-params))))))
+                                       :server-redirect-host (:server_redirect_host query-params))))))
 
 (defn- process-auth-callback [evaluator call-post-signup [auth-config _] request]
   (log-request "Auth-callback request" request)
