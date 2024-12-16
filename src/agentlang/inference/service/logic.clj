@@ -25,9 +25,7 @@
 (defn handle-doc-chunk [operation instance]
   (when (= :add operation)
     (let [doc-chunk (cn/instance-attributes instance)
-          app-uuid (:AppUuid doc-chunk)
-          doc-name (:Title doc-chunk)
-          chunk-text (:Content doc-chunk)]
+          app-uuid (:AppUuid doc-chunk)]
       (log/debug (u/pretty-str "Ingesting doc chunk" doc-chunk))
       (ec/embed-document-chunk app-uuid doc-chunk)
       instance)))
@@ -170,7 +168,10 @@
 
 (defn- maybe-add-docs [docs user-ins]
   (if (seq docs)
-    (str user-ins "\n Make use of the following knowledge-base:\n" (json/encode docs))
+    (let [content (mapv #(let [m (json/decode %)]
+                           (str (:Title m) "\n" (:Content m) "\n\n"))
+                        docs)]
+      (str user-ins "\n Make use of the following knowledge-base:\n" (apply str content)))
     user-ins))
 
 (def ^:private agent-documents-limit 20)
@@ -206,48 +207,6 @@
 (defn handle-classifier-agent [instance]
   (let [s (str (:UserInstruction instance) "\nReturn only the category name and nothing else.\n")]
     (handle-chat-agent (assoc instance :UserInstruction s))))
-
-(defn- start-chat [agent-instance]
-  ;; TODO: integrate messaging resolver
-  (println (str (:Name agent-instance) ": " (:UserInstruction agent-instance)))
-  (:ChatUuid agent-instance))
-
-(defn- get-next-chat-message [_]
-  ;; TODO: integrate messaging resolver
-  (print " ? ")
-  (flush)
-  (read-line))
-
-(defn- make-chat-completion [instance]
-  (let [agent-name (:Name instance)
-        chat-id (start-chat instance)]
-    (loop [iter 0, instance instance]
-      (if (< iter 5)
-        (let [[result _ :as r] (provider/make-completion instance)
-              chat-session (model/lookup-agent-chat-session instance)
-              msgs (:Messages chat-session)]
-          (log/debug (str "Response " iter " from " agent-name " - " result))
-          (if (= \{ (first (s/trim result)))
-            (do (println (str agent-name ": Thanks, your request is queued for processing."))
-                r)
-            (do (println (str agent-name ": " result))
-                (model/update-agent-chat-session
-                 chat-session
-                 (vec (concat msgs [{:role :user :content (get-next-chat-message chat-id)}])))
-                (recur (inc iter) (if (zero? iter) (dissoc instance :UserInstruction) instance)))))
-        (do (println (str agent-name ": session expired"))
-            [(json/encode {:error "chat session with agent " agent-name " has expired."}) "agentlang"])))))
-
-(defn handle-orchestrator-agent [instance]
-  (log-trigger-agent! instance)
-  (p/call-with-provider
-   (model/ensure-llm-for-agent instance)
-   #(let [ins (:UserInstruction instance)
-          docs (maybe-lookup-agent-docs instance)
-          preprocessed-instruction (call-preprocess-agents instance)
-          final-instruction (maybe-add-docs docs (or preprocessed-instruction ins))
-          instance (assoc instance :UserInstruction final-instruction)]
-      (compose-agents instance (make-chat-completion instance)))))
 
 (defn- maybe-eval-patterns [[response _]]
   (if (string? response)
