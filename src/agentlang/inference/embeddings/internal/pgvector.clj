@@ -6,6 +6,7 @@
             [cheshire.core :as json]
             [agentlang.util :as u]
             [agentlang.util.logger :as log]
+            [agentlang.global-state :as gs]
             [agentlang.inference.provider :as provider]
             [agentlang.inference.embeddings.internal.model :as model]))
 
@@ -98,7 +99,7 @@
     -1 * (embedding_%d <#> ?) AS inner_product,
     1 - (embedding_%d <=> ?) AS cosine_similarity
   FROM text_embedding
-  WHERE embedding_classname = ?
+  WHERE embedding_classname = ? AND (readers IS NULL %s) 
   ORDER BY euclidean_distance
   LIMIT ?")
 
@@ -106,10 +107,12 @@
   (assert-object! obj)
   (let [embedding-sql-param (pg-floats embedding)
         dimension-count (count embedding)
+        user (gs/active-user)
         find-similar-objects-sql (format find-similar-objects-sql-template
                                          dimension-count
                                          dimension-count
-                                         dimension-count)]
+                                         dimension-count
+                                         (if user (str "OR readers like '%%" user "%%'") ""))]
     (->> [find-similar-objects-sql
           embedding-sql-param
           embedding-sql-param

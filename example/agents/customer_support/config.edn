@@ -1,4 +1,6 @@
 {:service {:port 8080}
+ ;; :authentication {:service :cognito
+ ;;                  :superuser-email #$ FRACTL_SUPERUSER_EMAIL}
  :embeddings {:vectordb :pgvector
               :config {:llm-provider "llm01"
                        :host #$ [PGVECTOR_DB_HOST "localhost"]
