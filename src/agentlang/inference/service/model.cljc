@@ -14,7 +14,9 @@
             [agentlang.component :as cn]
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
+            [agentlang.util.http :as http]
             [agentlang.evaluator :as e]
+            [agentlang.datafmt.json :as json]
             [agentlang.lang.internal :as li]
             [agentlang.global-state :as gs]
             [agentlang.inference.service.planner :as planner]
@@ -61,7 +63,26 @@
                     tp (assoc :Type (u/keyword-as-string tp))
                     nm (assoc :Name (u/keyword-as-string nm))))))))
 
-(def ^:private doc-scheme-handlers {"file" slurp})
+;; The document must be specified using the scheme: "rs://<store>/<document_name>.<extn>",
+;; where "rs" means retrieval-service. E.g: "rs://local/Companies_new.pdf".
+;; Example entry in config.edn:
+;; {:retrieval-service {:host "https://retrieval-service.fractl.io/pratik@fractl.io" :token "<token>"}}
+(defn- read-from-retrieval-service [file-name]
+  (let [config (:retrieval-service (gs/get-app-config))
+        token (or (:token config)
+                  (u/getenv "RETRIEVAL_SERVICE_TOKEN" ""))
+        url (str (or (:host config)
+                     (u/getenv "RETRIEVAL_SERVICE_HOST"))
+                 "/" file-name "/chunks")
+        options (when (seq token) {:headers {"Token" token}})
+        response (http/do-get url options)]
+    (if (= 200 (:status response))
+      (let [body (json/decode (:body response))]
+        (apply str (concat (:chunks body))))
+      (u/throw-ex (str "failed to load document from: " url ", status: " (:status response))))))
+
+(def ^:private doc-scheme-handlers {"file" slurp
+                                    "rs" read-from-retrieval-service})
 (def ^:private doc-schemes (keys doc-scheme-handlers))
 (def ^:private scheme-suffix "://")
 
