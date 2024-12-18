@@ -554,12 +554,15 @@
         final-map (reduce dissoc updates-map (:removals update-info))]
     {:Mutation {:fields final-map}}))
 
-(defn remove-rbac-from-relationships [relationships]
-  (map (fn [relationship]
-         (let [key (first (keys relationship))
-               value-map (first (vals relationship))]
-           {key (dissoc value-map :rbac)}))
-       relationships))
+(defn remove-key-from-spec [k specs]
+  (map (fn [spec]
+         (let [key (first (keys spec))
+               value-map (first (vals spec))]
+           {key (dissoc value-map k)}))
+       specs))
+
+(def remove-rbac (partial remove-key-from-spec :rbac))
+(def remove-meta (partial remove-key-from-spec :meta))
 
 (defn make-fields-with-default-vals-optional
   [schema]
@@ -582,7 +585,9 @@
     (transform schema)))
 
 (defn preprocess-schema-info [schema-info]
-  (let [schema-info (assoc schema-info :relationships (remove-rbac-from-relationships (:relationships schema-info)))
+  (let [schema-info (assoc schema-info :relationships (remove-rbac (:relationships schema-info))
+                           :records (remove-meta (:records schema-info))
+                           :entities (remove-meta (:entities schema-info)))
         schema-info (make-fields-with-default-vals-optional schema-info)]
     (normalize-schema schema-info)))
 

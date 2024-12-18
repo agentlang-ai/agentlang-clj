@@ -82,3 +82,16 @@
 (defn uninstall-standalone-patterns! [] (reset! standalone-patterns nil))
 
 (def fire-post-events (atom nil))
+
+(def rbac-fns (atom nil))
+
+(defn set-rbac-fn! [k f]
+  (swap! rbac-fns assoc k f))
+
+(def set-update-rbac-owners! (partial set-rbac-fn! :update-rbac-owners))
+(def set-update-rbac-readers! (partial set-rbac-fn! :update-rbac-readers))
+
+(defn get-rbac-fn [k] (get @rbac-fns k))
+
+(def get-update-rbac-owners (partial get-rbac-fn :update-rbac-owners))
+(def get-update-rbac-readers (partial get-rbac-fn :update-rbac-readers))

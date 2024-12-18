@@ -8,6 +8,7 @@
             [agentlang.lang.raw :as raw]
             [agentlang.store.util :as stu]
             [agentlang.store.sql :as sql]
+            [agentlang.global-state :as gs]
             [agentlang.util.seq :as su]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
@@ -33,17 +34,34 @@
 
 (def id-type (sql/attribute-to-sql-type :Agentlang.Kernel.Lang/UUID))
 
+(defn maybe-add-rbac-clauses [entity-name q]
+  #_(if (or (cn/rbac-internal-entity? entity-name)
+          (cn/kernel-component? (first (li/split-path entity-name))))
+    q
+    (if-let [u (gs/active-user)]
+      (if (vector? q)
+        (let [[sql params] q
+              ident (stu/attribute-column-name (cn/identity-attribute-name entity-name))
+              idn (stu/attribute-column-name :Id)
+              n (stu/attribute-column-name :N)
+              owners (stu/entity-table-name (li/entity-owners entity-name))
+              readers (stu/entity-table-name (li/entity-readers entity-name))]
+          (str sql " AND (" ident " IN (SELECT " idn " FROM " owners " WHERE " n " = '" u "') OR " ident " IN (SELECT " idn " FROM " readers " WHERE " n " = '" u "'))")))))
+  q)
+
 (defn compile-query [query-pattern]
   (let [ename (:from query-pattern)
         eversion (:version query-pattern)
         query-pattern (dissoc query-pattern :version)]
-    (sql/format-sql
-     (stu/entity-table-name ename eversion)
-     (cn/view? ename)
-     (if (> (count (keys query-pattern)) 2)
-       (dissoc query-pattern :from)
-       (let [where-clause (:where query-pattern)]
-         (when (not= :* where-clause) where-clause))))))
+    (maybe-add-rbac-clauses
+     ename
+     (sql/format-sql
+      (stu/entity-table-name ename eversion)
+      (cn/view? ename)
+      (if (> (count (keys query-pattern)) 2)
+        (dissoc query-pattern :from)
+        (let [where-clause (:where query-pattern)]
+          (when (not= :* where-clause) where-clause)))))))
 
 (defn- norm-constraint-name [s]
   (s/replace s "_" ""))

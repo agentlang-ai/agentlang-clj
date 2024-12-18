@@ -957,6 +957,34 @@
       attrs
       (assoc attrs :meta (assoc meta li/owner-exclusive-crud true)))))
 
+(defn- guid-attribute-type [norm-attrs]
+  (loop [nas norm-attrs]
+    (if-let [[n a] (first nas)]
+      (if (keyword? a)
+        (if-let [scm (cn/find-attribute-schema a)]
+          (if (:guid scm)
+            (or (:type scm) :String)
+            (recur (rest nas)))
+          (recur (rest nas)))
+        (recur (rest nas)))
+      :UUID)))
+
+(declare entity)
+(def ^:dynamic rbac-entity-definition false)
+
+(defn- define-rbac-entities [entity-name norm-attrs]
+  (or rbac-entity-definition
+      (let [[c n :as en] (li/split-path entity-name)]
+        (if (cn/kernel-component? c)
+          entity-name
+          (let [spec {:meta {:rbac-internal? true}
+                      :Id {:type (guid-attribute-type norm-attrs) :indexed true}
+                      :N {:type :String :indexed true}
+                      :IdN {:type :String :guid true}}]
+            (binding [rbac-entity-definition true]
+              (entity (li/entity-owners en) spec)
+              (entity (li/entity-readers en) spec)))))))
+
 (defn- serializable-record
   ([rectype n attrs raw-attrs]
    (if-let [intern-rec (rectype intern-rec-fns)]
@@ -966,13 +994,8 @@
                        n)
              [attrs dfexps] (lift-implicit-entity-events rec-name attrs)
              attrs (maybe-add-curd-meta (assoc attrs li/meta-attr li/meta-attr-spec))
-             result (intern-rec
-                     rec-name
-                     (maybe-assoc-id
-                      rec-name
-                      (normalized-attributes
-                       rectype rec-name attrs))
-                     raw-attrs)]
+             norm-attrs (normalized-attributes rectype rec-name attrs)
+             result (intern-rec rec-name (maybe-assoc-id rec-name norm-attrs) raw-attrs)]
          (if (:view-query (:meta raw-attrs))
            (do
              (when-let [rbac-spec (:rbac attrs)]
@@ -1033,7 +1056,7 @@
              (let [rbac-spec (:rbac attrs)
                    is-rel (:relationship (:meta attrs))]
                (lr/rbac rec-name rbac-spec))
-             result)))
+             (and (define-rbac-entities rec-name norm-attrs) result))))
        (u/throw-ex (str "Syntax error. Check " (name rectype) ": " n)))
      (u/throw-ex (str "Not a serializable record type: " (name rectype)))))
   ([rectype n attrs]
@@ -1066,7 +1089,7 @@
   ([n attrs raw-attrs]
    (let [attrs (if raw-attrs (preproc-path-identity attrs) attrs)]
      (when-let [r (serializable-entity n (preproc-attrs attrs))]
-       (let [result (and (if raw-attrs (raw/entity r raw-attrs) true) r)]
+       (let [result (and (if (and raw-attrs (not (:rbac-internal? (:meta raw-attrs)))) (raw/entity r raw-attrs) true) r)]
          (and (audit-entity r raw-attrs) result)))))
   ([n attrs]
    (let [raw-attrs attrs

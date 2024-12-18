@@ -14,6 +14,7 @@
             [agentlang.global-state :as gs]
             [agentlang.paths :as p]
             [agentlang.resolver.registry :as rr]
+            [agentlang.evaluator :as e]
             [agentlang.evaluator.intercept.internal :as ii]))
 
 (defn- has-priv? [rbac-predic user arg]
@@ -92,6 +93,32 @@
 
 (def ^:private instance-priv-assignment?
   (partial cn/instance-of? :Agentlang.Kernel.Rbac/InstancePrivilegeAssignment))
+
+(defn- call-internal [f]
+  (binding [gs/audit-trail-mode true]
+    (f)))
+
+(defn- update-rbac-instances [make-name opr user instance]
+  (let [entity-name (li/split-path (cn/instance-type instance))]
+    (if (or (cn/kernel-component? (first entity-name))
+            (cn/rbac-internal-entity? entity-name))
+      instance
+      (let [ident ((cn/identity-attribute-name entity-name) instance)
+            rn (make-name entity-name)
+            pat (case opr
+                  :create {rn {:Id ident :N user :IdN (str ident user)}}
+                  :delete [:delete rn {:IdN (str ident user)}]
+                  nil)]
+        (when pat
+          (let [r (call-internal #(e/evaluate-pattern pat))
+                status (:status r)]
+            (when-not (or (= :ok status) (= :not-found status))
+              (log/error (dissoc r :env))
+              (u/throw-ex (str "failed to " (name opr) " instance-level permission: " status)))))
+        instance))))
+
+(gs/set-update-rbac-readers! (partial update-rbac-instances li/entity-readers))
+(gs/set-update-rbac-owners! (partial update-rbac-instances li/entity-owners))
 
 (defn- handle-instance-priv [user env opr inst is-system-event]
   (if (or (= opr :create) (= opr :delete))

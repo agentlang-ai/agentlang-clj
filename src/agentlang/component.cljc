@@ -11,6 +11,7 @@
             [agentlang.util :as u]
             [agentlang.util.errors :refer [make-error raise-error throw-ex-info]]
             [agentlang.util.hash :as sh]
+            [agentlang.global-state :as gs]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
             [agentlang.util.seq :as su]))
@@ -55,6 +56,9 @@
   (ffirst (filter (fn [[_ spec]]
                     (some #{component-name} (:components spec)))
                   @models)))
+
+(defn kernel-component? [component-name]
+  (= :Agentlang (model-for-component component-name)))
 
 (defn add-component-to-model [model-name component-name]
   (when-let [spec (get @models model-name)]
@@ -438,6 +442,9 @@
   (dissoc
    (:schema (find-event-schema event-name))
    li/event-context))
+
+(defn rbac-internal-entity? [entity-name]
+  (:rbac-internal? (fetch-meta entity-name)))
 
 (defn fetch-spec [tag n]
   (when-let [meta (fetch-meta n)]
@@ -2172,8 +2179,17 @@
         (assoc inst li/meta-attr meta))
       inst)))
 
-(def concat-owners (partial update-owners set/union))
-(def remove-owners (partial update-owners set/difference))
+(defn concat-owners [inst users]
+  (when-let [f (gs/get-update-rbac-owners)]
+    (doseq [user users]
+      (f :create user inst)))
+  (update-owners set/union inst users))
+
+(defn remove-owners [inst users]
+  (when-let [f (gs/get-update-rbac-owners)]
+    (doseq [user users]
+      (f :delete user inst)))
+  (update-owners set/difference inst users))
 
 (defn user-is-owner? [user inst]
   (some #{user} (owners inst)))
@@ -2183,9 +2199,14 @@
     (get (:instprivs (li/meta-attr inst)) user)))
 
 (defn assign-instance-privileges [inst user privs]
+  (when (some #{:read} privs)
+    (when-let [f (gs/get-update-rbac-readers)]
+      (f :create user inst)))
   (assoc-in inst [li/meta-attr :instprivs user] privs))
 
 (defn remove-instance-privileges [inst user]
+  (when-let [f (gs/get-update-rbac-readers)]
+    (f :delete user inst))
   (let [path [li/meta-attr :instprivs]]
     (if-let [ps (get-in inst path)]
       (assoc-in inst path (dissoc ps user))

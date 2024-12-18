@@ -596,3 +596,10 @@
               (or (keyword? n) (symbol? n))
               ;; is there an attributes map?
               (map? (get pat n))))))
+
+(defn rbac-entity-name [suffix entity-name]
+  (let [[c n] (split-path entity-name)]
+    (make-path c (keyword (str (name n) suffix)))))
+
+(def entity-owners (partial rbac-entity-name "Owners"))
+(def entity-readers (partial rbac-entity-name "Readers"))
