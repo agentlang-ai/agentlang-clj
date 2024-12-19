@@ -80,8 +80,7 @@
                store entity-name
                (cn/identity-attribute-name entity-name) id)]
       (if-not (seq res)
-        (do (log/warn (str "resource not found - " [entity-name id]))
-            inst)
+        (u/throw-ex (str "cannot assign " (name tag) " privileges, resource not found - " [entity-name id]))
         (do (when-not is-system-event
               (when-not (cn/user-is-owner? user res)
                 (u/throw-ex (str "only owner can assign " (name tag) " privileges - " [entity-name id]))))
@@ -96,9 +95,11 @@
 (defn- handle-instance-priv [user env opr inst is-system-event]
   (if (or (= opr :create) (= opr :delete))
     (handle-rbac-entity :instance (fn [res assignee]
-                                    (let [actions (when (= opr :create) (:Actions inst))]
+                                    (let [actions (when (= opr :create)
+                                                    (mapv u/string-as-keyword (:Actions inst)))]
                                       [(if actions
-                                         (cn/assign-instance-privileges res assignee actions)
+                                         (do (rbac/run-instance-privilege-assignment-callback res assignee actions)
+                                             (cn/assign-instance-privileges res assignee actions))
                                          (cn/remove-instance-privileges res assignee))]))
                         user env opr inst is-system-event)
     inst))
@@ -110,7 +111,8 @@
   (if (or (= opr :create) (= opr :delete))
     (handle-rbac-entity :ownership (fn [res assignee]
                                      [(if (= opr :create)
-                                        (cn/concat-owners res #{assignee})
+                                        (do (rbac/run-ownership-assignment-callback res assignee)
+                                            (cn/concat-owners res #{assignee}))
                                         (cn/remove-owners res #{assignee}))])
                         user env opr inst is-system-event)
     inst))

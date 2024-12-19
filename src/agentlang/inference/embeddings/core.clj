@@ -1,6 +1,7 @@
 (ns agentlang.inference.embeddings.core
   (:require [agentlang.util :as u]
             [agentlang.util.logger :as log]
+            [agentlang.rbac.core :as rbac]
             [agentlang.inference.embeddings.internal.generator :as g]
             [agentlang.inference.embeddings.internal.queue :as queue]
             [agentlang.inference.embeddings.internal.registry :as r]
@@ -79,3 +80,15 @@
    (p/find-similar-objects db query-spec limit))
   ([query-spec limit]
    (p/find-similar-objects (r/get-db) query-spec limit)))
+
+(defn append-reader-for-rbac
+  ([db app-uuid document-id user]
+   (p/append-reader-for-rbac db app-uuid document-id user))
+  ([app-uuid document-id user]
+   (p/append-reader-for-rbac (r/get-db) app-uuid document-id user)))
+
+(rbac/register-privilege-assignment-callback
+ :Agentlang.Core/Document
+ (fn [_ document-inst user _]
+   (append-reader-for-rbac (u/get-app-uuid) (:Id document-inst) user)
+   document-inst))

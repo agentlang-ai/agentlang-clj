@@ -127,3 +127,26 @@
 (def can-update? (partial has-priv? :update))
 (def can-delete? (partial has-priv? :delete))
 (def can-eval? (partial has-priv? :eval))
+
+(def ^:private priv-assignment-callbacks (atom nil))
+
+(defn register-privilege-assignment-callback [type-name callback-fn]
+  (swap! priv-assignment-callbacks assoc type-name callback-fn)
+  type-name)
+
+(defn run-privilege-assignment-callback
+  ([tag inst user privs]
+   ;; tag - oneof [:ownership :instpriv]
+   ;; inst - instance for which privilege assignment happens
+   ;; user - assignee
+   ;; privs - optional, setof actions in the case of :instpriv
+   (let [type-name (cn/instance-type-kw inst)]
+     (when-let [callback-fn (get @priv-assignment-callbacks type-name)]
+       (callback-fn tag inst user privs))))
+  ([tag inst user] (run-privilege-assignment-callback tag inst user nil)))
+
+(def run-instance-privilege-assignment-callback
+  (partial run-privilege-assignment-callback :instpriv))
+
+(def run-ownership-assignment-callback
+  (partial run-privilege-assignment-callback :ownership))

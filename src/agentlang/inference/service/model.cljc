@@ -258,7 +258,7 @@
   agent)
 
 (dataflow
- [:after :create :Agentlang.Core/Agent]
+ [:before :create :Agentlang.Core/Agent]
  [:eval '(agentlang.inference.service.model/maybe-input-as-inference :Instance)])
 
 (def ^:private agent-callbacks (atom nil))
