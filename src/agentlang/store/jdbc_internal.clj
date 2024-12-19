@@ -87,13 +87,21 @@
 
 (defn escape-like-pattern [path]
   (-> path
+      (str/replace "\\" "\\\\")
       (str/replace "[" "\\[")
       (str/replace "]" "\\]")
       (str/replace "%" "\\%")
-      (str/replace "_" "\\_")))
+      (str/replace "_" "\\_")
+      (str/replace "$" "\\$")))
 
 (defn delete-children-statement [conn table-name path]
-  (let [escaped-path (str (escape-like-pattern path) "%")
+  (let [full-path (if (str/starts-with? path "path://")
+                    path
+                    (str "path://" path))
+        base-path (if (str/ends-with? full-path "%")
+                    (subs full-path 0 (dec (count full-path)))
+                    full-path)
+        escaped-path (str (escape-like-pattern base-path) "%")
         sql (str "UPDATE " table-name
                  " SET _" su/deleted-flag-col " = TRUE"
                  " WHERE _" (name li/path-attr) " LIKE ? ESCAPE '\\'")]
