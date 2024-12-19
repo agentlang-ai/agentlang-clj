@@ -280,7 +280,6 @@
   {enum-name {:values (vec values)}})
 
 (defn sanitize-attributes [attributes]
-  ;; check if :rbac is present and handle operations
   (dissoc attributes :rbac :meta))
 
 (defn process-attributes [entity-name attributes]
