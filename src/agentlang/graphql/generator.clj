@@ -68,8 +68,8 @@
    :Keyword    :String
    :Path       :String
    :BigInteger :Int
-   :Map        :EDNMap
-   :Edn        :EDNMap})
+   :Map        :SerializedEDN
+   :Edn        :SerializedEDN})
 
 (defn type->GraphQL [type-info]
   (let [type-kw (cond
@@ -595,7 +595,7 @@
                    :else (str value)))
     :serialize str}
 
-   :EDNMap
+   :SerializedEDN
    {:parse     (fn [value]
                  (cond
                    (map? value) value
@@ -675,7 +675,7 @@
 
 (defn generate-comparison-type [base-type element-names relationship-names]
   (cond
-    (= base-type :EDNMap) :EDNComparison
+    (= base-type :SerializedEDN) :EDNComparison
     (= base-type :Boolean) :BooleanComparison
     (= base-type :Int) :IntComparison
     (= base-type :Float) :FloatComparison
