@@ -63,13 +63,13 @@
    :Decimal    :Float
    :Boolean    :Boolean
    :Email      :String
-   :Map        :Object
    :Any        :String
    :Identity   :String
    :Keyword    :String
    :Path       :String
    :BigInteger :Int
-   :Edn        :Object})
+   :Map        :EDNMap
+   :Edn        :EDNMap})
 
 (defn type->GraphQL [type-info]
   (let [type-kw (cond
@@ -281,7 +281,7 @@
 
 (defn sanitize-attributes [attributes]
   ;; check if :rbac is present and handle operations
-  (dissoc attributes :rbac))
+  (dissoc attributes :rbac :meta))
 
 (defn process-attributes [entity-name attributes]
   (if (empty? attributes)
@@ -588,16 +588,38 @@
 
 (def scalars
   {:AnyScalar
-   {:parse (fn [value]
-             (cond
-               (string? value) value
-               (number? value) (str value)
-               (boolean? value) (str value)
-               :else (str value)))
-    :serialize str}})
+   {:parse     (fn [value]
+                 (cond
+                   (string? value) value
+                   (number? value) (str value)
+                   (boolean? value) (str value)
+                   :else (str value)))
+    :serialize str}
+
+   :EDNMap
+   {:parse     (fn [value]
+                 (cond
+                   (map? value) value
+                   (string? value) (try
+                                    (read-string value)
+                                    (catch Exception _
+                                      ((:parse (:AnyScalar scalars)) value)))
+                   :else ((:parse (:AnyScalar scalars)) value)))
+    :serialize (fn [value]
+                 (if (map? value)
+                   (pr-str value)
+                   ((:serialize (:AnyScalar scalars)) value)))}})
 
 (def filter-input-objects
-  {:StringComparison
+  {:EDNComparison
+    {:fields
+     {:eq {:type :String}
+      :ne {:type :String}
+      :contains {:type :String}
+      :isEmpty {:type :Boolean}
+      :hasKey {:type :String}}}
+
+   :StringComparison
    {:fields
     {:eq         {:type :String}
      :ne         {:type :String}
@@ -654,6 +676,7 @@
 
 (defn generate-comparison-type [base-type element-names relationship-names]
   (cond
+    (= base-type :EDNMap) :EDNComparison
     (= base-type :Boolean) :BooleanComparison
     (= base-type :Int) :IntComparison
     (= base-type :Float) :FloatComparison
