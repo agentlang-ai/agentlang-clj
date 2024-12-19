@@ -175,22 +175,25 @@
 
 (defn- apply-rbac-for-user [user env opr arg]
   (log/info (str "Applying rbac check " opr " for user " user))
-  (let [check (partial apply-rbac-checks user env opr arg)]
+  (let [check (partial apply-rbac-checks user env opr arg)
+        opr-read? (= opr :read)]
     (if-let [data (ii/data-input arg)]
-      (if (or (ii/skip-for-input? data) (= opr :read))
+      (if (or (ii/skip-for-input? data) opr-read?)
         arg
         (let [is-delete (= :delete opr)
               resource (if is-delete (second data) (first-instance data))
               check-on (if is-delete (first data) resource)
-              ign-refs (or is-delete (= :read opr))]
+              ign-refs (or is-delete opr-read?)]
           (check resource {:data check-on :ignore-refs ign-refs})))
       (if-let [data (seq (ii/data-output arg))]
         (if (ii/skip-for-output? data)
           arg
-          (if (= opr :read)
+          (if opr-read?
             (if-let [rs (seq (extract-read-results data))]
-              (when-let [rslt (seq (filter #(check % {:data % :ignore-refs true}) rs))]
-                (ii/assoc-data-output arg (set-read-results data rslt)))
+              (if ((opr actions) user {:data (first rs) :ignore-refs true})
+                arg
+                (when-let [rslt (seq (filter #(check % {:data % :ignore-refs true}) rs))]
+                  (ii/assoc-data-output arg (set-read-results data rslt))))
               arg)
             arg))
         arg))))
