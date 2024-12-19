@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.6.2-alpha] - 2024-12-19
+## [0.6.2-alpha1] - 2024-12-19
 
 - Add anthropic provider APIs
 - Update `:agent-gen` to generate agent with component file only
