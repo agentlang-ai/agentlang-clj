@@ -13,6 +13,7 @@
             [agentlang.rbac.core :as rbac]
             [agentlang.global-state :as gs]
             [agentlang.paths :as p]
+            [agentlang.inference.service.model :as agent-model]
             [agentlang.resolver.registry :as rr]
             [agentlang.evaluator.intercept.internal :as ii]))
 
@@ -292,20 +293,31 @@
         :delete (maybe-revoke-ownership! env inst))))
   arg)
 
+(def ^:private agent-object-types (agent-model/open-entities))
+
+(defn- agent-object? [obj]
+  (when obj
+    (if (and (not (map? obj)) (seqable? obj))
+      (let [x (first obj)]
+        (when (cn/an-instance? x) (agent-object? x)))
+      (and (cn/an-instance? obj) (some #{(cn/instance-type-kw obj)} agent-object-types)))))
+
 (defn- run [env opr arg]
-  (if-not gs/audit-trail-mode
-    (let [user (or (cn/event-context-user (ii/event arg))
-                   (gs/active-user))]
-      (if (or (rbac/superuser-email? user)
-              (system-event? (ii/event arg)))
-        (maybe-handle-system-objects user env opr arg)
-        (let [is-ups (or (= opr :update) (= opr :create))
-              arg (if is-ups (ii/assoc-user-state arg) arg)]
-          (when-let [r (apply-rbac-for-user user env opr arg)]
-            (and (post-process env opr arg) r))
-          ;; TODO: call check-upsert-on-attributes for create/update
-          )))
-    arg))
+  (if (and (= opr :read) (agent-object? (or (ii/data-input arg) (ii/data-output arg))))
+    arg
+    (if-not gs/audit-trail-mode
+      (let [user (or (cn/event-context-user (ii/event arg))
+                     (gs/active-user))]
+        (if (or (rbac/superuser-email? user)
+                (system-event? (ii/event arg)))
+          (maybe-handle-system-objects user env opr arg)
+          (let [is-ups (or (= opr :update) (= opr :create))
+                arg (if is-ups (ii/assoc-user-state arg) arg)]
+            (when-let [r (apply-rbac-for-user user env opr arg)]
+              (and (post-process env opr arg) r))
+            ;; TODO: call check-upsert-on-attributes for create/update
+            )))
+      arg)))
 
 (defn make [_] ; config is not used
   (ii/make-interceptor :rbac run))

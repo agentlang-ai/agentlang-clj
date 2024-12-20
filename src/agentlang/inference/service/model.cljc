@@ -546,3 +546,6 @@
     (when-let [sess (lookup-agent-chat-session agent)]
       (let [msgs (vec (filter #(= :system (:role %)) (:Messages sess)))]
         (update-agent-chat-session sess msgs)))))
+
+(defn open-entities [] ; entities that's open to be read by all users
+  (set/difference (set (cn/entity-names :Agentlang.Core false)) #{:Agentlang.Core/Document}))
