@@ -1,60 +1,153 @@
+<div align="center">
+
+# AgentLang Programming Language
+
+AgentLang is the **easiest way** to build AI Agents, Chatbots and Apps - build **teams of AI agents** that collaborate (with other AI agents and humans) to handle complex, time-consuming, monotonous tasks. AgentLang is a data-oriented, declarative abstraction for building agents and apps, similar to how Terraform is a declarative abstraction for infrastructure-as-code.
+
 [![AppCI](https://github.com/agentlang-ai/agentlang/actions/workflows/app.yml/badge.svg)](https://github.com/agentlang-ai/agentlang/actions/workflows/app.yml)
 [![AgentLang clj CI](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-clj.yml/badge.svg)](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-clj.yml)
 [![AgentLang cljs CI](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-cljs.yml/badge.svg)](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-cljs.yml)
 
-# The AgentLang Programming Language
-AgentLang is a very high-level, declarative, open-source programming language for solving complex tasks with the help of interacting AI agents. Agentlang makes it easy to enhance agents with tools, knowledge bases and chat prompts. Agents can also form complex graphs of inter-relationships that allows them to collaborate together in solving difficult problems.
+### **Open | Enterprise-grade | Production-ready**
 
-While most AI programming frameworks limit themselves to LLM based text-generation tasks, AgentLang is designed as a complete tool for real-world application development. As a language, AgentLang is data-oriented and declarative, with an abstraction that is closer to natural languages than traditional programming languages. This makes AgentLang a much better fit for LLM-powered code generation. Users can rapidly build business application in AgentLang from high-level
-specifications - typically more than 10x faster than traditional programming languages.
+The AgentLang language specification, its compiler and runtime are open source. AgentLang programs can run anywhere - **avoiding the vendor lock-in** of other AI agent/programming platforms. 
 
-## AgentLang is open
-The AgentLang language specification, its compiler and runtime are open source.
+AgentLang runtime has native integration with databases, vector databases, auth stores, etc. AgentLang programs run on the JVM and can make use of any of the millions of existing Java/Clojure and other JVM libraries out there. 
 
-The code you build in AgentLang can be run anywhere using the open source compiler and runtime, thereby avoiding the vendor lock-in of other AI programming platforms.
+AgentLang comes with all the modern tooling, dependency management and REPL needed to build production-grade agents and apps.
 
-## AgentLang is innovative
-AgentLang introduces a number of innovative concepts to programming:
+[Website](https://agentlang-ai.github.io/agentlang/) - [Examples](#examples) - [Documentation](/docs/#readme)
 
-1. **First-class AI Agents** - interacting AI Agents is a built-in language concept - developers can choose from one of the built-in agent-types, or easily add their own agent-types.
-2. **Graph-based Hierarchical Data Model** - compose the high-level data model of an application as a hierarchical graph of business entities with relationships. Such [entities and relationships](https://docs.agentlang.io/docs/concepts/data-model) are first-class constructs in AgentLang.
-3. **Zero-trust Programming** - tightly control operations on business entities through [declarative access-control](https://docs.agentlang.io/docs/concepts/zero-trust-programming) encoded directly in the model itself.
-4. **Declarative Dataflow** - express business logic as [purely-declarative patterns of data](https://docs.agentlang.io/docs/concepts/declarative-dataflow).
-5. **Resolvers** - use a simple, but [powerful mechanism](https://docs.agentlang.io/docs/concepts/resolvers) to interface with external systems.
-6. **Interceptors** - [extend the agentlang runtime](https://docs.agentlang.io/docs/concepts/interceptors) with custom capabilities.
-7. **Entity-graph-Database Mapping** - take advantage of an [abstract persistence layer](https://docs.agentlang.io/docs/concepts/entity-db-mapping) for fully-automated storage of entity instances.
+</div>
 
-## A Taste of AgentLang
+## First-class AI Agents
 
-The following code snippet shows a simple agent that can interact with a human user:
+Agents are a built-in language construct - developers can choose from one of the built-in agent-types, or easily add their own agent-types.
+
+### Example: A Humorous Chatbot
 
 ```clojure
 (component :Chat)
 
 {:Agentlang.Core/Agent
- {:Name :example-agent
+ {:Name :comedian
   :Input :Chat/Session
   :UserInstruction "You are an AI bot who tell jokes"}}
 ```
 
-Save this code to a file named `chat.al` and it's ready to be run as a highly-scalable service with auto-generated HTTP APIs for interacting with the agent. But before you can actually run it, you need to install AgentLang. The next section will help you with that.
+(Save this example in a file named `chat.al`. In a later section, we will show you how to run it)
 
-## Download and Install
+## Team of AI Agents
 
-#### Prerequisites
+AI Agents can delegate tasks to other specialized agents and dramatically increase the efficiency and accuracy of agentic behavior.
+
+### Example: Expense Processor
+
+Analyse scanned images of expense receipts and generate expense records
+
+```clojure
+;; file: expense.al
+
+(component :Expense)
+
+(entity
+ :Expense
+ {:Id :Identity
+  :Title :String
+  :Amount :Double})
+
+{:Agentlang.Core/Agent
+ {:Name :ocr-agent
+  :Type :ocr
+  :UserInstruction (str "Analyse the image of a receipt and return only the items and their amounts. "
+                        "No need to include sub-totals, totals and other data.")}}
+
+{:Agentlang.Core/Agent
+ {:Name :expense-agent
+  :Type :planner
+  :UserInstruction "Convert an expense report into individual instances of the expense entity."
+  :Tools [:Expense/Expense]
+  :Input :Expense/SaveExpenses
+  :Delegates {:To :ocr-agent :Preprocessor true}}}
+```
+
+## Data Modeling
+
+Model any business domain - from simple to complex - with the relationship graph based data modeling approach of AgentLang. Apply RBAC policies, declaratively, to the data model and secure your application data.
+
+### Example: Personal Accounting
+
+Defines the model for a simple accounting application, where the income and expense records of multiple users can be tracked separately.
+
+```clojure
+;; file: accounts.al
+
+(component :Accounts)
+
+(entity
+ :User
+ {:Email {:type :Email :guid true}
+  :Name :String
+  :Created :Now})
+
+(record
+ :Entry
+ {:Id :Identity
+  :Description :String
+  :Date :Now
+  :Amount :Double})
+
+(entity :Income {:meta {:inherits :Entry}})
+(entity :Expense {:meta {:inherits :Entry}})
+
+(relationship :UserIncome {:meta {:contains [:User :Income]}})
+
+(relationship :UserExpense {:meta {:contains [:User :Expense]}})
+```
+
+## Dataflow
+
+A dataflow allows you to express complex business logic simply as purely-declarative [patterns of data operations](https://docs.agentlang.io/docs/concepts/declarative-dataflow). The dataflow defined below creates an income and expense report, given the email of a user:
+
+```clojure
+;; file: accounts.al
+
+(defn compute-total [entries]
+ (apply + (mapv :Amount entries)))
+
+(record
+ :Report
+ {:Incomes {:listof :Income}
+  :Expenses {:listof :Expense}
+  :TotalIncome '(accounts/compute-total :Incomes)
+  :TotalExpense '(accounts/compute-total :Expenses)
+  :NetIncome '(- :TotalIncome :TotalExpense)})
+
+(dataflow
+ :GenerateReport
+ {:User {:Email? :GenerateReport.Email} :as [:U]} ; find the user
+ ; query the user's incomes and expenses:
+ {:Income? {} :-> [[:UserIncome? :U]] :as :Incomes}
+ {:Expense? {} :-> [[:UserExpense? :U]] :as :Expenses}
+ {:Report {:Incomes :Incomes :Expenses :Expenses}})
+```
+
+# Installing AgentLang
+
+### Prerequisites
 
 1. [Java SE 21](https://openjdk.org/projects/jdk/21/) or later
 2. Linux, Mac OSX or a Unix emulator in Windows
 3. Download and install the [AgentLang CLI tool](https://github.com/agentlang-ai/agentlang.cli)
 4. Set the `OPENAI_API_KEY` environment variable to a valid API key from OpenAI
 
-Now you can run the chat-agent as,
+### Running the examples
 
 ```shell
 agent /path/to/chat.al
 ```
 
-Once the agent starts running, send it a message with an HTTP POST like,
+Once the agent starts running, send it a message with an HTTP POST,
 
 ```shell
 curl --header "Content-Type: application/json" \
@@ -63,9 +156,68 @@ curl --header "Content-Type: application/json" \
 http://localhost:8080/api/Chat/Session
 ```
 
-If all goes well, the agent will reply with a joke about itself!
+You should see a response from the agent with a joke about itself!
 
-## Contributing
+Now you can try running the expenses example:
+
+```shell
+agent /path/to/expense.al
+```
+
+Send a request with a proper URL pointing to the image of a receipt or a bill:
+
+```shell
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"Expense/SaveExpenses": {"UserInstruction": "https://acme.com/receipts/r01.png"}}' \
+http://localhost:8080/api/Expense/SaveExpenses
+```
+
+Once the expenses are processed, you can execute the following `GET` request to fetch the individual expense items that were created:
+
+```shell
+curl --header "Content-Type: application/json" http://localhost:8080/api/Expense/Expense
+```
+
+Next we will try running the account example:
+
+```shell
+agent /path/to/accounts.al
+```
+
+Create a user:
+
+```shell
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"Accounts/User": {"Email": "j@acme.com", "Name": "JJ"}}' \
+http://localhost:8080/api/Accounts/User
+```
+
+Make some account entries for the user:
+
+```shell
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"Accounts/Income": {"Description": "salary", "Amount": 3450.54}}' \
+http://localhost:8080/api/Accounts/User/j@acme.com/UserIncome/Income
+
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"Accounts/Expense": {"Description": "rent", "Amount": 50.0}}' \
+http://localhost:8080/api/Accounts/User/j@acme.com/UserExpense/Expense
+```
+
+Generate the income and expense report:
+
+```shell
+curl --header "Content-Type: application/json" \
+--request POST \
+--data '{"Accounts/GenerateReport": {"Email": "j@acme.com"}}' \
+http://localhost:8080/api/Accounts/GenerateReport
+```
+
+### Contributing
 
 If you are excited about cutting-edge AI and programming language technology, please consider becoming a contributor to the Agentlang project.
 
@@ -74,7 +226,7 @@ There are two main ways you can contribute:
   1. Try out the language, report bugs and proposals in the project's [issue tracker](https://github.com/agentlang-ai/agentlang/issues).
   2. Actively participate in the development of Agentlang and submit your patches as [pull requests](https://github.com/agentlang-ai/agentlang/pulls).
 
-## License
+### License
 
 Copyright 2024 Fractl Inc.
 
