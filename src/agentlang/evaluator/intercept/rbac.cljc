@@ -297,15 +297,20 @@
 
 (defn- agent-object? [obj]
   (when obj
-    (if (and (not (map? obj)) (seqable? obj))
-      (let [x (first obj)]
-        (when (cn/an-instance? x) (agent-object? x)))
+    (if (not (map? obj))
+      (when (seqable? obj)
+        (let [f (first obj)]
+          (cond
+            (keyword? f) (some #{(li/make-path obj)} agent-object-types)
+            (map? f) (agent-object? f)
+            :else (when-let [r (seq (extract-read-results obj))]
+                    (agent-object? r)))))
       (and (cn/an-instance? obj) (some #{(cn/instance-type-kw obj)} agent-object-types)))))
 
 (defn- run [env opr arg]
-  (if (and (= opr :read) (agent-object? (or (ii/data-input arg) (ii/data-output arg))))
-    arg
-    (if-not gs/audit-trail-mode
+  (if-not gs/audit-trail-mode
+    (if (and (= opr :read) (agent-object? (or (ii/data-input arg) (ii/data-output arg))))
+      arg
       (let [user (or (cn/event-context-user (ii/event arg))
                      (gs/active-user))]
         (if (or (rbac/superuser-email? user)
@@ -316,8 +321,8 @@
             (when-let [r (apply-rbac-for-user user env opr arg)]
               (and (post-process env opr arg) r))
             ;; TODO: call check-upsert-on-attributes for create/update
-            )))
-      arg)))
+            ))))
+    arg))
 
 (defn make [_] ; config is not used
   (ii/make-interceptor :rbac run))

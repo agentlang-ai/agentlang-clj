@@ -429,6 +429,9 @@
   ([event callback] (eval-event event callback false))
   ([event] (eval-event event identity)))
 
+(defn- eval-internal-event [event & args]
+  (apply eval-event (e/mark-internal (cn/make-instance event)) args))
+
 (defn- maybe-agent-pattern [p]
   (when (and (map? p)
              (= :Agentlang.Core/Agent (li/record-name p)))
@@ -519,7 +522,7 @@
 (defn create-agent-chat-session [agent-instance alt-instruction]
   (let [ins (or (:UserInstruction agent-instance) alt-instruction)]
     (when ins
-      (eval-event
+      (eval-internal-event
        {:Agentlang.Core/CreateAgentChatSession
         {:ChatId (or (context-chat-id agent-instance) (:Name agent-instance))
          :Messages [{:role :system :content ins}]
@@ -533,7 +536,7 @@
       agent-instance))
 
 (defn update-agent-chat-session [chat-session messages]
-  (eval-event
+  (eval-internal-event
    {:Agentlang.Core/Update_ChatSession
     {li/path-attr (li/path-attr chat-session)
      :Data {:Messages messages}}}

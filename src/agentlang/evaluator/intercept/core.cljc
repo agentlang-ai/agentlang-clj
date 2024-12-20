@@ -76,7 +76,7 @@
           (if-let [i (first ins)]
             (if-let [r
                      (do
-                       (log/info (str "Invoking input interceptor " (:name i) " on " (u/pretty-str result)))
+                       (log/debug (str "Invoking input interceptor " (:name i) " on " (u/pretty-str result)))
                        ((ii/intercept-fn i)
                         (when (system-interceptor? i) env) opr result))]
               (recur (rest ins) r)
