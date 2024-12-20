@@ -30,8 +30,7 @@
     :raw
     :-*-containers-*-
     :Agentlang.Kernel.UserApp
-    :Agentlang.Kernel.Repl
-    :Agentlang.Core})
+    :Agentlang.Kernel.Repl})
 
 (def non-instance-user-attr-keys
   #{type-tag-key id-attr type-key dirty-key})
@@ -56,6 +55,11 @@
   (ffirst (filter (fn [[_ spec]]
                     (some #{component-name} (:components spec)))
                   @models)))
+
+(defn add-component-to-model [model-name component-name]
+  (when-let [spec (get @models model-name)]
+    (let [cns (vec (set (conj (:components spec) component-name)))]
+      (register-model model-name (assoc spec :components cns)))))
 
 (defn get-model-version [component]
   (or (model-version (model-for-component component)) "0.0.1"))
@@ -865,7 +869,8 @@
     attributes))
 
 (defn- validated-attribute-values [recname recversion schema attributes]
-  (let [r (check-attribute-names recname schema attributes)]
+  (let [r (check-attribute-names recname schema attributes)
+        icns (set (internal-component-names))]
     (or (error? r)
         (loop [schema schema, attributes attributes]
           (if-let [[aname atype] (first schema)]
@@ -875,10 +880,8 @@
                     [component aref] (li/split-path typname)]
                 (recur
                  (rest schema)
-                 (if-let [ascm (find-attribute-schema 
-                                component 
-                                (if (contains? (set (internal-component-names)) component)
-                                  nil recversion)
+                 (if-let [ascm (find-attribute-schema
+                                component (when-not (contains? icns component) recversion)
                                 aref)]
                    (apply-attribute-validation
                     aname ascm (preproc-attribute-value attributes aname typname))
@@ -1154,6 +1157,17 @@
        result)))
   ([component] (entity-names component true)))
 
+(defn all-entity-names-and-versions []
+  (reduce
+   (fn [entities c]
+     (merge
+      entities
+      (apply
+       merge
+       (map #(do {% (get-model-version c)})
+            (entity-names c false)))))
+   {} (component-names)))
+
 (def event-names (partial record-names-by-type :event))
 
 (defn relationship-names [component]
@@ -1409,13 +1423,18 @@
 (defn unique-attribute? [entity-schema attr]
   (:unique (find-attribute-schema (get entity-schema attr))))
 
-(defn attribute-type [entity-schema-or-name attr]
+(defn entity-attribute-schema [entity-schema-or-name attr]
   (let [entity-schema (if (keyword? entity-schema-or-name)
                         (fetch-entity-schema entity-schema-or-name)
                         entity-schema-or-name)
         ascm (get entity-schema attr)]
-    (or (:type (find-attribute-schema ascm))
-        ascm)))
+    [(find-attribute-schema ascm) ascm]))
+
+(defn attribute-type [entity-schema-or-name attr]
+  (when-let [[ascm ascm0] (entity-attribute-schema entity-schema-or-name attr)]
+    (if (map? ascm)
+      (or (:type ascm) ascm0)
+      ascm)))
 
 (def identity-attribute? li/guid)
 
@@ -1857,7 +1876,10 @@
 (defn parent-identity-attribute-type [parent-recname]
   (when-let [a (or (path-identity-attribute-name parent-recname)
                    (identity-attribute-name parent-recname))]
-    (attribute-type parent-recname a)))
+    (let [[ascm ascm0] (entity-attribute-schema parent-recname a)]
+      (if (map? ascm)
+        (dissoc ascm :unique :guid :optional)
+        (or ascm ascm0)))))
 
 (defn parent-of? [child parent]
   (let [child (li/make-path child)

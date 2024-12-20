@@ -2,29 +2,33 @@
   (:require
     clojure.main
     clojure.test
-    [clojure.java.io :as io]
-    [clojure.string :as s]
-    [agentlang.util :as u]
-    [agentlang.util.seq :as su]
-    [agentlang.util.logger :as log]
-    [agentlang.resolver.timer :as timer]
-    [agentlang.resolver.registry :as rr]
-    [agentlang.compiler :as c]
-    [agentlang.component :as cn]
-    [agentlang.evaluator :as e]
-    [agentlang.evaluator.intercept :as ei]
-    [agentlang.store :as store]
-    [agentlang.global-state :as gs]
-    [agentlang.lang :as ln]
-    [agentlang.lang.rbac :as lr]
-    [agentlang.lang.tools.loader :as loader]
-    [agentlang.lang.tools.build :as build]
-    [agentlang.auth :as auth]
-    [agentlang.rbac.core :as rbac]
-    [agentlang.connections.client :as cc]
-    [agentlang.inference.embeddings.core :as ec]
-    [agentlang.inference.service.core :as isc]
-    [fractl-config-secrets-reader.core :as sr]))
+   [clojure.java.io :as io]
+   [clojure.string :as s]
+   [agentlang.util :as u]
+   [agentlang.util.seq :as su]
+   [agentlang.util.logger :as log]
+   [agentlang.util.runtime :as ur]
+   [agentlang.store :as store]
+   [agentlang.store.util :as sfu]
+   [agentlang.store :as as]
+   [agentlang.store.db-common :as dbc]
+   [agentlang.resolver.timer :as timer]
+   [agentlang.resolver.registry :as rr]
+   [agentlang.compiler :as c]
+   [agentlang.component :as cn]
+   [agentlang.evaluator :as e]
+   [agentlang.evaluator.intercept :as ei]
+   [agentlang.global-state :as gs]
+   [agentlang.lang :as ln]
+   [agentlang.lang.rbac :as lr]
+   [agentlang.lang.tools.loader :as loader]
+   [agentlang.lang.tools.build :as build]
+   [agentlang.auth :as auth]
+   [agentlang.rbac.core :as rbac]
+   [agentlang.connections.client :as cc]
+   [agentlang.inference.embeddings.core :as ec]
+   [agentlang.inference.service.core :as isc]
+   [fractl-config-secrets-reader.core :as sr]))
 
 (def ^:private repl-mode-key :-*-repl-mode-*-)
 (def ^:private repl-mode? repl-mode-key)
@@ -363,19 +367,65 @@
   ([model-name f]
    (call-after-load-model model-name f false)))
 
+(defn- rename-entity-table [connection entity-name old-version new-version]
+  (try
+    (let [old-table-name (sfu/entity-table-name entity-name old-version)
+          new-table-name (sfu/entity-table-name entity-name new-version)]
+      (dbc/rename-db-table! connection new-table-name old-table-name)
+      (println "Table renamed: " old-table-name "to" new-table-name))
+    (catch Exception e
+      (log/error
+       (str "Table not renamed - " entity-name " - " old-version " - " new-version))
+      (log/error e))))
+
+(defn rename-db-entity-tables [new-entities old-entities old-agentlang-version config]
+  (let [no-auto-migration (get config :no-auto-migration #{})
+        connection (as/connection-info (store-from-config config))]
+    (loop [ne (into [] old-entities)]
+      (when (seq ne)
+        (let [[k v] (first ne)]
+          (when (and (not (contains? no-auto-migration k))
+                     (not (contains? no-auto-migration (keyword (namespace k))))
+                     (not (contains? no-auto-migration (cn/model-for-component (keyword (namespace k)))))
+                     (nil? (rr/resolver-for-path k)))
+            
+            (when-let [new-version (get new-entities k)]
+              (if (contains? (set (cn/internal-component-names)) (keyword (namespace k)))
+                (when (and (not= old-agentlang-version "current")
+                           (not= old-agentlang-version new-version))
+                  (rename-entity-table connection k old-agentlang-version new-version))
+                (when (not= v new-version)
+                  (rename-entity-table connection k v new-version))))))
+        (recur (rest ne))))))
+
+(defn invoke-migrations-event []
+  (try
+    (let
+     [r (e/eval-all-dataflows
+         (cn/make-instance
+          {:Agentlang.Kernel.Lang/Migrations {}}))]
+      (log/info (str "migrations result: " r))
+      r)
+    (catch Exception ex
+      (log/error (str "migrations event failed: " (.getMessage ex)))
+      (throw ex))))
+
 (defn call-after-load-model-migrate
-  ([model-name f ignore-load-error]
+  ([model-name type path options ignore-load-error] 
    (binding [gs/migration-mode true]
      (gs/in-script-mode!)
-     (when (try
-             (build/load-model model-name)
-             (build/load-model-migration model-name)
-             (catch Exception ex
-               (if ignore-load-error true (throw ex))))
-       (f))))
-  ([model-name f]
-   (call-after-load-model-migrate model-name f false)))
-
+     (try
+       (let [[_ config] (read-model-and-config options)
+             [model old-entities] (build/load-model-migration model-name type path)]
+         (cn/unregister-model (:name model))
+         (let [[_ new-entities] (build/load-model-migration model-name nil nil)]
+           (rename-db-entity-tables new-entities old-entities (:agentlang-version model) config))
+         (init-runtime (:name model) config)
+         (invoke-migrations-event))
+       (catch Exception ex
+         (if ignore-load-error true (throw ex))))))
+  ([model-name type path options]
+   (call-after-load-model-migrate model-name type path options false)))
 
 (defn force-call-after-load-model [model-name f]
   (try

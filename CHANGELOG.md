@@ -7,38 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.6.1-alpha6] - 2024-11-21
+## [0.6.1] - 2024-12-05
 
+- Telemetry integration
+- Schema diff support
+- Agent generation support using `:agent-gen` type of agent
+- Support kernel model version for Agentlang.Core component
+- Resolver query preprocessor bug fix for boolean values
+- Syntax update for :git dependencies
+- Fix dependency loading for `agent run`
+- Add code evaluation support for nREPL to add functionalities to running nREPL session
 - Return `ok` status for `not-found` at the HTTP layer
-- Minor bug fixes
-
-## [0.6.1-alpha5] - 2024-11-20
-
 - Support shared cognito tokens across apps
 - Return 415 on unsupported content-type
 - Option to disable local user sessions
-- Telemetry integration
-
-## [0.6.1-alpha4] - 2024-11-18
-
 - Migration join tests and fixes
-- Completely disable publish-schema for cljs
-
-## [0.6.1-alpha3] - 2024-11-14
-
-- Add logging to nREPL requests and evaluation phases
-- nREPL now sends json response with status and result
-- Add fix for postgres `=` operator to work on parent attribute
 - Support for restarting and retries for timer
-
-## [0.6.1-alpha2] - 2024-11-13
-
-- nREPL now handles all evaluation as async evaluation
-- nREPL now doesn't depend on timeout for evaluation result
-
-## [0.6.1-alpha1] - 2024-11-08
-
-- Update timeout for nREPL drawbridge
 
 ## [0.6.0] - 2024-10-22
 

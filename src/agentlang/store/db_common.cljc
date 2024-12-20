@@ -144,6 +144,11 @@
     db-schema-name
     (u/throw-ex (str "Failed to create schema - " db-schema-name))))
 
+(defn rename-db-table! [connection db-table-name-new db-table-name-old]
+  (if (execute-sql! connection [(stu/rename-table-sql db-table-name-new db-table-name-old)])
+    db-table-name-new
+    (u/throw-ex (str "Failed to rename table - " db-table-name-old " to " db-table-name-new))))
+
 (defn- drop-db-schema! [connection db-schema-name]
   (if (execute-sql! connection [(stu/drop-schema-sql db-schema-name)])
     db-schema-name

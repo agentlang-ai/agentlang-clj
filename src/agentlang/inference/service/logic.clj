@@ -199,6 +199,10 @@
           instance (assoc instance :UserInstruction final-instruction)]
       (compose-agents instance (provider/make-completion instance)))))
 
+(defn handle-agent-gen-agent [instance]
+  (let [s (str (:UserInstruction instance) "\nGenerate an agent with `core.al` file contents and `model.al` file contents.\n")]
+    (handle-chat-agent (assoc instance :UserInstruction s))))
+
 (defn handle-classifier-agent [instance]
   (let [s (str (:UserInstruction instance) "\nReturn only the category name and nothing else.\n")]
     (handle-chat-agent (assoc instance :UserInstruction s))))

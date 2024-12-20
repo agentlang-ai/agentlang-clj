@@ -22,8 +22,8 @@
  :Result)
 
 {:Agentlang.Core/LLM
- {:Type "openai"
-  :Name "llm01"
+ {:Type :openai
+  :Name :llm01
   :Config {:ApiKey (agentlang.util/getenv "OPENAI_API_KEY")
            :EmbeddingApiEndpoint "https://api.openai.com/v1/embeddings"
            :EmbeddingModel "text-embedding-3-small"
@@ -31,16 +31,16 @@
            :CompletionModel "gpt-3.5-turbo"}}}
 
 {:Agentlang.Core/Agent
- {:Name "weather-planner-agent"
-  :Type "planner"
-  :ToolComponents ["Weather.Service.Core"]
+ {:Name :weather-planner-agent
+  :Type :planner
+  :Tools [:Weather.Service.Core/GetWeatherForCity]
   :UserInstruction "You are an agent that figures out which tool to use to answer a user query."
-  :LLM "llm01"}}
+  :LLM :llm01
+  :Input :Weather.Service.Core/InvokePlanner}}
 
 ;; Usage:
 ;; POST api/Weather.Service.Core/InvokePlanner
 ;; {"Weather.Service.Core/InvokePlanner": {"UserInstruction": "What's the weather for Boston today?"}}
-(inference :InvokePlanner {:agent "weather-planner-agent"})
 
 (dataflow
  :Agentlang.Kernel.Lang/AppInit

@@ -203,7 +203,10 @@
    {:Manager n}))
 
 (def default-manager (make-ticket-manager "admin@acme.com"))
-(def default-slack-channel (make-slack-channel (if test-mode "approval-requests" (System/getenv "SLACK_CHANNEL_ID"))))
+(def default-slack-channel (make-slack-channel
+                            (if test-mode
+                              "approval-requests"
+                              (or (System/getenv "SLACK_CHANNEL_ID") "C07L51XJULV"))))
 
 (def manager-db {"10000" (make-ticket-manager "mgr01@acme.com")})
 (def slack-channel-db {"mgr01@acme.com" default-slack-channel})

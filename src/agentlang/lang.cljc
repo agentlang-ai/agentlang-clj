@@ -63,6 +63,8 @@
      (when-not gs/migration-mode
        (when (cn/component-exists? ns-name)
          (cn/remove-component ns-name)))
+     (when-let [model-name (:model spec)]
+       (cn/add-component-to-model model-name n))
      (let [r (cn/create-component
               ns-name
               (when spec
@@ -846,7 +848,9 @@
 
 (defn- crud-event-inst-accessor
   ([evtname cname inst-attr]
-   (let [r (crud-event-subattr-accessor evtname :Instance inst-attr)]
+   (let [r (crud-event-subattr-accessor evtname :Instance inst-attr)
+         cname (let [[c n] (li/split-path evtname)]
+                 (if (and c n) c cname))]
      (if cname
        (if (keyword? cname)
          (cn/canonical-type-name cname r)
@@ -856,8 +860,11 @@
   ([evtname] (crud-event-inst-accessor evtname true nil)))
 
 (defn- direct-id-accessor [evtname id-attr]
-  (cn/canonical-type-name
-   (keyword (str (name evtname) "." (name id-attr)))))
+  (let [[c n] (li/split-path evtname)
+        cname (and n c)]
+    (cn/canonical-type-name
+     cname
+     (keyword (str (name evtname) "." (name id-attr))))))
 
 (defn- identity-attribute-name [recname]
   (or (cn/identity-attribute-name recname)
@@ -1202,10 +1209,15 @@
         raw-meta (raw/entity-meta child)
         [c _] (li/split-path child)
         pidtype (cn/parent-identity-attribute-type parent)
-        parent-attr-spec {:type (or pidtype :Any)
-                          :optional true
-                          :expr `'(agentlang.paths/parent-id-from-path
-                                   ~(name c) ~li/path-attr ~(k/numeric-type? pidtype))}]
+        parent-attr-spec
+        (merge
+         {:type :Agentlang.Kernel.Lang/Any}
+         (if (map? pidtype)
+           pidtype
+           {:type (or pidtype :Agentlang.Kernel.Lang/Any)})
+         {:optional true
+          :expr `'(agentlang.paths/parent-id-from-path
+                   ~(name c) ~li/path-attr ~(k/numeric-type? (if (map? pidtype) (:type pidtype) pidtype)))})]
     (if-not (cn/path-identity-attribute-name child)
       (let [cident (user-defined-identity-attribute-name child)
             cident-raw-spec (cident child-attrs)

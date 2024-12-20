@@ -17,6 +17,7 @@
 (register-agent-handler "classifier" logic/handle-classifier-agent)
 (register-agent-handler "eval" logic/handle-eval-agent)
 (register-agent-handler "ocr" logic/handle-ocr-agent)
+(register-agent-handler "agent-gen" logic/handle-agent-gen-agent)
 
 (defn- cleanup-agent [inst]
   (dissoc inst :Context))

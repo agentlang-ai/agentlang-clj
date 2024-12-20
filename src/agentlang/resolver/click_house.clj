@@ -110,12 +110,12 @@
               (str (if (seq s) ", " "") (as-table-name t) "." (name c) " AS " (name n))))
           "" with-attrs))
 
-(defn- query-by-sql [ds sql format]
+(defn- query-by-sql [ds sql params format]
   (let [^Connection conn (ds)]
     (try
       (let [sql (if (string? sql) sql (:query sql))
-            pstmt (ji/do-query-statement conn sql)
-            results (ji/execute-stmt-once! conn pstmt nil)]
+            [pstmt sanitized-params] (ji/do-query-statement conn sql params)
+            results (ji/execute-stmt-once! conn pstmt sanitized-params)]
         (format results))
       (finally
         (.close conn)))))
@@ -128,12 +128,14 @@
   (cond
     (or (:join query) (:left-join query))
     [(sql/format-join-sql as-table-name name false (as-table-name (:from query)) query)
+     []
      format-raw-results]
 
     (or (= w :*) (nil? (seq w)))
     (let [wa (:with-attributes query)
           clause (if wa (make-select-clause wa) "*")]
       [(str "SELECT " clause " FROM " (as-table-name entity-name))
+       []
        (partial stu/results-as-instances entity-name name)])
 
     :else
@@ -148,12 +150,13 @@
           table-name (as-table-name entity-name)
           with-attrs (:with-attributes query)
           select-clause (if with-attrs (make-select-clause with-attrs) "*")]
-      [(str "SELECT " select-clause " FROM " table-name " WHERE " where-clause)
+      [(str "SELECT " select-clause " FROM " table-name " WHERE " (first where-clause))
+       (second where-clause)
        (if with-attrs format-raw-results (partial stu/results-as-instances entity-name name))])))
 
 (defn- ch-query [ds query-pattern]
-  (let [[sql fmt] (compile-query query-pattern)]
-    (query-by-sql ds sql fmt)))
+  (let [[sql params fmt] (compile-query query-pattern)]
+    (query-by-sql ds sql params fmt)))
 
 (defn- as-ch-type [attr-type]
   (if-let [rtp (k/find-root-attribute-type attr-type)]
@@ -179,7 +182,7 @@
          ") PRIMARY KEY(" (name (cn/identity-attribute-name entity-name)) ")")))
 
 (defn- create-view-sql [table-name view-query]
-  (let [[q _] (compile-query view-query)
+  (let [[q _ _] (compile-query view-query)
         sql (if (string? q) q (:query q))]
     (str "CREATE VIEW IF NOT EXISTS " table-name " AS " sql)))
 

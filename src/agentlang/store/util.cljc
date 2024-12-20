@@ -89,6 +89,9 @@
   (str (if unique? create-unique-index-prefix create-index-prefix)
        " " (index-name table-name) " ON " table-name "(" colname ")"))
 
+(defn rename-table-sql [to from]
+  (str "ALTER TABLE " from " RENAME TO " to))
+
 (defn create-schema-sql [schema-name]
   (str "CREATE SCHEMA IF NOT EXISTS " schema-name))
 
