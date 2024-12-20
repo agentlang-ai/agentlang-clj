@@ -23,9 +23,8 @@
 (defn suspend? [result]
   (= opc/suspend-tag (opc/result-status-tag result)))
 
-(defn as-suspended [result suspension-id]
-  (let [r (dissoc (:result result) :alias)]
-    (assoc result opc/result-status-tag opc/ok-tag :suspension-id suspension-id :result r)))
+(defn suspension [result suspension-id]
+  (assoc result opc/result-status-tag opc/ok-tag :suspension-id suspension-id))
 
 (defn error [message]
   (make-result opc/error-tag nil nil message))

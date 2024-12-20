@@ -158,8 +158,6 @@
          (dynamic-upsert
           [[path-parts changed-attrs instance-compiler alias-name]]
           "Fetch the entity-instance bound to varname, merge the new attributes and do an upsert")
-         (suspend [[alias]]
-          "Suspend the dataflow evaluation and return a constinuation-id that can be used to restart the suspended execution.")
          (await_
           [[body continuation]]
           "Evaluate body asynchronously and then evaluate the proper handler in the 

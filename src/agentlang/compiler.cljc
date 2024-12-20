@@ -603,7 +603,7 @@
       (u/throw-ex (str "macro not found - " m))
       (u/throw-ex (str "not a valid macro name - " m)))))
 
-(defn- special-form-alias [pat]
+(defn special-form-alias [pat]
   (let [rpat (reverse pat)]
     (if (= :as (second rpat))
       [(vec (reverse (nthrest rpat 2))) (first rpat)]
@@ -771,13 +771,6 @@
        (ctx/add-alias! ctx alias-name))
      (emit-try rethrow? body handlers alias-name)))
   ([ctx pat] (compile-try false ctx pat)))
-
-(defn- suspension-alias [pat]
-  (when (= :as (first pat))
-    (second pat)))
-
-(defn- compile-suspend [ctx pat]
-  (op/suspend [(suspension-alias pat)]))
 
 (defn- valid-alias-name? [alias]
   (if (vector? alias)
@@ -1009,7 +1002,6 @@
    :delete compile-delete
    :await compile-await
    :eval compile-eval
-   :suspend compile-suspend
    :? compile-path-query})
 
 (defn- compile-special-form

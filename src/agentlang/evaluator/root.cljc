@@ -1234,8 +1234,6 @@
           (env/active-error-result env)
           result)))
 
-    (do-suspend [self env [alias]] (i/suspend (i/ok {:suspended true :alias alias} env)))
-
     (do-await_ [self env [body continuation]]
       (do
         (go

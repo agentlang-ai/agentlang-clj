@@ -31,13 +31,41 @@
 
 (declare eval-all-dataflows evaluator-with-env safe-eval-pattern)
 
-(defn- suspend-dataflow [result env opcc]
-  (let [event (env/active-event env)]
-    (if (zero? opcc)
-      (i/as-suspended result nil)
-      (if-let [sid (sp/save-suspension eval-all-dataflows event opcc (env/cleanup env false) (get-in result [:result :alias]))]
-        (i/as-suspended result sid)
-        (u/throw-ex (str "failed to suspend dataflow for " (cn/instance-type-kw event)))))))
+(def ^:private suspension-flag #?(:clj (ThreadLocal.)
+                                  :cljs (atom false)))
+
+(defn- reset-suspension-flag! []
+  #?(:clj (.set suspension-flag false)
+     :cljs (reset! suspension-flag false)))
+
+(defn as-suspended [result]
+  #?(:clj (.set suspension-flag true)
+     :cljs (reset! suspension-flag true))
+  result)
+
+(defn- is-suspension-flag-set? []
+  #?(:clj (.get suspension-flag)
+     :cljs @suspension-flag))
+
+(defn- extract-alias-from-pattern [pat]
+  (if (map? pat)
+    (:as pat)
+    (when (seqable? pat) (second (drop-while #(not= % :as) pat)))))
+
+(defn- suspend-dataflow [result env opcode opcode-count]
+  (reset-suspension-flag!)
+  (let [result
+        (let [event (env/active-event env)]
+          (if (zero? opcode-count)
+            (i/suspension result nil)
+            (if-let [sid (sp/save-suspension
+                          eval-all-dataflows event opcode-count
+                          (env/cleanup env false)
+                          (when-let [pat (:pattern opcode)]
+                            (extract-alias-from-pattern pat)))]
+              (i/suspension result sid)
+              (u/throw-ex (str "failed to suspend dataflow for " (cn/instance-type-kw event))))))]
+    result))
 
 (defn- dispatch-an-opcode [evaluator env opcode]
   (((opc/op opcode) i/dispatch-table) evaluator env (opc/arg opcode)))
@@ -63,8 +91,8 @@
               (cn/future-object? result))
         (if-let [opcode (first dc)]
           (let [r (dispatch evaluator (:env result) opcode)]
-            (if (i/suspend? r)
-              (suspend-dataflow r (:env r) (count (rest dc)))
+            (if (is-suspension-flag-set?)
+              (suspend-dataflow r (:env r) opcode (count (rest dc)))
               (recur (rest dc) r)))
           result)
         result))))
