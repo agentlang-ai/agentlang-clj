@@ -138,13 +138,24 @@ A dataflow allows you to express complex business logic simply as purely-declara
 
 1. [Java SE 21](https://openjdk.org/projects/jdk/21/) or later
 2. Linux, Mac OSX or a Unix emulator in Windows
-3. Download and install the [AgentLang CLI tool](https://github.com/agentlang-ai/agentlang.cli)
+3. Download and install the [AgentLang CLI tool](https://github.com/agentlang-ai/agentlang.cli) or use it via Docker
 4. Set the `OPENAI_API_KEY` environment variable to a valid API key from OpenAI
 
 ### Running the examples
 
 ```shell
 agent /path/to/chat.al
+```
+
+Or run it via Docker (assuming the file `chat.al` is in the current directory):
+
+```shell
+docker run --rm \
+  -v .:/agentlang \
+  -e OPENAI_API_KEY="<FIXME>" \
+  -p 8080:8080 \
+  -it agentlang/agentlang.cli:latest \
+  agent chat.al
 ```
 
 Once the agent starts running, send it a message with an HTTP POST,
@@ -162,6 +173,17 @@ Now you can try running the expenses example:
 
 ```shell
 agent /path/to/expense.al
+```
+
+Or run it via Docker (assuming the file `expense.al` is in the current directory):
+
+```shell
+docker run --rm \
+  -v .:/agentlang \
+  -e OPENAI_API_KEY="<FIXME>" \
+  -p 8080:8080 \
+  -it agentlang/agentlang.cli:latest \
+  agent expense.al
 ```
 
 Send a request with a proper URL pointing to the image of a receipt or a bill:
@@ -183,6 +205,17 @@ Next we will try running the account example:
 
 ```shell
 agent /path/to/accounts.al
+```
+
+Or run it via Docker (assuming the file `accounts.al` is in the current directory):
+
+```shell
+docker run --rm \
+  -v .:/agentlang \
+  -e OPENAI_API_KEY="<FIXME>" \
+  -p 8080:8080 \
+  -it agentlang/agentlang.cli:latest \
+  agent accounts.al
 ```
 
 Create a user:
