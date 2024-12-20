@@ -1209,10 +1209,15 @@
         raw-meta (raw/entity-meta child)
         [c _] (li/split-path child)
         pidtype (cn/parent-identity-attribute-type parent)
-        parent-attr-spec {:type (or pidtype :Any)
-                          :optional true
-                          :expr `'(agentlang.paths/parent-id-from-path
-                                   ~(name c) ~li/path-attr ~(k/numeric-type? pidtype))}]
+        parent-attr-spec
+        (merge
+         {:type :Agentlang.Kernel.Lang/Any}
+         (if (map? pidtype)
+           pidtype
+           {:type (or pidtype :Agentlang.Kernel.Lang/Any)})
+         {:optional true
+          :expr `'(agentlang.paths/parent-id-from-path
+                   ~(name c) ~li/path-attr ~(k/numeric-type? (if (map? pidtype) (:type pidtype) pidtype)))})]
     (if-not (cn/path-identity-attribute-name child)
       (let [cident (user-defined-identity-attribute-name child)
             cident-raw-spec (cident child-attrs)
