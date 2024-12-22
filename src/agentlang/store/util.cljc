@@ -1,3 +1,4 @@
+
 (ns agentlang.store.util
   (:require [clojure.set :as set]
             [clojure.string :as s]
@@ -73,7 +74,7 @@
     (into {} (map vector indexed-attrs tabnames))))
 
 (def create-table-prefix "CREATE TABLE IF NOT EXISTS")
-#?(:clj 
+#?(:clj
    (def create-unique-index-prefix "CREATE UNIQUE INDEX IF NOT EXISTS")
    :cljs
    (def create-unique-index-prefix "CREATE UNIQUE INDEX"))
@@ -104,7 +105,7 @@
     (u/throw-ex (str "schema not found for record - " rec-name))))
 
 (defn table-name->entity
-  [tabname] 
+  [tabname]
   (let [tabnamestr (name tabname)
         [cnstr estr] (s/split tabnamestr #"__")]
     [(keyword (s/replace cnstr #"_" ".")) (keyword estr)]))
@@ -168,12 +169,18 @@
       (subs s 1))))
 
 (defn- normalize-attribute [schema kw-type-attrs [k v]]
-  [k
-   (cond
-     (some #{k} kw-type-attrs) (u/string-as-keyword v)
-     (uuid? v) (str v)
-     (encoded-clj-object? v) (decode-clj-object v)
-     :else v)])
+  (let [attr-type (or (get (cn/find-attribute-schema (get schema k)) :type)
+                      (get schema k))]
+    [k
+     (cond
+       (some #{k} kw-type-attrs) (u/string-as-keyword v)
+       (uuid? v) (str v)
+       (and v (= :Agentlang.Kernel.Lang/Boolean attr-type))
+       (not (#{0 false} v))
+       (and (number? v) (= :Agentlang.Kernel.Lang/Decimal attr-type))
+       #?(:clj (bigdec v) :cljs (float v))
+       (encoded-clj-object? v) (decode-clj-object v)
+       :else v)]))
 
 (defn result-as-instance
   ([entity-name entity-version entity-schema normalize-colname result]

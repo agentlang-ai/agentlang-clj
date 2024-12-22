@@ -1,3 +1,4 @@
+
 (ns agentlang.test.util
   (:require [agentlang.evaluator :as e]
             [agentlang.evaluator.internal :as ei]
@@ -102,16 +103,17 @@
      (js/setTimeout f msec)))
 
 (defn rand-str [len]
-  #?(:clj  
+  #?(:clj
      (apply str (take len (repeatedly #(char (+ (rand 26) 97)))))))
 
 (defn rand-email [domain]
-  #?(:clj  
+  #?(:clj
      (str (rand-str 12) "@" domain)))
 
-;; To test postgres in CI
+;; To test a DB in CI, set relevant env variable, for example:
 ;; export POSTGRES_ENABLED=<something>
-;; To turn off
+;;
+;; To turn off:
 ;; unset POSTGRES_ENABLED
 (def test-with-postgres
   #?(:clj (if (System/getenv "POSTGRES_ENABLED")
@@ -120,7 +122,17 @@
      :cljs false))
 
 (store/open-default-store
- #?(:clj (when test-with-postgres
+ #?(:clj (cond
+           #?(:clj (System/getenv "SNOWFLAKE_ENABLED") :cljs false)
+           {:type     :snowflake
+            :account  (System/getenv "SNOWFLAKE_ACCOUNT")
+            :warehouse (System/getenv "SNOWFLAKE_WAREHOUSE")
+            :dbname   (System/getenv "SNOWFLAKE_DB")
+            :schema   (System/getenv "SNOWFLAKE_SCHEMA")
+            :username (System/getenv "SNOWFLAKE_USER")
+            :password (System/getenv "SNOWFLAKE_PASSWORD")}
+
+           #?(:clj (System/getenv "POSTGRES_ENABLED") :cljs false)
            {:type     :postgres
             :host     (or (System/getenv "POSTGRES_HOST") "localhost")
             :dbname   (or (System/getenv "POSTGRES_DB") "postgres")
@@ -139,7 +151,7 @@
 
 (comment
   {:Agentlang.Kernel.Lang/UUID (list `s/with-gen string?
-                      #(gen/fmap str (s/gen uuid?)))})
+                                     #(gen/fmap str (s/gen uuid?)))})
 
 (def agentlang-type->spec-clj-type
   {:Agentlang.Kernel.Lang/String string?
@@ -150,35 +162,35 @@
    :Agentlang.Kernel.Lang/Float float?
    :Agentlang.Kernel.Lang/Double double?
    :Agentlang.Kernel.Lang/Decimal #?(:clj decimal?
-                      :cljs float?)
+                                     :cljs float?)
    :Agentlang.Kernel.Lang/Boolean boolean?
    :Agentlang.Kernel.Lang/Any any?
    :Agentlang.Kernel.Lang/Map map?
    :Agentlang.Kernel.Lang/UUID uuid?
    :Agentlang.Kernel.Lang/Path (list `s/or :string (list `s/and string? (complement clojure.string/blank?))
-                      :keyword keyword?)
+                                     :keyword keyword?)
    :Agentlang.Kernel.Lang/Edn (list `s/or :vector vector?
-                     :map map?
-                     :symbol symbol?
-                     :keyword keyword?
-                     :string string?
-                     :number number?
-                     :boolean boolean?
-                     :nil nil?
-                     :list list?
-                     :set set?)
+                                    :map map?
+                                    :symbol symbol?
+                                    :keyword keyword?
+                                    :string string?
+                                    :number number?
+                                    :boolean boolean?
+                                    :nil nil?
+                                    :list list?
+                                    :set set?)
    :Agentlang.Kernel.Lang/Date (list `s/with-gen (partial instance? java.time.LocalDate)
-                      #(gen/fmap (fn [ms]
-                                   (local-date/of-epoch-day ms))
-                                 (s/gen ::past-and-future-date)))
+                                     #(gen/fmap (fn [ms]
+                                                  (local-date/of-epoch-day ms))
+                                                (s/gen ::past-and-future-date)))
    :Agentlang.Kernel.Lang/Time (list `s/with-gen (partial instance? java.time.LocalTime)
-                      #(gen/fmap (fn [ms]
-                                   (local-time/of-nano-of-day ms))
-                                 (s/gen ::time)))
+                                     #(gen/fmap (fn [ms]
+                                                  (local-time/of-nano-of-day ms))
+                                                (s/gen ::time)))
    :Agentlang.Kernel.Lang/DateTime (list `s/with-gen (partial instance? java.time.LocalDateTime)
-                          #(gen/fmap (fn [ms]
-                                       (local-date-time/of-epoch-second ms 0 utc))
-                                     (s/gen ::past-and-future-date-time)))})
+                                         #(gen/fmap (fn [ms]
+                                                      (local-date-time/of-epoch-second ms 0 utc))
+                                                    (s/gen ::past-and-future-date-time)))})
 
 (defn get-spec-namespace [component-name entity-name]
   (keyword (str (name component-name) "/" (name entity-name))))
@@ -200,8 +212,8 @@
 (comment
   ;;[com.gfredericks/test.chuck "0.2.13"] can be used for predefined regex patterns
   (defcomponent :RefCheck
-                #_(entity {:RefCheck/E3 {:AIdId {:type :Agentlang.Kernel.Lang/String
-                                               :format "^((19|2[0-9])[0-9]{2})-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$"}}}))
+    #_(entity {:RefCheck/E3 {:AIdId {:type :Agentlang.Kernel.Lang/String
+                                     :format "^((19|2[0-9])[0-9]{2})-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$"}}}))
   (defmethod define-spec :Agentlang.Kernel.Lang/String [{:keys [spec-entity-name property-details]}]
     (let [spec-fn (if (:format property-details)
                     (list `s/def spec-entity-name (list `s/and string? #(re-matches (re-pattern (:format property-details)) %)))
@@ -241,7 +253,7 @@
     (-> attr-schema :oneof seq) {:type :oneof
                                  :vals (-> attr-schema :oneof set)}
     (= (-> attr-schema :type) :Agentlang.Kernel.Lang/String) {:type :Agentlang.Kernel.Lang/String
-                                                    :format (-> attr-schema :format-str)}
+                                                              :format (-> attr-schema :format-str)}
     (-> attr-schema :listof some?) {:type :listof
                                     :listof-type (:listof attr-schema)}
     :else attr-schema))

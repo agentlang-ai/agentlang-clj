@@ -1,6 +1,8 @@
+
 (ns agentlang.store
   (:require #?(:clj [agentlang.store.h2 :as h2])
             #?(:clj [agentlang.store.postgres :as postgres])
+            #?(:clj [agentlang.store.snowflake :as snowflake])
             [agentlang.store.mem.core :as mem]
             [agentlang.component :as cn]
             #?(:clj [agentlang.util.logger :as log]
@@ -43,6 +45,7 @@
    #?(:clj
       {:h2 h2/make
        :postgres postgres/make
+       :snowflake snowflake/make
        :mem mem/make}
       :cljs
       {:mem mem/make})))

@@ -1,3 +1,4 @@
+
 (ns agentlang.store.db-common
   (:require [clojure.string :as s]
             [clojure.set :as set]
@@ -169,43 +170,55 @@
 (defn- create-relational-view [connection view-name view-query]
   (let [q (compile-query view-query)
         select (if (string? q) q (:query q))
-        sql (str "CREATE OR REPLACE VIEW " view-name " AS " (if (string? select) select (first select)))]
-    (when-not (execute-sql! connection [sql])
-      (u/throw-ex (str "Failed to create view - " sql)))
+        sql-view-init (str "DROP VIEW IF EXISTS " view-name)
+        sql (str "CREATE OR REPLACE VIEW " view-name " AS "
+                 (if (string? select) select (first select)))]
+    (try
+      (execute-sql! connection [sql])
+      (catch Exception ex
+        ;; Fallback to DROP + CREATE if REPLACE not supported
+        (execute-sql! connection [sql-view-init])
+        (execute-sql! connection [sql])))
     view-name))
 
 (defn create-schema
-  "Create the schema, tables and indexes for the component."
-  [datasource component-name]
-  (let [scmname (stu/db-schema-for-component component-name)
-        table-data (atom nil)
-        create-views (atom nil)
-        component-meta-table (stu/component-meta-table-name component-name)]
-    (execute-fn!
-     datasource
-     (fn [txn]
-       (execute-sql! txn [(create-component-meta-table-sql component-meta-table)])
-       (doseq [ename (cn/entity-names component-name false)]
-         (when-not (cn/entity-schema-predefined? ename)
-           (let [tabname (stu/entity-table-name ename)]
-             (if-let [q (cn/view-query ename)]
-               (swap! create-views conj #(create-relational-view txn tabname q))
-               (let [schema (stu/find-entity-schema ename)]
-                 (create-relational-table
-                  txn schema tabname
-                  (cn/indexed-attributes schema)
-                  (cn/unique-attributes schema)
-                  (cn/compound-unique-attributes ename)
-                  table-data)
-                 (execute-sql!
-                  txn [(insert-entity-meta-sql
-                        component-meta-table tabname
-                        {:columns
-                         (mapv normalize-meta-data (:columns @table-data))})]))))))
-       (doseq [sql (:post-init-sqls @table-data)]
-         (execute-sql! txn [sql]))
-       (doseq [cv @create-views] (cv))
-       component-name))))
+  ([datasource component-name]
+   (create-schema datasource component-name true))
+  ([datasource component-name post-init]
+   (let [scmname (stu/db-schema-for-component component-name)
+         table-data (atom nil)
+         create-views (atom [])  ; Initialize as empty vector
+         component-meta-table (stu/component-meta-table-name component-name)]
+     (execute-fn!
+      datasource
+      (fn [txn]
+        (execute-sql! txn [(create-component-meta-table-sql component-meta-table)])
+        ;; First pass: Create tables and collect view creation info
+        (doseq [ename (cn/entity-names component-name false)]
+          (when-not (cn/entity-schema-predefined? ename)
+            (let [tabname (stu/entity-table-name ename)]
+              (if-let [q (cn/view-query ename)]
+                (swap! create-views conj [tabname q])  ; Just store the info, don't create closure
+                (let [schema (stu/find-entity-schema ename)]
+                  (create-relational-table
+                   txn schema tabname
+                   (cn/indexed-attributes schema)
+                   (cn/unique-attributes schema)
+                   (cn/compound-unique-attributes ename)
+                   table-data)
+                  (execute-sql!
+                   txn [(insert-entity-meta-sql
+                         component-meta-table tabname
+                         {:columns
+                          (mapv normalize-meta-data (:columns @table-data))})]))))))
+        ;; Execute post-init SQLs conditionally
+        (when post-init
+          (doseq [sql (:post-init-sqls @table-data)]
+            (execute-sql! txn [sql])))
+        ;; Create views with current transaction
+        (doseq [[tabname query] @create-views]
+          (create-relational-view txn tabname query))
+        component-name)))))
 
 (defn drop-schema
   "Remove the schema from the database, perform a non-cascading delete."
