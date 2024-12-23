@@ -9,13 +9,27 @@
             [agentlang.inference.embeddings.internal.model :as model]))
 
 (def ^:private dbtype "sqlite")
+(def ^:private vec0-script-path "./scripts/maybe-download-vec0.sh")
 
 (defn open-connection [config]
-  (merge {:dbtype dbtype} config))
+  (jdbc/get-connection
+   (assoc
+    (dissoc config :llm-provider)
+    :enable_load_extension true :dbtype dbtype)))
 
 (defn close-connection [db-conn]
   (when (= dbtype (:dbtype db-conn))
     true))
+
+(defn load-sqlite-vec0-extension [conn]
+  (log/info (str "checking if vec0 extension exists")) 
+  (try
+    (u/execute-script vec0-script-path)
+    (catch Exception ex
+      (log/error (str "load-sqlite-vec0-extension: vec0 sqlite extension installation failed"))
+      (log/error ex)))
+  (jdbc/execute! conn ["SELECT load_extension ('vec0');"])
+  (log/debug (str "vec0 extension loaded")))
 
 (defn- pg-floats
   "Turn supplied collection of floating-point values into a Sqlite

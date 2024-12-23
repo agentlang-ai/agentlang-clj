@@ -16,10 +16,8 @@
         cwp #(provider/call-with-provider @provider-name %1)]
     (reify p/EmbeddingDb
       (open-connection [this config]
-        (let [conn (jdbc/get-connection (sqv/open-connection (assoc
-                                                              (dissoc config :llm-provider)
-                                                              :enable_load_extension true)))] 
-          (jdbc/execute! conn ["SELECT load_extension ('vec0');"])
+        (let [conn (sqv/open-connection config)] 
+          (sqv/load-sqlite-vec0-extension conn)
           (u/safe-set db-conn conn))
          (u/safe-set-once provider-name #(:llm-provider config))
         this)
