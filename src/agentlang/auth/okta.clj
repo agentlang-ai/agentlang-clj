@@ -171,11 +171,12 @@
                         client-id :client-id
                         client-secret :client-secret
                         auth-server :auth-server
-                        authorize-redirect-url :authorize-redirect-url}
+                        authorize-redirect-url :authorize-redirect-url
+                        server-redirect-host :server-redirect-host}
                        code]
   (let [url (str "https://" domain "/oauth2/" auth-server "/v1/token")
         req (str "client_id=" client-id "&client_secret=" client-secret
-                 "&grant_type=authorization_code&redirect_uri=" authorize-redirect-url
+                 "&grant_type=authorization_code&redirect_uri=" (or server-redirect-host authorize-redirect-url)
                  "&code=" code)
         resp (http/do-request :post url {"Content-Type" "application/x-www-form-urlencoded"} req)]
     (if (= 200 (:status resp))
@@ -188,6 +189,7 @@
 (defn- make-authorize-url [{domain :domain
                             auth-server :auth-server
                             authorize-redirect-url :authorize-redirect-url
+                            server-redirect-host :server-redirect-host
                             client-id :client-id
                             no-prompt :no-prompt
                             scope :scope
@@ -198,7 +200,7 @@
         state (if user-state (str s0 user-state-delim user-state) s0)
         url0 (str "https://" domain "/oauth2/" auth-server "/v1/authorize?client_id=" client-id
                   "&response_type=code&scope=" (http/url-encode scope) "&redirect_uri="
-                  (http/url-encode authorize-redirect-url) "&state=" state "&nonce=" nonce)
+                  (http/url-encode (or server-redirect-host authorize-redirect-url)) "&state=" state "&nonce=" nonce)
         url (if no-prompt (str url0 "&prompt=none") url0)]
     [(if session-token
        (str url "&sessionToken=" session-token)
@@ -259,20 +261,18 @@
 
 (defmethod auth/authenticate-session tag [{cookie :cookie
                                            client-url :client-url
-                                           cookie-domain :cookie-domain
+                                           server-redirect-host :server-redirect-host
                                            :as auth-config}]
   (let [user-state (str (when client-url (b64/encode-string client-url)) user-state-delim
-                       (when cookie-domain (b64/encode-string cookie-domain)))
+                        (when server-redirect-host (b64/encode-string server-redirect-host)))
         auth-config (assoc auth-config :user-state user-state)]
     (if-let [sid (auth/cookie-to-session-id auth-config cookie)]
       (do
         (log/debug (str "auth/authenticate-session with cookie " sid))
         (if (sess/lookup-session-cookie-user-data sid)
           {:status :redirect-found
-           :location client-url
-           :cookie-domain cookie-domain}
-          {:status :redirect-found
-           :cookie-domain cookie-domain}))
+           :location client-url}
+          {:status :redirect-found}))
       {:status :redirect-found
        :location (first (make-authorize-url auth-config))})))
 
@@ -292,19 +292,19 @@
 (defn client-url-from-state [state]
   (get-nth-state state 1))
 
-(defn cookie-domain-from-state [state]
+(defn server-redirect-host-from-state [state]
   (get-nth-state state 2))
 
 (defmethod auth/handle-auth-callback tag [{client-url :client-url args :args :as auth-config}]
   (let [request (:request args)
         current-sid (cookie-to-sid (get-in request [:headers "cookie"]))
         params (http/form-decode (:query-string request))
-        tokens (code-to-tokens auth-config (:code params))
+        server-redirect-host (server-redirect-host-from-state (:state params))
+        tokens (code-to-tokens (assoc auth-config :server-redirect-host server-redirect-host) (:code params))
         session-id (or current-sid (u/uuid-string))
         result {:authentication-result (us/snake-to-kebab-keys tokens)}
         auth-status (auth/verify-token auth-config [[session-id result] nil])
         client-url (or (client-url-from-state (:state params)) client-url)
-        cookie-domain (cookie-domain-from-state (:state params))
         user (:username auth-status)]
     (log/debug (str "auth/handle-auth-callback returning session-cookie " session-id " to " client-url))
     (when-not (sess/ensure-local-user
@@ -322,7 +322,6 @@
         (auth/on-user-login user)
         {:status :redirect-found
          :location client-url
-         :cookie-domain cookie-domain
          :set-cookie (str "sid=" session-id)})
       {:error "failed to create session"})))
 
