@@ -1,4 +1,8 @@
 {:service {:port 8080}
+ ;; :store {:type :postgres}
+ ;; :authentication {:service :cognito
+ ;;                  :superuser-email #$ FRACTL_SUPERUSER_EMAIL}
+ ;; :rbac-enabled true
  :embeddings {:vectordb :pgvector
               :config {:llm-provider "llm01"
                        :host #$ [PGVECTOR_DB_HOST "localhost"]

@@ -14,7 +14,8 @@
 (def ^:private oprs li/rbac-oprs)
 
 (defn- crud-list? [xs]
-  (every? #(some #{%} oprs) (set xs)))
+  (let [xs (mapv u/string-as-keyword xs)]
+    (every? #(some #{%} oprs) (set xs))))
 
 (entity
  :Privilege
