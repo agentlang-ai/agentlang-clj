@@ -136,10 +136,11 @@ A dataflow allows you to express complex business logic simply as purely-declara
 
 ### Prerequisites
 
-1. [Java SE 21](https://openjdk.org/projects/jdk/21/) or later
-2. Linux, Mac OSX or a Unix emulator in Windows
-3. Download and install the [AgentLang CLI tool](https://github.com/agentlang-ai/agentlang.cli) or use it via Docker
-4. Set the `OPENAI_API_KEY` environment variable to a valid API key from OpenAI
+1. Linux, Mac OSX or a Unix emulator in Windows
+2. Download and install the [AgentLang CLI tool](https://github.com/agentlang-ai/agentlang.cli) or use it via Docker
+   a. Pre-requisite: [Java SE 21](https://openjdk.org/projects/jdk/21/) or later
+   b. Pre-requisite: Git CLI for your OS
+3. Set the `OPENAI_API_KEY` environment variable to a valid API key from OpenAI
 
 ### Running the examples
 
@@ -152,7 +153,7 @@ Or run it via Docker (assuming the file `chat.al` is in the current directory):
 ```shell
 docker run --rm \
   -v .:/agentlang \
-  -e OPENAI_API_KEY="<FIXME>" \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
   -p 8080:8080 \
   -it agentlang/agentlang.cli:latest \
   agent chat.al
@@ -180,7 +181,7 @@ Or run it via Docker (assuming the file `expense.al` is in the current directory
 ```shell
 docker run --rm \
   -v .:/agentlang \
-  -e OPENAI_API_KEY="<FIXME>" \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
   -p 8080:8080 \
   -it agentlang/agentlang.cli:latest \
   agent expense.al
@@ -212,7 +213,7 @@ Or run it via Docker (assuming the file `accounts.al` is in the current director
 ```shell
 docker run --rm \
   -v .:/agentlang \
-  -e OPENAI_API_KEY="<FIXME>" \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
   -p 8080:8080 \
   -it agentlang/agentlang.cli:latest \
   agent accounts.al
