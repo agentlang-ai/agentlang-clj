@@ -282,7 +282,7 @@
   agent)
 
 (dataflow
- [:after :create :Agentlang.Core/Agent]
+ [:before :create :Agentlang.Core/Agent]
  [:eval '(agentlang.inference.service.model/maybe-input-as-inference :Instance)])
 
 (def ^:private agent-callbacks (atom nil))
@@ -453,6 +453,9 @@
   ([event callback] (eval-event event callback false))
   ([event] (eval-event event identity)))
 
+(defn- eval-internal-event [event & args]
+  (apply eval-event (e/mark-internal (cn/make-instance event)) args))
+
 (defn- maybe-agent-pattern [p]
   (when (and (map? p)
              (= :Agentlang.Core/Agent (li/record-name p)))
@@ -543,7 +546,7 @@
 (defn create-agent-chat-session [agent-instance alt-instruction]
   (let [ins (or (:UserInstruction agent-instance) alt-instruction)]
     (when ins
-      (eval-event
+      (eval-internal-event
        {:Agentlang.Core/CreateAgentChatSession
         {:ChatId (or (context-chat-id agent-instance) (:Name agent-instance))
          :Messages [{:role :system :content ins}]
@@ -557,7 +560,7 @@
       agent-instance))
 
 (defn update-agent-chat-session [chat-session messages]
-  (eval-event
+  (eval-internal-event
    {:Agentlang.Core/Update_ChatSession
     {li/path-attr (li/path-attr chat-session)
      :Data {:Messages messages}}}
@@ -570,3 +573,6 @@
     (when-let [sess (lookup-agent-chat-session agent)]
       (let [msgs (vec (filter #(= :system (:role %)) (:Messages sess)))]
         (update-agent-chat-session sess msgs)))))
+
+(defn open-entities [] ; entities that's open to be read by all users
+  (set/difference (set (cn/entity-names :Agentlang.Core false)) #{:Agentlang.Core/Document}))

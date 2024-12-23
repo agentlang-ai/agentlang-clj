@@ -13,6 +13,7 @@
             [agentlang.rbac.core :as rbac]
             [agentlang.global-state :as gs]
             [agentlang.paths :as p]
+            [agentlang.inference.service.model :as agent-model]
             [agentlang.resolver.registry :as rr]
             [agentlang.evaluator.intercept.internal :as ii]))
 
@@ -80,8 +81,7 @@
                store entity-name
                (cn/identity-attribute-name entity-name) id)]
       (if-not (seq res)
-        (do (log/warn (str "resource not found - " [entity-name id]))
-            inst)
+        (u/throw-ex (str "cannot assign " (name tag) " privileges, resource not found - " [entity-name id]))
         (do (when-not is-system-event
               (when-not (cn/user-is-owner? user res)
                 (u/throw-ex (str "only owner can assign " (name tag) " privileges - " [entity-name id]))))
@@ -96,9 +96,11 @@
 (defn- handle-instance-priv [user env opr inst is-system-event]
   (if (or (= opr :create) (= opr :delete))
     (handle-rbac-entity :instance (fn [res assignee]
-                                    (let [actions (when (= opr :create) (:Actions inst))]
+                                    (let [actions (when (= opr :create)
+                                                    (mapv u/string-as-keyword (:Actions inst)))]
                                       [(if actions
-                                         (cn/assign-instance-privileges res assignee actions)
+                                         (do (rbac/run-instance-privilege-assignment-callback res assignee actions)
+                                             (cn/assign-instance-privileges res assignee actions))
                                          (cn/remove-instance-privileges res assignee))]))
                         user env opr inst is-system-event)
     inst))
@@ -110,7 +112,8 @@
   (if (or (= opr :create) (= opr :delete))
     (handle-rbac-entity :ownership (fn [res assignee]
                                      [(if (= opr :create)
-                                        (cn/concat-owners res #{assignee})
+                                        (do (rbac/run-ownership-assignment-callback res assignee)
+                                            (cn/concat-owners res #{assignee}))
                                         (cn/remove-owners res #{assignee}))])
                         user env opr inst is-system-event)
     inst))
@@ -175,22 +178,25 @@
 
 (defn- apply-rbac-for-user [user env opr arg]
   (log/info (str "Applying rbac check " opr " for user " user))
-  (let [check (partial apply-rbac-checks user env opr arg)]
+  (let [check (partial apply-rbac-checks user env opr arg)
+        opr-read? (= opr :read)]
     (if-let [data (ii/data-input arg)]
-      (if (or (ii/skip-for-input? data) (= opr :read))
+      (if (or (ii/skip-for-input? data) opr-read?)
         arg
         (let [is-delete (= :delete opr)
               resource (if is-delete (second data) (first-instance data))
               check-on (if is-delete (first data) resource)
-              ign-refs (or is-delete (= :read opr))]
+              ign-refs (or is-delete opr-read?)]
           (check resource {:data check-on :ignore-refs ign-refs})))
       (if-let [data (seq (ii/data-output arg))]
         (if (ii/skip-for-output? data)
           arg
-          (if (= opr :read)
+          (if opr-read?
             (if-let [rs (seq (extract-read-results data))]
-              (when-let [rslt (seq (filter #(check % {:data % :ignore-refs true}) rs))]
-                (ii/assoc-data-output arg (set-read-results data rslt)))
+              (if ((opr actions) user {:data (first rs) :ignore-refs true})
+                arg
+                (when-let [rslt (seq (filter #(check % {:data % :ignore-refs true}) rs))]
+                  (ii/assoc-data-output arg (set-read-results data rslt))))
               arg)
             arg))
         arg))))
@@ -287,19 +293,35 @@
         :delete (maybe-revoke-ownership! env inst))))
   arg)
 
+(def ^:private agent-object-types (agent-model/open-entities))
+
+(defn- agent-object? [obj]
+  (when obj
+    (if (not (map? obj))
+      (when (seqable? obj)
+        (let [f (first obj)]
+          (cond
+            (keyword? f) (some #{(li/make-path obj)} agent-object-types)
+            (map? f) (agent-object? f)
+            :else (when-let [r (seq (extract-read-results obj))]
+                    (agent-object? r)))))
+      (and (cn/an-instance? obj) (some #{(cn/instance-type-kw obj)} agent-object-types)))))
+
 (defn- run [env opr arg]
   (if-not gs/audit-trail-mode
-    (let [user (or (cn/event-context-user (ii/event arg))
-                   (gs/active-user))]
-      (if (or (rbac/superuser-email? user)
-              (system-event? (ii/event arg)))
-        (maybe-handle-system-objects user env opr arg)
-        (let [is-ups (or (= opr :update) (= opr :create))
-              arg (if is-ups (ii/assoc-user-state arg) arg)]
-          (when-let [r (apply-rbac-for-user user env opr arg)]
-            (and (post-process env opr arg) r))
-          ;; TODO: call check-upsert-on-attributes for create/update
-          )))
+    (if (and (= opr :read) (agent-object? (or (ii/data-input arg) (ii/data-output arg))))
+      arg
+      (let [user (or (cn/event-context-user (ii/event arg))
+                     (gs/active-user))]
+        (if (or (rbac/superuser-email? user)
+                (system-event? (ii/event arg)))
+          (maybe-handle-system-objects user env opr arg)
+          (let [is-ups (or (= opr :update) (= opr :create))
+                arg (if is-ups (ii/assoc-user-state arg) arg)]
+            (when-let [r (apply-rbac-for-user user env opr arg)]
+              (and (post-process env opr arg) r))
+            ;; TODO: call check-upsert-on-attributes for create/update
+            ))))
     arg))
 
 (defn make [_] ; config is not used

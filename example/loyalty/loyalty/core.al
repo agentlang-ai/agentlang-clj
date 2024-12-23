@@ -10,7 +10,7 @@
   :Created :Now
   :meta {:doc "Loyalty point earned by a customer for each purchase."}})
 
-(relationship :Points
+(relationship :CustomerPoint
  {:meta {:between [:Customer :Point]}})
 
 (entity :Purchase
@@ -28,19 +28,18 @@
     :else 2))
 
 (dataflow [:after :create :Purchase]
- "When a new purchase happens, use its amount to compute 
-a loyalty point for the customer."
+ "When a new purchase happens, use its amount to compute a loyalty point for the customer."
  [:match
   [:> :Instance.Amount 1000.0]
   {:Point {:Value '(loyalty.core/compute-points :Instance.Amount)}
-   :-> [[{:Points {}} {:Customer {:Email? :Instance.CustomerEmail}}]]}
+   :-> [[{:CustomerPoint {}} {:Customer {:Email? :Instance.CustomerEmail}}]]}
   :Instance])
 
 (defn total-points [ps]
   (reduce + 0 (map :Value ps)))
 
-(dataflow :FetchPoints
+(dataflow :CustomerLoyaltyPoints
  "Return the total loyalty-points for a customer."
- {:Point? {} :-> [[{:Points {:Customer? :FetchPoints.CustomerEmail}}]]
+ {:Point? {} :-> [[{:CustomerPoint {:Customer? :CustomerLoyaltyPoints.CustomerEmail}}]]
   :as :Result}
  [:eval '(loyalty.core/total-points :Result)])

@@ -58,7 +58,8 @@
                  [camel-snake-kebab "0.4.3"]
                  [stringer "0.4.1"]
                  [nrepl/drawbridge "0.2.1"]
-                 [clj-jgit "1.0.2"]]
+                 [clj-jgit "1.0.2"]
+                 [org.xerial/sqlite-jdbc "3.47.1.0"]]
 
   :license {:name "Apache2"}
 

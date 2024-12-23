@@ -711,3 +711,54 @@
     (is (= 180 (tu/result {:Frwd/E {:X 3 :B (:Id default-b)}})))
     (is (= 120 (tu/result {:Frwd/E {:X 2 :B (:Id default-b)}})))
     (is (= 190 (tu/result {:Frwd/E {:X 1 :B (:Id default-b)}})))))
+
+(deftest special-chars-in-paths
+  (defcomponent :Scp
+    (entity
+     :Scp/Parent
+     {:Id {:type :Int tu/guid true}
+      :Name :String})
+    (entity
+     :Scp/Child
+     {:Id {:type :Int tu/guid true}
+      :Value :Int})
+    (relationship
+     :Scp/Contains
+     {:meta {:contains [:Scp/Parent :Scp/Child]}}))
+
+  (let [parent (tu/first-result
+                {:Scp/Create_Parent
+                 {:Instance {:Scp/Parent
+                             {:Id 1 :Name "Parent's Name"}}}})
+        create-child (fn [id value path]
+                      (tu/first-result
+                       {:Scp/Create_Child
+                        {:Instance {:Scp/Child
+                                    {:Id id :Value value}}
+                         li/path-attr path}}))
+        fq (partial pi/as-fully-qualified-path :Scp)
+        children [(create-child 1 100 "/Parent/1/Contains")
+                  (create-child 2 200 "/Parent/1/Contains")]
+        lookup-all (fn [parent-id]
+                    (tu/result
+                     {:Scp/LookupAll_Child
+                      {li/path-attr (fq (str "path://Parent/" parent-id "/Contains/Child/%"))}}))]
+
+    (is (cn/instance-of? :Scp/Parent parent))
+    (is (= 2 (count children)))
+    (is (every? (partial cn/instance-of? :Scp/Child) children))
+
+    (let [initial-children (lookup-all 1)]
+      (is (= 2 (count initial-children)))
+      (is (every? #(s/starts-with?
+                    (li/path-attr %)
+                    (fq "path://Parent/1/Contains/Child"))
+                  initial-children)))
+
+    (is (cn/same-instance? parent
+                          (tu/first-result
+                           {:Scp/Delete_Parent {:Id 1}})))
+
+    (is (tu/not-found? (tu/eval-all-dataflows
+                        {:Scp/LookupAll_Child
+                         {li/path-attr (fq "path://Parent/1/Contains/Child/%")}})))))
