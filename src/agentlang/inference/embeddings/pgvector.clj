@@ -38,6 +38,8 @@
         (pgv/get-document-classname app-uuid))
       (get-planner-classname [_ app-uuid]
         (pgv/get-planner-classname app-uuid))
+      (append-reader-for-rbac [db app-uuid document-id user]
+        (pgv/append-reader-for-rbac @db-conn app-uuid document-id user))
       (find-similar-objects [_ query-spec limit]
         (pgv/find-similar-objects @db-conn query-spec limit)))))
 

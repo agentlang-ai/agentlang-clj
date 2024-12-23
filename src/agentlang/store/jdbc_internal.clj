@@ -7,8 +7,8 @@
             [agentlang.lang.internal :as li]
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
-            [agentlang.util.logger :as log]
-            [agentlang.store.util :as su])
+            [agentlang.store.util :as su]
+            [clojure.string :as str])
   (:import [java.sql PreparedStatement]))
 
 (def prepare jdbc/prepare)
@@ -85,9 +85,27 @@
               (str "UPDATE " table-name " SET _" su/deleted-flag-col " = TRUE"))]
     (jdbc/prepare conn [sql])))
 
+(defn escape-like-pattern [path]
+  (-> path
+      (str/replace "\\" "\\\\")
+      (str/replace "[" "\\[")
+      (str/replace "]" "\\]")
+      (str/replace "%" "\\%")
+      (str/replace "_" "\\_")
+      (str/replace "$" "\\$")))
+
 (defn delete-children-statement [conn table-name path]
-  (let [sql (str "UPDATE " table-name " SET _" su/deleted-flag-col " = TRUE WHERE _" (name li/path-attr) " LIKE '" path "'")]
-    (jdbc/prepare conn [sql])))
+  (let [full-path (if (str/starts-with? path "path://")
+                    path
+                    (str "path://" path))
+        base-path (if (str/ends-with? full-path "%")
+                    (subs full-path 0 (dec (count full-path)))
+                    full-path)
+        escaped-path (str (escape-like-pattern base-path) "%")
+        sql (str "UPDATE " table-name
+                 " SET _" su/deleted-flag-col " = TRUE"
+                 " WHERE _" (name li/path-attr) " LIKE ? ESCAPE '\\'")]
+    (jdbc/prepare conn [sql escaped-path])))
 
 (defn do-query-statement
   ([conn query-sql query-params]
@@ -111,11 +129,8 @@
 (defn execute-fn! [datasource f]
   (if-let [txn (gs/get-active-txn)]
     (f txn)
-    (try
-      (with-open [conn (jdbc/get-connection datasource)]
-        (f conn))
-      (catch Exception ex
-        (log/error ex)))))
+    (with-open [conn (jdbc/get-connection datasource)]
+      (f conn))))
 
 (defn execute-sql! [conn sql]
   (jdbc/execute! conn sql))

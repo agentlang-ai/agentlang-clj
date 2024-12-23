@@ -34,7 +34,7 @@
 (attribute :Agentlang.Kernel.Lang/String {:check k/kernel-string?})
 (attribute
  :Agentlang.Kernel.Lang/Keyword
- {:check (fn* [p1__395#] (or (keyword? p1__395#) (string? p1__395#)))})
+ {:check (fn* [p1__394#] (or (keyword? p1__394#) (string? p1__394#)))})
 (attribute :Agentlang.Kernel.Lang/Path {:check k/path?})
 (attribute :Agentlang.Kernel.Lang/DateTime {:check k/date-time?})
 (attribute :Agentlang.Kernel.Lang/Date {:check k/date?})
@@ -196,4 +196,4 @@
     :paths [:Agentlang.Kernel.Lang/DataSync]})])
 (def
  Agentlang_Kernel_Lang___COMPONENT_ID__
- "2200d389-d753-4bfb-a2a9-f3ed43bee787")
+ "fbf212fe-4d7a-4a82-b497-89c77854f5cb")

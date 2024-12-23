@@ -25,9 +25,7 @@
 (defn handle-doc-chunk [operation instance]
   (when (= :add operation)
     (let [doc-chunk (cn/instance-attributes instance)
-          app-uuid (:AppUuid doc-chunk)
-          doc-name (:Title doc-chunk)
-          chunk-text (:Content doc-chunk)]
+          app-uuid (:AppUuid doc-chunk)]
       (log/debug (u/pretty-str "Ingesting doc chunk" doc-chunk))
       (ec/embed-document-chunk app-uuid doc-chunk)
       instance)))
