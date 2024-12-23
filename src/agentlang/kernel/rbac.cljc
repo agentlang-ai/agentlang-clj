@@ -38,7 +38,9 @@
 (defn-
  crud-list?
  [xs]
- (every? (fn* [p1__401#] (some #{p1__401#} oprs)) (set xs)))
+ (let
+  [xs (mapv u/string-as-keyword xs)]
+  (every? (fn* [p1__400#] (some #{p1__400#} oprs)) (set xs))))
 (entity
  :Agentlang.Kernel.Rbac/Privilege
  {:Name {:type :String, :default u/uuid-string, li/guid true},
@@ -82,7 +84,7 @@
    " in ("
    (s/join
     ","
-    (map (fn* [p1__402#] (str "'" (str p1__402#) "'")) role-names))
+    (map (fn* [p1__401#] (str "'" (str p1__401#) "'")) role-names))
    "))")))
 (dataflow
  :Agentlang.Kernel.Rbac/FindPrivilegeAssignments
@@ -102,7 +104,7 @@
    " in ("
    (s/join
     ","
-    (map (fn* [p1__403#] (str "'" (str p1__403#) "'")) names))
+    (map (fn* [p1__402#] (str "'" (str p1__402#) "'")) names))
    "))")))
 (dataflow
  :Agentlang.Kernel.Rbac/FindPrivileges
@@ -132,4 +134,4 @@
                           :Assignee {:type :String, :indexed true}}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "62fde7af-6e81-49aa-a504-ce166e6b36f2")
+ "5e1d56e1-a386-4bea-bf3e-40b06076eef4")

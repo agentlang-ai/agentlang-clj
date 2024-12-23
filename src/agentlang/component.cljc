@@ -2188,7 +2188,7 @@
 
 (defn instance-privileges-for-user [inst user]
   (when (an-instance? inst)
-    (get (:instprivs (li/meta-attr inst)) user)))
+    (seq (get (:instprivs (li/meta-attr inst)) user))))
 
 (defn assign-instance-privileges [inst user privs]
   (assoc-in inst [li/meta-attr :instprivs user] privs))
