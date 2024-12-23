@@ -138,7 +138,7 @@ A dataflow allows you to express complex business logic simply as purely-declara
 
 1. Linux, Mac OSX or a Unix emulator in Windows
 2. Download and install the [AgentLang CLI tool](https://github.com/agentlang-ai/agentlang.cli) or use it via Docker
-   a. Pre-requisite: [Java SE 21](https://openjdk.org/projects/jdk/21/) or later
+   a. Pre-requisite: [Java SE 21](https://adoptium.net/en-GB/temurin/releases/?version=21) or later
    b. Pre-requisite: Git CLI for your OS
 3. Set the `OPENAI_API_KEY` environment variable to a valid API key from OpenAI
 
