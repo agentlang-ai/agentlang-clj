@@ -1,17 +1,23 @@
 (ns agentlang.store.jdbc-cp
   "Generic connection pooling for JDBC datasources."
-  (:import [javax.sql DataSource]
+  (:require [next.jdbc :as jdbc])
+  (:import [javax.sql DataSource] 
            [com.mchange.v2.c3p0 ComboPooledDataSource DataSources]))
 
 (defn ^DataSource as-pooled [^DataSource unpooled stmt-cache-size]
   (DataSources/pooledDataSource unpooled stmt-cache-size))
 
 (defn- setup-datasource [^ComboPooledDataSource ds dbspec]
-  (if (= :postgres (:dbtype dbspec))
+  (case (:dbtype dbspec)
+    :postgres
     (do (.setDriverClass ds "org.postgresql.Driver")
         (.setJdbcUrl ds (str "jdbc:postgresql://" (:host dbspec) "/" (:dbname dbspec)))
         (.setUser ds (:user dbspec))
         (.setPassword ds (:password dbspec))
+        ds)
+    :sqlite
+    (do (.setDriverClass ds "org.sqlite.Driver")
+        (.setJdbcUrl ds (str "jdbc:sqlite://" (:dbpath dbspec)))
         ds)
     (throw (Exception. (str "Unsupported database: " (:dbtype ds))))))
 
@@ -31,6 +37,9 @@
     (.setUser ds (:username dbspec))
     (.setPassword ds (:password dbspec))
     ds))
+
+(defn open-non-pooled-datasource [dbspec]
+  (jdbc/get-datasource dbspec))
 
 (defn close-pooled-datasource [^ComboPooledDataSource ds]
   (.close ds))

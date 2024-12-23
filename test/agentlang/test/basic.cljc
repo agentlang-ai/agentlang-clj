@@ -1554,19 +1554,25 @@
          :Y :String}))
      (let [create-e (fn [id]
                       (let [x (* id 10)]
-                        (tu/first-result
-                         {:Mtt01/Create_E
-                          {:Instance
-                           {:Mtt01/E {:Id id :X x
-                                      :Y (str id ", " x)}}}})))
+                        (loop [attempts 0]
+                          (let [res (tu/first-result
+                                     {:Mtt01/Create_E
+                                      {:Instance
+                                       {:Mtt01/E {:Id id :X x
+                                                  :Y (str id ", " x)}}}})]
+                            (if (seq res) res
+                                (when (< attempts 4) (recur (inc attempts))))))))
            e? (partial cn/instance-of? :Mtt01/E)
            create-es #(mapv create-e %)
            lookup-all (fn [] (tu/result
                               {:Mtt01/LookupAll_E {}}))
            delete-e (fn [id]
-                      (tu/first-result
-                       {:Mtt01/Delete_E
-                        {:Id id}}))
+                      (loop [attempts 0]
+                        (let [res (tu/first-result
+                                   {:Mtt01/Delete_E
+                                    {:Id id}})]
+                          (if (seq res) res
+                              (when (< attempts 4) (recur (inc attempts)))))))
            delete-es #(mapv delete-e %)
            trtest (fn [opr ids]
                     (let [res (atom nil)
