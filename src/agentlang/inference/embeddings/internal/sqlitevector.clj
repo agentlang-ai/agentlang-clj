@@ -29,16 +29,16 @@
 (defn get-planner-classname [app-uuid]
   (str "PlannerTools_" (s/replace app-uuid "-" "")))
 
-(def ^:private delete-selected-sql
+(def ^:private delete-selected-sql-template
   "DELETE
   FROM text_embedding
-  WHERE embedding_classname = ? AND meta_content -> ? ->> 'type' = ?")
+  WHERE embedding_classname = ? AND json_extract(meta_content, '$.%s.type') = ?")
 
 (defn delete-selected [db-conn app-uuid tag type]
-  (let [embedding-classname (get-planner-classname app-uuid)]
+  (let [embedding-classname (get-planner-classname app-uuid)
+        delete-selected-sql (format delete-selected-sql-template (name tag))]
     (jdbc/execute! db-conn [delete-selected-sql
                             embedding-classname
-                            (name tag)
                             (subs (str type) 1)])))
 
 (defn- assert-object! [obj]
@@ -73,9 +73,9 @@
 
 (def ^:private find-similar-objects-sql-template
   "SELECT
-   text_content
+   readers, text_content
   FROM text_embedding
-  WHERE embedding_%d match ?
+  WHERE embedding_classname = ? AND embedding_%d match ?
   LIMIT ?")
 
 (defn find-similar-objects [db-conn {classname :classname embedding :embedding :as obj} limit]
@@ -86,9 +86,15 @@
         find-similar-objects-sql (format find-similar-objects-sql-template
                                          dimension-count)]
     (->> [find-similar-objects-sql
+          classname
           embedding-sql-param
           limit]
          (jdbc/execute! db-conn)
+         (filter
+          #(let [readers (:text_embedding/readers %)]
+            (or
+             (= readers "")
+             (if user (s/includes? readers user) false))))
          (mapv :text_embedding/text_content))))
 
 (defn delete-planner-tool [db-conn {app-uuid :app-uuid tag :tag type :type}]
@@ -153,10 +159,10 @@
                             :embedding-model embedding-model})))
 
 (def ^:private find-readers-by-document-sql
-  "SELECT readers FROM text_embedding WHERE embedding_classname = ? AND meta_content->>'DocumentId' = ?")
+  "SELECT readers FROM text_embedding WHERE embedding_classname = ? AND json_extract(meta_content, '$.DocumentId') = ?")
 
 (def ^:private update-readers-by-document-sql
-  "UPDATE text_embedding SET readers = ? WHERE embedding_classname = ? AND meta_content->>'DocumentId' = ?")
+  "UPDATE text_embedding SET readers = ? WHERE embedding_classname = ? AND json_extract(meta_content, '$.DocumentId') = ?")
 
 (defn append-reader-for-rbac [db-conn app-uuid document-id user]
   (let [classname (get-document-classname app-uuid)
