@@ -55,7 +55,6 @@
 
 {:Agentlang.Core/Agent
  {:Name :analyzer-agent
-  :LLM :llm01
   :Type :planner
   :Tools [:EcommerceReviewAnalysis.Core/Analysis]
   :UserInstruction "Create a new Analysis instance initialized with values based on the following review."
