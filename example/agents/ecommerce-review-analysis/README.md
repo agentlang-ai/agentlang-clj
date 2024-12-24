@@ -27,7 +27,7 @@ $ docker run --rm \
 In another terminal:
 
 ```shell
-$ curl -X POST http://localhost:8080/api/EcommerceReviewAnalysiss.Core/Review \
+$ curl -X POST http://localhost:8080/api/EcommerceReviewAnalysis.Core/Review \
   -H 'Content-type: application/json' \
   --data-binary @sample.json
 ```
@@ -35,7 +35,7 @@ $ curl -X POST http://localhost:8080/api/EcommerceReviewAnalysiss.Core/Review \
 After the request is submitted successfully, you may inspect the analysis as follows:
 
 ```shell
-$ curl http://localhost:8080/api/EcommerceReviewAnalysiss.Core/Analysis
+$ curl http://localhost:8080/api/EcommerceReviewAnalysis.Core/Analysis
 ```
 
 ## License

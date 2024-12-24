@@ -49,23 +49,19 @@
    :Summary {:type :String
              :optional true}})
 
-{:Agentlang.Core/LLM
- {:Type "openai"
-  :Name :llm01
-  :Config {:ApiKey (agentlang.util/getenv "OPENAI_API_KEY")
-           :EmbeddingApiEndpoint "https://api.openai.com/v1/embeddings"
-           :EmbeddingModel "text-embedding-3-small"
-           :CompletionApiEndpoint "https://api.openai.com/v1/chat/completions"
-           :CompletionModel "gpt-3.5-turbo"}}}
+(event
+ :AnalyseReview
+ {:meta {:inherits :Agentlang.Core/Inference}})
 
 {:Agentlang.Core/Agent
  {:Name :analyzer-agent
   :LLM :llm01
-  :UserInstruction "Find review analysis for the given review"
-  :Input :EcommerceReviewAnalysis/AnalyseReview}}
+  :Type :planner
+  :Tools [:EcommerceReviewAnalysis.Core/Analysis]
+  :UserInstruction "Create a new Analysis instance initialized with values based on the following review."
+  :Input :AnalyseReview}}
 
-(dataflow [:after :create :EcommerceReviewAnalysis.Core/Review]
-  {:EcommerceReviewAnalysis/AnalyseReview :Instance
-   :as :A}
-  {:EcommerceReviewAnalysis.Core/Analysis :A})
-
+(dataflow
+ [:after :create :Review]
+ {:AnalyseReview {:UserInstruction '(str "The review instance is: \n" :Instance)}}
+ :Instance)
