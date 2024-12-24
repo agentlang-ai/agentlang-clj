@@ -61,6 +61,6 @@
   :Input :AnalyseReview}}
 
 (dataflow
- [:after :create :Review]
+ [:before :create :Review]
  {:AnalyseReview {:UserInstruction '(str "The review instance is: \n" :Instance)}}
  :Instance)
