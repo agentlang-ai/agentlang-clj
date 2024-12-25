@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+export OPENAI_API_KEY="FIXME"
+export GITHUB_OWNER="FIXME"
+export GITHUB_REPO="FIXME"
+export GITHUB_TOKEN="FIXME"
+
+rm -rf logs
+agent run -c config.edn
+
