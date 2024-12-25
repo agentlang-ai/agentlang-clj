@@ -1,6 +1,11 @@
 (ns agentlang.model
-  (:require
-   [agentlang.lang]))
+  #?(:clj
+     (:require [agentlang.lang])
+     :cljs
+     (:require
+      [agentlang.kernel.lang :as agentlang.kernel.lang]
+      [agentlang.kernel.identity :as agentlang.kernel.identity]
+      [agentlang.kernel.rbac :as agentlang.kernel.rbac])))
 
 (agentlang.lang/model
  {:name :Agentlang,
