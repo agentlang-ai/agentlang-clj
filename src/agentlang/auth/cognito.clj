@@ -76,7 +76,7 @@
 (defn- assign-user-roles [client user-pool-id username default-role]
   (let [user-groups (admin-list-groups-for-user client :user-pool-id user-pool-id :username username)
         roles (mapv :group-name (:groups user-groups))
-        roles-for-user (when-not (seq roles) [(or default-role "user")])]
+        roles-for-user (if-not (seq roles) [(or default-role "user")] roles)]
     (sess/maybe-assign-roles username roles-for-user)))
 
 (defmethod auth/verify-token tag [_config token]
@@ -238,10 +238,7 @@
         cognito-domain (u/getenv "AWS_COGNITO_DOMAIN")
         api-url (u/getenv "AGENTLANG_API_URL")
         ui-url (u/getenv "AGENTLANG_UI_URL")
-        client-id (u/getenv "AWS_COGNITO_CLIENT_ID")
-        default-role (get auth-config :default-role)
-        {:keys [user-pool-id] :as aws-config} (uh/get-aws-config)
-        client (auth/make-client (merge auth-config aws-config))]
+        client-id (u/getenv "AWS_COGNITO_CLIENT_ID")]
     (try
       (let [resp
             @(hc/post
@@ -279,7 +276,6 @@
                        (assoc
                         (create-event :Agentlang.Kernel.Identity/PostSignUp)
                         :SignupResult sign-up-result :SignupRequest {:User user-obj})))))
-                (assign-user-roles client user-pool-id (:email user) default-role)
                 (sess/upsert-user-session (:sub user) true)
                 {:status :redirect-found
                  :location (str (or redirect-query ui-url)
