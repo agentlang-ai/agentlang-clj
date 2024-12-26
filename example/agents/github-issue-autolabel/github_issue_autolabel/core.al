@@ -23,7 +23,8 @@ Priority: Either of [Urgent, High, Moderate, Low, Negligible]
 ;; timer
 (dataflow :GithubIssueAutolabel.Core/Sleep
   {:Agentlang.Kernel.Lang/Timer
-   {:Expiry 60
+   {:Name "timer-autolabel"
+    :Expiry 60
     :ExpiryUnit "Minutes" ; one of ["Seconds" "Minutes" "Hours" "Days"]
     :ExpiryEvent [:q# {:GithubIssueAutolabel.Core/FetchIssues {}}]}})
 
