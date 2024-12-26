@@ -5,13 +5,13 @@
             [agentlang.global-state :as gs]
             [agentlang.datafmt.json :as json]))
 
-;; A client library for the connection-manager-service.
+;; A client library for the integration-manager-service.
 
-(def ^:private connection-manager-config
-  (memoize (fn [] (:connection-manager (gs/get-app-config)))))
+(def ^:private integration-manager-config
+  (memoize (fn [] (:integration-manager (gs/get-app-config)))))
 
 (defn- connections-api-host []
-  (or (:host (connection-manager-config))
+  (or (:host (integration-manager-config))
       "http://localhost:5000"))
 
 (defn- post-handler [response]
@@ -22,7 +22,7 @@
 (def ^:private auth-token (atom nil))
 
 (defn- reset-auth-token []
-  (let [conn-config (connection-manager-config)]
+  (let [conn-config (integration-manager-config)]
     (if-let [token (:token conn-config)]
       (do (reset! auth-token token)
           token)
@@ -64,14 +64,14 @@
 (defn create-new-integration
   ([integ-name user-data]
    (create-instance
-    (str (connections-api-host) "/api/ConnectionManager.Core/Integration")
-    integ-name {:ConnectionManager.Core/Integration {:Name integ-name :UserData user-data}}))
+    (str (connections-api-host) "/api/IntegrationManager.Core/Integration")
+    integ-name {:IntegrationManager.Core/Integration {:Name integ-name :UserData user-data}}))
   ([integ-name] (create-new-integration integ-name nil)))
 
 (defn configure-new-connection [integ-name conn-name conn-attrs]
   (create-instance
-   (str (connections-api-host) "/api/ConnectionManager.Core/Integration/" integ-name "/ConnectionConfigGroup/ConnectionConfig")
-   conn-name {:ConnectionManager.Core/ConnectionConfig (merge {:Name conn-name} conn-attrs)}))
+   (str (connections-api-host) "/api/IntegrationManager.Core/Integration/" integ-name "/ConnectionConfigGroup/ConnectionConfig")
+   conn-name {:IntegrationManager.Core/ConnectionConfig (merge {:Name conn-name} conn-attrs)}))
 
 (def cached-connections (atom nil))
 
@@ -80,8 +80,8 @@
 (defn create-connection [conn-config-name conn-name]
   (or (get-connection conn-name)
       (create-instance
-       (str (connections-api-host) "/api/ConnectionManager.Core/Connection")
-       conn-name {:ConnectionManager.Core/Connection
+       (str (connections-api-host) "/api/IntegrationManager.Core/Connection")
+       conn-name {:IntegrationManager.Core/Connection
                   {:ConnectionId (u/uuid-string)
                    :ConnectionConfigName (name conn-config-name)}}
        (fn [conn]
@@ -99,7 +99,7 @@
     (try
       (let [response (http/do-request
                       :delete
-                      (str (connections-api-host) "/api/ConnectionManager.Core/Connection/" (:ConnectionId conn))
+                      (str (connections-api-host) "/api/IntegrationManager.Core/Connection/" (:ConnectionId conn))
                       (when-let [token @auth-token]
                         {"Authorization" (str "Bearer " token)}))]
         (case (:status response)

@@ -18,7 +18,7 @@
   (and (vector? obj)
        (every? conn-inst? obj)))
 
-(def connmgr-spec
+(def intgmgr-spec
   [:map
    [:integrations {:optional true} [:set :string]]
    [:configurations {:optional true} :map]
@@ -39,7 +39,7 @@
   [:map
    [:service {:optional true} service-spec]
    [:store {:optional true} store-spec]
-   [:connection-manager {:optional true} connmgr-spec]
+   [:integration-manager {:optional true} intgmgr-spec]
    [:authentication {:optional true} :map]
    [:telemetry {:optional true} telemetry-spec]
    [:llms {:optional true} llms-spec]])
