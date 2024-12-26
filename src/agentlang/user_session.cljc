@@ -90,7 +90,7 @@
         {:Id (normalize-sid sid) :Data {:UserData user-data}}})
       user-data)))
 
-(defn- maybe-assign-roles [email user-roles]
+(defn maybe-assign-roles [email user-roles]
   (ev/safe-eval-internal
    {:Agentlang.Kernel.Rbac/DeleteRoleAssignments
     {:Assignee email}})

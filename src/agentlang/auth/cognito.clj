@@ -2,7 +2,7 @@
   (:require [amazonica.aws.cognitoidp
              :refer [admin-add-user-to-group admin-delete-user admin-get-user admin-remove-user-from-group
                      admin-update-user-attributes admin-user-global-sign-out change-password
-                     confirm-forgot-password confirm-sign-up create-group delete-group
+                     confirm-forgot-password confirm-sign-up create-group delete-group admin-list-groups-for-user
                      forgot-password initiate-auth list-users resend-confirmation-code sign-up]]
             [clojure.string :as str]
             [clojure.walk :as w]
@@ -73,6 +73,12 @@
     (catch Exception e
       (log/warn e))))
 
+(defn- assign-user-roles [client user-pool-id username default-role]
+  (let [user-groups (admin-list-groups-for-user client :user-pool-id user-pool-id :username username)
+        roles (mapv :group-name (:groups user-groups))
+        roles-for-user (when-not (seq roles) [(or default-role "user")])]
+    (sess/maybe-assign-roles username roles-for-user)))
+
 (defmethod auth/verify-token tag [_config token]
   (verify-and-extract (uh/get-aws-config) token))
 
@@ -81,14 +87,18 @@
     (fn [_req token]
       (verify-and-extract aws-config token))))
 
-(defmethod auth/user-login tag [{:keys [event] :as req}]
-  (let [{:keys [client-id] :as aws-config} (uh/get-aws-config)]
+(defmethod auth/user-login tag [{:keys [event default-role] :as req}]
+  (let [{:keys [client-id user-pool-id] :as aws-config} (uh/get-aws-config)
+        client (auth/make-client (merge req aws-config))]
     (try
-      (initiate-auth (auth/make-client (merge req aws-config))
-                     :auth-flow "USER_PASSWORD_AUTH"
-                     :auth-parameters {"USERNAME" (:Username event)
-                                       "PASSWORD" (:Password event)}
-                     :client-id client-id)
+      (let [login-response
+            (initiate-auth client
+                           :auth-flow "USER_PASSWORD_AUTH"
+                           :auth-parameters {"USERNAME" (:Username event)
+                                             "PASSWORD" (:Password event)}
+                           :client-id client-id)]
+        (assign-user-roles client user-pool-id (:Username event) default-role) 
+        login-response)
       (catch Exception e
         (throw (Exception. (get-error-msg-and-log e)))))))
 
@@ -228,7 +238,10 @@
         cognito-domain (u/getenv "AWS_COGNITO_DOMAIN")
         api-url (u/getenv "AGENTLANG_API_URL")
         ui-url (u/getenv "AGENTLANG_UI_URL")
-        client-id (u/getenv "AWS_COGNITO_CLIENT_ID")]
+        client-id (u/getenv "AWS_COGNITO_CLIENT_ID")
+        default-role (get auth-config :default-role)
+        {:keys [user-pool-id] :as aws-config} (uh/get-aws-config)
+        client (auth/make-client (merge auth-config aws-config))]
     (try
       (let [resp
             @(hc/post
@@ -266,6 +279,7 @@
                        (assoc
                         (create-event :Agentlang.Kernel.Identity/PostSignUp)
                         :SignupResult sign-up-result :SignupRequest {:User user-obj})))))
+                (assign-user-roles client user-pool-id (:email user) default-role)
                 (sess/upsert-user-session (:sub user) true)
                 {:status :redirect-found
                  :location (str (or redirect-query ui-url)
