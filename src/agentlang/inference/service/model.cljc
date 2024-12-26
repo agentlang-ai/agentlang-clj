@@ -325,10 +325,12 @@
 
 (dataflow
  :Agentlang.Core/CreateAgentChatSession
- {:Agentlang.Core/ChatSession
-  {:Id :Agentlang.Core/CreateAgentChatSession.ChatId
-   :Messages :Agentlang.Core/CreateAgentChatSession.Messages}
-  :-> [[:Agentlang.Core/AgentChatSession :Agentlang.Core/CreateAgentChatSession.Agent]]})
+ [:try
+  {:Agentlang.Core/ChatSession
+   {:Id :Agentlang.Core/CreateAgentChatSession.ChatId
+    :Messages :Agentlang.Core/CreateAgentChatSession.Messages}
+   :-> [[:Agentlang.Core/AgentChatSession :Agentlang.Core/CreateAgentChatSession.Agent]]}
+  :error {:Agentlang.Core/LookupAgentChatSessions {:Agent :Agentlang.Core/CreateAgentChatSession.Agent}}])
 
 (dataflow
  :Agentlang.Core/ResetAgentChatSessions

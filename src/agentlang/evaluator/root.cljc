@@ -726,7 +726,7 @@
            (recur (rest main-clauses)))
          (if alternative
            (eval-opcode evaluator env alternative)
-           (i/ok false env)))))))
+           (i/ok true env)))))))
 
 (defn- bind-for-each-element [env element elem-alias]
   (cond

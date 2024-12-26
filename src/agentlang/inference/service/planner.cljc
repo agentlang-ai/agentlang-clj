@@ -20,14 +20,19 @@
 (defn- maybe-alias [x]
   (when (symbol? x) (keyword x)))
 
+(defn- parse-operator [opr]
+  (if (= opr 'not=)
+    '<>
+    opr))
+
 (defn- parse-ref-or-expr [v]
   (cond
     (list? v)
     (cond
-      (some #{(first v)} '(= < > <= >= and or)) (parse-ref-or-expr (vec v))
+      (some #{(first v)} '(= < > <= >= not= and or)) (parse-ref-or-expr (vec v))
       (keyword? (first v)) (li/make-ref (u/symbol-as-keyword (second v)) (first v)) ; TODO: handle references more than one level deep
       :else `(~(first v) ~@(reverse (into '() (mapv parse-ref-or-expr (rest v))))))
-    (vector? v) [(u/symbol-as-keyword (first v))
+    (vector? v) [(u/symbol-as-keyword (parse-operator (first v)))
                  (or (maybe-alias (second v)) (parse-ref-or-expr (second v)))
                  (or (maybe-alias (last v)) (parse-ref-or-expr (last v)))]
     (symbol? v) (keyword v)
@@ -108,7 +113,11 @@
 (declare expressions-to-patterns expression-to-pattern)
 
 (defn- parse-for-each [[n expr] alias]
-  (let [pat [:for-each (parse-ref-or-expr n) (expression-to-pattern expr)]]
+  (let [pat [:for-each
+             (if (vector? n)
+               (mapv expression-to-pattern n)
+               (parse-ref-or-expr n))
+             (expression-to-pattern expr)]]
     (if alias
       (vec (concat pat [:as alias]))
       pat)))
@@ -188,6 +197,7 @@
           customers
           (make :Acme.Core/PlatinumCustomer {:Email (:Email %)})))
        "\nThe special variable `%` will be bound to each element in the sequence, i.e `customers` in this example.\n"
+       "DO NOT EXPLICITLY DEFINE `%`, it is automatically defined for for-each.\n"
        "The other two operations you can do on entities are `update` and `delete`. The following example shows how to change "
        "a customer's name and address. The customer is looked-up by email:\n"
        (u/pretty-str
