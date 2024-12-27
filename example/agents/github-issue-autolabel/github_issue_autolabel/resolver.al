@@ -87,7 +87,7 @@
          )))
 
 (entity
-  :GithubIssuesDemo.Resolver/IssueTriage
+  :GithubIssueAutolabel.Resolver/IssueTriage
   {:Url      :String
    :Severity {:type :String :optional true}
    :Priority {:type :String :optional true}})
