@@ -1,24 +1,28 @@
 (component
-  :GithubIssueAutolabel.Core)
+  :GithubIssueAutolabel.Core
+  {:clj-import (quote [(:require [cheshire.core :as json])])})
 
 
 {:Agentlang.Core/Agent
  {:Name :autolabel-agent
   :Type :planner
-  :Tools [:GithubIssueAutolabel.Resolver/Issue]
+  :Tools [:GithubIssueAutolabel.Resolver/Issue
+          :GithubIssueAutolabel.Resolver/IssueTriage]
   :UserInstruction "Find issue analysis for the given Github project issue.
 Output attributes are: [\"Url\", \"Severity\", \"Priority\"]
 Severity: Either of [Critical, Major, Minor, Low]
 Priority: Either of [Urgent, High, Moderate, Low, Negligible]
+
+Result output should be an instance of :GithubIssueAutolabel.Resolver/IssueTriage
 "
-  :Input :GithubIssueAutolabel.Resolver/IssueTriage}}
+  :Input :AnalyseIssue}}
 
 (event
  :AnalyseIssue
  {:meta {:inherits :Agentlang.Core/Inference}})
 
 (dataflow [:after :create :GithubIssueAutolabel.Resolver/Issue]
-  {:AnalyseIssue :Instance})
+  {:AnalyseIssue {:UserInstruction '(cheshire.core/generate-string :Instance)}})
 
 ;; timer
 (dataflow :GithubIssueAutolabel.Core/Sleep
@@ -32,7 +36,7 @@ Priority: Either of [Urgent, High, Moderate, Low, Negligible]
   [:eval '(println "Fetching issues")]
   {:GithubIssueAutolabel.Resolver/Issue? {} :as :Issues}
   [:for-each :Issues
-   {:AnalyseIssue :%}]
+   {:AnalyseIssue {:UserInstruction '(cheshire.core/generate-string :%)}}]
   {:GithubIssueAutolabel.Core/Sleep {}}
   :Issues)
 
