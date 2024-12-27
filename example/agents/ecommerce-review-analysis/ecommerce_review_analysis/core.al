@@ -1,5 +1,5 @@
 (component
-  :EcommerceReviewAnalysis.Core)
+ :EcommerceReviewAnalysis.Core)
 
 (entity
   :Review
@@ -61,6 +61,6 @@
   :Input :AnalyseReview}}
 
 (dataflow
- [:before :create :Review]
+ [:after :create :Review]
  {:AnalyseReview {:UserInstruction '(str "The review instance is: \n" :Instance)}}
  :Instance)
