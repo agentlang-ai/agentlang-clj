@@ -1,6 +1,6 @@
 # github-issue-autolabel
 
-This app fetches Github issues and updates triage labels periodically.
+This app fetches Github open issues for a given repo (via `config.edn`) and updates triage labels periodically.
 
 ## Usage
 
@@ -20,6 +20,7 @@ Then run the app:
 $ ./run.sh
 ```
 
+Please follow the instructions in the `run.sh` script to run the app.
 
 ## License
 
