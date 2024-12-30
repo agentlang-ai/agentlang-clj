@@ -100,7 +100,10 @@
                            "anthropic-version" anthropic-version}
                  :body (json/generate-string
                         {:model model-name
-                         :system formatted-system-message
+                         :system (if (or (nil? formatted-system-message)
+                                         (empty? formatted-system-message))
+                                     []
+                                     formatted-system-message)
                          :temperature temperature
                          :messages messages
                          :max_tokens max-tokens})}
