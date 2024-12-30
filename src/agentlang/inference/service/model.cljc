@@ -450,7 +450,7 @@
                              event))]
      (when (= :ok (:status result))
        (callback (:result result)))))
-  ([event callback] (eval-event event callback false))
+  ([event callback] (eval-event event callback true))
   ([event] (eval-event event identity)))
 
 (defn- eval-internal-event [event & args]

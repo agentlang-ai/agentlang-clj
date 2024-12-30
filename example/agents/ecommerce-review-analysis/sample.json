@@ -1,0 +1,19 @@
+{
+  "EcommerceReviewAnalysis.Core/Review": {
+    "Marketplace": "US",
+    "CustomerId": 53096399,
+    "ReviewId": "R1BALOA11Z06MT",
+    "ProductId": "1559947608",
+    "ProductParent": "381720534",
+    "ProductTitle": "The 22 Immutable Laws of Marketing",
+    "ProductCategory": "Books",
+    "StarRating": 4,
+    "HelpfulVotes": 0,
+    "TotalVotes": 0,
+    "Vine": false,
+    "VerifiedPurchase": true,
+    "ReviewHeadline": "awesome",
+    "ReviewBody": "I've always been partial to immutable laws. The tape is entertaining, good car listening. The laws are clearly self evident once you've  heard them and you wonder why you didn't know  all that already and were about to go off and  do something stupid.  It's cheap, get it.",
+    "ReviewDate": "1995-08-17"
+  }
+}
