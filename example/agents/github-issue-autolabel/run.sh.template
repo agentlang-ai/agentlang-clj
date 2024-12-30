@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+export OPENAI_API_KEY="FIXME"
+export GITHUB_OWNER="FIXME"
+export GITHUB_REPO="FIXME"
+export GITHUB_TOKEN="FIXME"
+
+
+# !! IMPORTANT !!
+#
+# Below are two ways to run this app. Please uncomment either of the two
+
+
+##
+# Use locally installed Agentlang CLI to run the app
+#-----
+#rm -rf logs
+#agent run -c config.edn
+
+
+##
+# Use Docker to run the app
+#-----
+docker run --rm \
+  -p "0.0.0.0:8080:8080" \
+  -v $PWD:/agentlang \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+  -e GITHUB_OWNER="$GITHUB_OWNER" \
+  -e GITHUB_REPO="$GITHUB_REPO" \
+  -e GITHUB_TOKEN="$GITHUB_TOKEN" \
+  -it agentlang/agentlang.cli:latest \
+  agent run
+
