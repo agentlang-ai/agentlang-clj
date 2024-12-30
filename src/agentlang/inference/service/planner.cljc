@@ -1,6 +1,7 @@
 (ns agentlang.inference.service.planner
   (:require [clojure.walk :as w]
             [agentlang.util :as u]
+            [agentlang.component :as cn]
             [agentlang.lang.internal :as li]
             [agentlang.inference.service.tools :as tools]))
 
@@ -56,8 +57,21 @@
 
 (defn- parse-make [[n attrs :as expr] alias]
   (when (validate-record-expr expr alias)
-    (merge {n (parse-value-refs-and-exprs attrs)}
-           (when alias {:as alias}))))
+    (let [a0 (parse-value-refs-and-exprs attrs)]
+      (merge {n a0}
+             (when alias {:as alias})))))
+
+(defn- merge-contains [entity-name contains-rel-name parent-id]
+  (if-let [parent-name (first (cn/relationship-nodes contains-rel-name))]
+    {:-> [[contains-rel-name {parent-name {(li/name-as-query-pattern (cn/identity-attribute-name parent-name)) parent-id}}]]}
+    (u/throw-ex (str "failed to fetch parent for " entity-name " via " contains-rel-name))))
+
+(defn- parse-make-child [[n attrs contains-rel parent-id :as expr] alias]
+  (when (validate-record-expr expr alias)
+    (let [a0 (parse-value-refs-and-exprs attrs)]
+      (merge {n a0}
+             (when contains-rel (merge-contains n contains-rel parent-id))
+             (when alias {:as alias})))))
 
 (defn- parse-lookup [[n attrs :as expr] alias]
   (when (validate-record-expr expr alias)
@@ -109,6 +123,7 @@
 (defn- parse-binding [expr alias]
   ((case (first expr)
      make parse-make
+     make-child parse-make-child
      cond parse-cond
      lookup-one parse-lookup-one
      lookup-many parse-lookup-many
@@ -247,7 +262,28 @@
        (u/pretty-str
         '(do (def spouse (lookup-one :Family.Core/Spouse {:Wife "mary@family.org"}))
              (def husband (lookup-one :Family.Core/Person {:Email (:Husband spouse)}))))
-       "\n\nIn addition to entities, you may also have events in a model, as the one shown below:\n"
+       "\n\nTwo entities may also form a `contains` relationship - where the relationship is hierarchical. For example, "
+       "a Company can contain Departments:\n"
+       (u/pretty-str
+        '(entity
+          :Acme.Core/Company
+          {:Name {:type :String :guid true}}))
+       (u/pretty-str
+        '(entity
+          :Acme.Core/Department
+          {:No {:type :Int :guid true}
+           :Name :String}))
+       (u/pretty-str
+        '(relationship
+          :Acme.Core/CompanyDepartment
+          {:meta {:contains [:Acme.Core/Company :Acme.Core/Department]}}))
+       "\n\nWhen creating a new Department, the name of its parent Company must be specified as follows:\n"
+       (u/pretty-str
+        '(def dept (make-child :Acme.Core/Department {:No 101 :Name "sales"} :Acme.Core/CompanyDepartment "RK Steels Corp")))
+       "\n\nNote that the parent is identified by its guid - in this case the company-name. The parent is assumed to be already existing."
+       "You should not lookup or try to create the parent, unless explicitly instructed to do so. Never call `make` and `make-child` for the same "
+       "instance - a instance of an entity with a parent should always be created with a call to `make-child`."
+       "\n\nIn addition to entities and relationships, you may also have events in a model, as the one shown below:\n"
        (u/pretty-str
         '(event
           :Acme.Core/InvokeSummaryAgent

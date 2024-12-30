@@ -1,5 +1,6 @@
 (ns agentlang.lang.tools.schema.model
   (:require [clojure.string :as s]
+            [clojure.set :as set]
             [malli.core :as m]
             [agentlang.util :as u]
             [agentlang.global-state :as gs]
@@ -68,11 +69,28 @@
 (defn model-name? [n]
   (or (string? n) (keyword? n)))
 
+(def channel-spec
+  [:map
+   [:subscriptions {:optional true} :boolean]
+   [:tools {:optional true} [:vector :keyword]]])
+
+(def ^:private conn-type-keys #{:type :title :description})
+
+(defn connection-type-spec? [obj]
+  (and (map? obj)
+       (every?
+        (fn [k]
+          (and (or (keyword? k) (string? k))
+               (let [v (get obj k)]
+                 (map? v)
+                 (= conn-type-keys (set/union conn-type-keys (set (keys v)))))))
+        (keys obj))))
+
 (def model-spec
   {(gs/agentlang-version)
    [:map
+    {:closed true}
     [:description {:optional true} :string]
-    [:tags {:optional true} [:set :keyword]]
     [:workspace {:optional true} :string]
     [:config {:optional true} config-spec]
     [:agentlang-version :string]
@@ -86,6 +104,9 @@
     [:branch {:optional true} :string]
     [:created-at {:optional true} :string]
     [:dependencies {:optional true} [:fn dependencies?]]
+    [:channel {:optional true} channel-spec]
+    [:connection-types {:optional true} [:fn connection-type-spec?]]
+    [:model-paths {:optional true} [:vector :string]]
     [:owner {:optional true} :string]]})
 
 (def diffs {})

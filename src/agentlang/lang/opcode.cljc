@@ -54,6 +54,7 @@
 (def not-found-tag :not-found)
 (def declined-tag :declined)
 (def error-tag :error)
+(def suspend-tag :suspend)
 
 (defn result-tag? [x]
   (some #{x} result-tags))

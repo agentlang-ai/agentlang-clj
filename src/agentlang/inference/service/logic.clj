@@ -157,7 +157,8 @@
            :Context (:Context agent-instance)
            :UserInstruction (str (or (:UserInstruction delegate) "")
                                  "\n"
-                                 (:UserInstruction agent-instance)))))
+                                 (or (get-in agent-instance [:Context :UserInstruction])
+                                     (:UserInstruction agent-instance))))))
 
 (defn- call-preprocess-agents [agent-instance]
   (when-let [delegates (seq (model/find-agent-pre-delegates agent-instance))]

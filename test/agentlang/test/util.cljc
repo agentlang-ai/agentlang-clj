@@ -43,7 +43,8 @@
 (defn- finalize-kernel-components []
   (doseq [cn [:Agentlang.Kernel.Lang
               :Agentlang.Kernel.Identity
-              :Agentlang.Kernel.Rbac]]
+              :Agentlang.Kernel.Rbac
+              :Agentlang.Kernel.Eval]]
     (store/force-init-schema (store/get-default-store) cn)))
 
 (defn finalize-component [component]
