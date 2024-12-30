@@ -3,6 +3,7 @@
             [agentlang.util :as u]
             [agentlang.lang :as ln]
             [agentlang.env :as env]
+            [agentlang.util.logger :as log]
             [agentlang.component :as cn]
             [agentlang.evaluator.state :as gs]))
 
@@ -75,3 +76,35 @@
   (let [r (first (evaluator {:Agentlang.Kernel.Eval/LoadSuspension {:Id id}}))]
     (when (= :ok (:status r))
       (first (:result r)))))
+
+(ln/entity
+ :Agentlang.Kernel.Eval/Continue
+ {:Id {:type :String :guid true}
+  :Result {:type :Any :optional true}})
+
+(defn- parse-restarter-id [id]
+  (let [[sid vs :as r] (s/split id #"\$")]
+    (if vs
+      [sid (into {} (mapv #(let [[k v] (s/split % #":")] [(keyword k) (read-string v)]) (s/split vs #",")))]
+      r)))
+
+(defn- query-suspension-restarter [[_ {where :where}]]
+  (when-let [[_ _ id] where]
+    (let [[susp-id value] (parse-restarter-id id)
+          result
+          (first
+           ((gs/get-active-evaluator)
+            {:Agentlang.Kernel.Eval/RestartSuspension
+             {:Id susp-id :Value value}}))]
+      (if (= :ok (:status result))
+        [(cn/make-instance
+          :Agentlang.Kernel.Eval/Continue
+          {:Id id :Result (:result result)})]
+        (log/error result)))))
+
+(ln/resolver
+ :Agentlang.Kernel.Eval/SuspensionRestarterResolver
+ {:with-methods
+  {:create identity
+   :query query-suspension-restarter}
+  :paths [:Agentlang.Kernel.Eval/Continue]})
