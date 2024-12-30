@@ -603,7 +603,7 @@
       (u/throw-ex (str "macro not found - " m))
       (u/throw-ex (str "not a valid macro name - " m)))))
 
-(defn- special-form-alias [pat]
+(defn special-form-alias [pat]
   (let [rpat (reverse pat)]
     (if (= :as (second rpat))
       [(vec (reverse (nthrest rpat 2))) (first rpat)]
