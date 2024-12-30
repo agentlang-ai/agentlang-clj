@@ -92,3 +92,40 @@
  :Slack.Core/Resolver
  {:with-methods {:create create-entity}
   :paths [:Slack.Core/Chat]})
+
+(entity
+ :ManagerSlackChannel
+ {:Manager {:type :String :optional true}
+  :SlackChannelId {:type :String :optional true}})
+
+(event
+ :LookupManagerSlackChannel
+ {:Manager :String})
+
+(dataflow
+ :LookupManagerSlackChannel
+ {:ManagerSlackChannel {:Manager? :LookupManagerSlackChannel.Manager}})
+
+(defn- make-slack-channel [channel-id]
+  (cn/make-instance
+   :Slack.Core/ManagerSlackChannel
+   {:SlackChannelId channel-id}))
+
+(def default-slack-channel (make-slack-channel
+                            (if test-mode
+                              "approval-requests"
+                              (or (System/getenv "SLACK_CHANNEL_ID") "C07L51XJULV"))))
+
+(def slack-channel-db {"mgr01@acme.com" default-slack-channel})
+
+(defn- get-manager-info [[[_ n] {where :where}]]
+  (let [[_ _ v] where]
+    (when (= n :ManagerSlackChannel)
+      (when-let [ch (get slack-channel-db v default-slack-channel)]
+        [(assoc ch :Manager v)]))))
+
+(resolver
+ :ManagerResolver
+ {:with-methods
+  {:query get-manager-info}
+  :paths [:Slack.Core/ManagerSlackChannel]})

@@ -24,6 +24,15 @@
 
 (component :Agentlang.Core {:model :Agentlang})
 
+(def subscription-events (atom {}))
+
+(defn register-subscription-event [resolver-model input-event]
+  (swap! subscription-events assoc resolver-model input-event)
+  resolver-model)
+
+(defn get-subscription-event [resolver-model]
+  (get @subscription-events resolver-model))
+
 (entity
  :Agentlang.Core/LLM
  {:Type {:type :String :default "openai"} ; e.g "openai"
@@ -150,6 +159,7 @@
   :Context {:type :Map :optional true}
   :Response {:type :Any :read-only true}
   :Integrations {:listof :String :optional true}
+  :Channels {:listof :Any :optional true}
   :CacheChatSession {:type :Boolean :default true}})
 
 (defn- agent-of-type? [typ agent-instance]
@@ -215,6 +225,15 @@
     (u/throw-ex (str "Invalid name " n ", cannot contain `/` or `.`")))
   n)
 
+(defn- fetch-channel-tools [channel]
+  (when-let [tools (get-in (cn/fetch-model channel) [:channel :tools])]
+    (preproc-agent-tools-spec tools)))
+
+(defn- maybe-register-subscription-handlers! [channels input]
+  (doseq [channel channels]
+    (when (get-in (cn/fetch-model channel) [:channel :subscriptions])
+      (register-subscription-event channel input))))
+
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
  (fn [pat]
@@ -226,6 +245,8 @@
          tp (:Type attrs)
          llm (or (:LLM attrs) {:Type "openai"})
          docs (:Documents attrs)
+         channels (:Channels attrs)
+         tools (vec (concat tools (flatten (us/nonils (mapv fetch-channel-tools channels)))))
          new-attrs
          (-> attrs
              (cond->
@@ -235,7 +256,10 @@
                  delegates (assoc :Delegates delegates)
                  docs (assoc :Documents (preproc-agent-docs docs))
                  tp (assoc :Type (u/keyword-as-string tp))
+                 channels (assoc :Channels (mapv name channels))
                  llm (assoc :LLM (u/keyword-as-string llm))))]
+     (when (seq channels)
+       (maybe-register-subscription-handlers! channels (keyword input)))
      (assoc pat :Agentlang.Core/Agent
             (cond
               (planner-agent? new-attrs) (planner/with-instructions new-attrs)
