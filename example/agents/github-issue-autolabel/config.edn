@@ -1,0 +1,4 @@
+{:service {:port 8080}
+ :GithubIssueAutolabel.Resolver/Config {:Token #$ GITHUB_TOKEN
+                                        :Owner #$ GITHUB_OWNER
+                                        :Repo  #$ GITHUB_REPO}}
