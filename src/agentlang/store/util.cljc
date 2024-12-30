@@ -174,7 +174,7 @@
      (some #{k} kw-type-attrs) (u/string-as-keyword v)
      (uuid? v) (str v)
      (and v (= :Agentlang.Kernel.Lang/Boolean attr-type)) (not (#{0 false} v))
-     (and (number? v) (= :Agentlang.Kernel.Lang/Decimal attr-type)) #?(:clj (bigdec v) :cljs (float ))
+     (and (number? v) (= :Agentlang.Kernel.Lang/Decimal attr-type)) #?(:clj (bigdec v) :cljs (float v))
      (encoded-clj-object? v) (decode-clj-object v)
      :else v)]))
 
