@@ -25,7 +25,9 @@
   :Subject :String
   :Body :String})
 
-{:Agentlang.Core/LLM {:Name :llm01}}
+{:Agentlang.Core/LLM
+ {:Type :anthropic
+  :Name :llm01}}
 
 {:Agentlang.Core/Agent
  {:Name :planner-agent
