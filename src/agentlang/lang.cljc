@@ -605,7 +605,7 @@
       (when-not (= :on (nth match-pat 3))
         (u/throw-ex (str ":on keyword not found - " match-pat)))
       (when-not (= :where (nth match-pat 5))
-        (u/throw-ex (str ("where clause not found - " match-pat))))
+        (u/throw-ex (str "where clause not found - " match-pat)))
       [(li/validate-on-clause (nth match-pat 4))
        (li/validate-where-clause (nth match-pat 6))])
     (u/throw-ex (str ":on and :where clauses expected - " match-pat))))

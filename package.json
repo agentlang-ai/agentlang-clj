@@ -1,0 +1,8 @@
+{
+    "name": "agentlang",
+    "version": "1.0.0",
+    "main": "target/cljsbuild/public/js/agentlang.js",
+    "scripts": {
+        "build": "lein cljsbuild once"
+    }
+}

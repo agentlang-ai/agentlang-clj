@@ -76,12 +76,21 @@
   :plugins [[lein-cljsbuild "1.1.8" :exclusions [[org.clojure/clojure]]]
             [lein-environ "1.2.0"]
             [s3-wagon-private "1.3.4"]
+            [lein-cljsbuild "1.1.8"]
             [lein-doo "0.1.10"]
             [reifyhealth/lein-git-down "0.4.0"]
             [lein-ancient "1.0.0-RC3"]
             [cider/cider-nrepl "0.37.1"]
             [refactor-nrepl "3.10.0"]
             [lein-classpath-jar "0.1.0"]]
+
+
+  :cljsbuild {:builds [{:id "npm"
+                        :source-paths ["src"]
+                        :compiler {:output-to "target/cljsbuild/public/js/agentlang.js"  ;; output path for single JS file
+                                   :output-dir "target/cljsbuild/public/js"
+                                   :optimizations :advanced  ;; minification for production
+                                   :pretty-print false}}]}
 
   :middleware [lein-git-down.plugin/inject-properties]
 
