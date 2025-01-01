@@ -13,7 +13,7 @@
             [agentlang.rbac.core :as rbac]
             [agentlang.global-state :as gs]
             [agentlang.paths :as p]
-            [agentlang.inference.service.model :as agent-model]
+            #?(:clj [agentlang.inference.service.model :as agent-model])
             [agentlang.resolver.registry :as rr]
             [agentlang.evaluator.intercept.internal :as ii]))
 
