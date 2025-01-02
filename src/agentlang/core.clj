@@ -50,33 +50,31 @@
        (h/run-server evaluator server-cfg nrepl-handler))))
   ([model-info nrepl-handler] (run-service nil model-info nrepl-handler)))
 
-
-(defn generate-swagger-doc [model-name args]
-  (let [model-path (first args)]
-    (if (build/compiled-model? model-path model-name)
-      (let [components (remove (cn/internal-component-names)
-                               (cn/component-names))]
-        (.mkdir (File. "doc"))
-        (.mkdir (File. "doc/api"))
-
-        (docindex/gen-index-file model-name components)
-
-        (doseq [component components]
-          (let [comp-name (clojure.string/replace
-                           (name component) "." "")
-                doc-path "doc/api/"
-                json-file (str doc-path comp-name ".json")
-                html-file (str doc-path comp-name ".html")]
-            (with-open [w (clojure.java.io/writer
-                           json-file)]
-              (.write w (doc/generate-swagger-json component)))
-            (let [^CommandLine cmd-line
-                  (CommandLine/parse
-                   (str "redoc-cli bundle -o " html-file " " json-file))
-                  ^Executor executor (DefaultExecutor.)]
-              (.execute executor cmd-line))))
-        (ur/log-seq! "components" components))
-      (build/exec-with-build-model (str "lein run -s " model-name " .") nil model-name))))
+(defn generate-swagger-doc []
+  (let [components (remove (set (cn/internal-component-names))
+                           (cn/component-names))]
+    (.mkdir (File. "doc"))
+    (.mkdir (File. "doc/api"))
+  
+    (docindex/gen-index-file
+     (cn/model-for-component (first components))
+     components)
+  
+    (doseq [component components]
+      (let [comp-name (clojure.string/replace
+                       (name component) "." "")
+            doc-path "doc/api/"
+            json-file (str doc-path comp-name ".json")
+            html-file (str doc-path comp-name ".html")]
+        (with-open [w (clojure.java.io/writer
+                       json-file)]
+          (.write w (doc/generate-swagger-json component)))
+        (let [^CommandLine cmd-line
+              (CommandLine/parse
+               (str "redoc-cli bundle -o " html-file " " json-file))
+              ^Executor executor (DefaultExecutor.)]
+          (.execute executor cmd-line))))
+    (ur/log-seq! "components" components)))
 
 (defn generate-graphql-schema [model-name args]
   (let [model-path (first args)]
@@ -192,7 +190,6 @@
 
 (def ^:private cli-options
   [["-c" "--config CONFIG" "Configuration file"]
-   ["-s" "--doc MODEL" "Generate documentation in .html"]
    ["-i" "--interactive 'app-description'" "Invoke AI-assist to model an application"]
    ["-h" "--help"]
    ["-v" "--version"]
@@ -213,7 +210,8 @@
   (println "  build MODEL-NAME           Compile a model to produce a standalone application")
   (println "  publish MODEL-NAME TARGET  Publish the model to the target - local, clojars or github")
   (println "  exec MODEL-NAME            Build and run the model as a standalone application")
-  (println "  repl MODEL-NAME            Launch the Agentlang REPL")
+  (println "  repl MODEL-NAME            Launch the Agentlang REPL") 
+  (println "  doc MODEL-NAME             Generate OpenAPI and HTML documentation")
   (println "  migrate MODEL-NAME [git/local] [branch/path]          Migrate database given previous version of the app")
   (println)
   (println "The model will be searched in the local directory or under the paths pointed-to by")
@@ -222,7 +220,6 @@
   (println)
   (println "The command-line arguments accepted by agentlang are:")
   (println "  -c --config CONFIG         Configuration file")
-  (println "  -s --doc MODEL             Generate HTML documentation")
   (println "  -i --interactive 'desc'    Use AI to generate a model from the textual description")
   (println "  -h --help                  Print this help and quit")
   (println "  -g --graphql MODEL         Generate GraphQL schema for reference")
@@ -269,9 +266,6 @@
       (:graphql options) (generate-graphql-schema
                            (:graphql options)
                            args)
-      (:doc options) (generate-swagger-doc
-                      (:doc options)
-                      args)
       (:interactive options) (gpt-bot (:interactive options))
       :else
       (or (some
@@ -282,6 +276,7 @@
                                                    (run-service
                                                     (ur/read-model-and-config options)
                                                     (agentlang-nrepl-handler (first %) options))))
+                  :doc               #(ur/call-after-load-model (first %) generate-swagger-doc)
                   :migrate           (fn [args]
                                        (let [args (if (= 3 (count args)) args (cons nil args))]
                                          (if (and (= 3 (count args))

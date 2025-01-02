@@ -30,7 +30,8 @@
     :raw
     :-*-containers-*-
     :Agentlang.Kernel.UserApp
-    :Agentlang.Kernel.Repl})
+    :Agentlang.Kernel.Repl
+    :Agentlang.Kernel.Eval})
 
 (def non-instance-user-attr-keys
   #{type-tag-key id-attr type-key dirty-key})
