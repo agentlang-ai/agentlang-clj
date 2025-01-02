@@ -1,7 +1,7 @@
 (ns agentlang.auth.jwt
   (:require #?(:clj [buddy.core.keys.jwk.proto :as buddy-jwk])
             #?(:clj [buddy.sign.jwt :as jwt])
-            [clojure.algo.generic.functor :refer [fmap]]
+            #?(:clj [clojure.algo.generic.functor :refer [fmap]])
             [clojure.string :as str]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
