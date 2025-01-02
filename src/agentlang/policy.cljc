@@ -3,7 +3,8 @@
             [agentlang.evaluator :as ev]
             [agentlang.component :as cn]
             [agentlang.lang.internal :as li]
-            #?(:cljs [agentlang.ui.policy-resolver :as uip])))
+            ;;#?(:cljs [agentlang.ui.policy-resolver :as uip])
+            ))
 
 (defn- normalize-path [p]
   (if (li/parsed-path? p)
@@ -15,7 +16,8 @@
 (defn lookup-policies [intercept resource]
   (or
    #?(:cljs
-      (uip/lookup-policies intercept resource)
+      ;; (uip/lookup-policies intercept resource)
+      nil
       :clj
       (let [result
             (ev/eval-all-dataflows

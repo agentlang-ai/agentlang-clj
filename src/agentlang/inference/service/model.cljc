@@ -19,8 +19,8 @@
             [agentlang.datafmt.json :as json]
             [agentlang.lang.internal :as li]
             [agentlang.global-state :as gs]
-            [agentlang.inference.service.planner :as planner]
-            [agentlang.inference.service.agent-gen :as agent-gen]))
+            #?(:clj [agentlang.inference.service.planner :as planner])
+            #?(:clj [agentlang.inference.service.agent-gen :as agent-gen])))
 
 (component :Agentlang.Core {:model :Agentlang})
 
@@ -261,11 +261,13 @@
      (when (seq channels)
        (maybe-register-subscription-handlers! channels (keyword input)))
      (assoc pat :Agentlang.Core/Agent
-            (cond
-              (planner-agent? new-attrs) (planner/with-instructions new-attrs)
-              (agent-gen-agent? new-attrs) (agent-gen/with-instructions new-attrs)
-              (classifier-agent? new-attrs) (classifier-with-instructions new-attrs)
-              :else new-attrs)))))
+            #?(:clj
+               (cond
+                 (planner-agent? new-attrs) (planner/with-instructions new-attrs)
+                 (agent-gen-agent? new-attrs) (agent-gen/with-instructions new-attrs)
+                 (classifier-agent? new-attrs) (classifier-with-instructions new-attrs)
+                 :else new-attrs)
+               :cljs new-attrs)))))
 
 (defn maybe-define-inference-event [event-name]
   (if (cn/find-schema event-name)

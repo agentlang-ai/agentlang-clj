@@ -7,7 +7,6 @@
    [agentlang.util :as u]
    [agentlang.util.seq :as su]
    [agentlang.util.logger :as log]
-   [agentlang.util.runtime :as ur]
    [agentlang.store :as store]
    [agentlang.store.util :as sfu]
    [agentlang.store :as as]

@@ -1,7 +1,8 @@
 (ns agentlang.auth.core
   (:require [agentlang.evaluator :as ev]
             [agentlang.component :as cn]
-            [agentlang.util.logger :as log]))
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])))
 
 (def service-tag :service)
 
