@@ -1,6 +1,6 @@
 (ns agentlang.auth.jwt
-  (:require [buddy.core.keys.jwk.proto :as buddy-jwk]
-            [buddy.sign.jwt :as jwt]
+  (:require #?(:clj [buddy.core.keys.jwk.proto :as buddy-jwk])
+            #?(:clj [buddy.sign.jwt :as jwt])
             [clojure.algo.generic.functor :refer [fmap]]
             [clojure.string :as str]
             #?(:clj [agentlang.util.logger :as log]
@@ -27,14 +27,15 @@
   "Transform a vector of json web keys into a map of kid -> key pairs where each key is a map
   of :public-key and optionally :private-keys."
   [json-web-keys]
-  (->> json-web-keys
-       :keys
-       (filter #(= (:kty %) "RSA"))
-       (group-by :kid)
-       (fmap first)
-       (fmap #(assoc {}
-                     :public-key (buddy-jwk/jwk->public-key %)
-                     :private-key (buddy-jwk/jwk->private-key %)))))
+  #?(:clj
+     (->> json-web-keys
+          :keys
+          (filter #(= (:kty %) "RSA"))
+          (group-by :kid)
+          (fmap first)
+          (fmap #(assoc {}
+                        :public-key (buddy-jwk/jwk->public-key %)
+                        :private-key (buddy-jwk/jwk->private-key %))))))
 
 (defn- fetch-keys
   "Fetches the jwks from the supplied jwks-url and converts to java Keys.
@@ -89,11 +90,12 @@
   ([jwks-url token]
    (verify-and-extract jwks-url token {}))
   ([jwks-url token opts]
-   (let [token (remove-bearer token)]
-     (try
-       (jwt/unsign
-        token
-        (partial resolve-public-key jwks-url)
-        (merge {:alg :rs256} opts))
-       (catch Exception e
-         (log/warn e))))))
+   #?(:clj
+      (let [token (remove-bearer token)]
+        (try
+          (jwt/unsign
+           token
+           (partial resolve-public-key jwks-url)
+           (merge {:alg :rs256} opts))
+          (catch Exception e
+            (log/warn e)))))))

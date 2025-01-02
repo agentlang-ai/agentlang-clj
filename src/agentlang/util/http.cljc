@@ -219,7 +219,7 @@
       (let [parent-entity
             (cn/containing-parents (or (first path) entity))]
         (if (empty? parent-entity)
-          {:path (str "_e/" (namespace entity)
+          {:path (str "api/" (namespace entity)
                       (when (seq path)
                         (let [path (add-path-vars path)]
                           (str "/"
