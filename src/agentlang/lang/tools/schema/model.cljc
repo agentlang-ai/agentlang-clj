@@ -93,7 +93,7 @@
 (def model-spec
   {(gs/agentlang-version)
    [:map
-    {:closed true}
+    {:closed false}
     [:description {:optional true} :string]
     [:workspace {:optional true} :string]
     [:config {:optional true} config-spec]
