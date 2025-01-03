@@ -21,16 +21,30 @@
 (defn- maybe-alias [x]
   (when (symbol? x) (keyword x)))
 
+(defn- operator? [x]
+  (and (symbol? x)
+       (some #{x} #{'= '< '> 'not= '>= '<= 'and 'or})))
+
+(defn- parse-operator [opr]
+  (if (= opr 'not=)
+    '<>
+    opr))
+
+(declare expression-to-pattern)
+
 (defn- parse-ref-or-expr [v]
   (cond
     (list? v)
     (cond
-      (some #{(first v)} '(= < > <= >= and or)) (parse-ref-or-expr (vec v))
+      (some #{(first v)} '(= < > <= >= not= and or)) (parse-ref-or-expr (vec v))
       (keyword? (first v)) (li/make-ref (u/symbol-as-keyword (second v)) (first v)) ; TODO: handle references more than one level deep
       :else `(~(first v) ~@(reverse (into '() (mapv parse-ref-or-expr (rest v))))))
-    (vector? v) [(u/symbol-as-keyword (first v))
-                 (or (maybe-alias (second v)) (parse-ref-or-expr (second v)))
-                 (or (maybe-alias (last v)) (parse-ref-or-expr (last v)))]
+    (vector? v)
+    (if (operator? (first v))
+      [(u/symbol-as-keyword (parse-operator (first v)))
+       (or (maybe-alias (second v)) (parse-ref-or-expr (second v)))
+       (or (maybe-alias (last v)) (parse-ref-or-expr (last v)))]
+      (mapv expression-to-pattern v))
     (symbol? v) (keyword v)
     :else v))
 
@@ -70,8 +84,6 @@
 (defn- parse-lookup-one [expr alias]
   (parse-lookup expr (when alias [alias])))
 
-(declare expression-to-pattern)
-
 (def ^:private parse-lookup-many parse-lookup)
 
 (defn- parse-cond [expr alias]
@@ -103,7 +115,7 @@
       pat)))
 
 (defn- parse-fn-call [expr alias]
-  (let [pat [:eval `'(~(first expr) ~@(mapv parse-ref-or-expr (rest expr)))]]
+  (let [pat [:eval (~(first expr) ~@(mapv parse-ref-or-expr (rest expr)))]]
     (if alias
       (vec (concat pat [:as alias]))
       pat)))
@@ -120,10 +132,14 @@
      parse-fn-call)
    (rest expr) alias))
 
-(declare expressions-to-patterns expression-to-pattern)
+(declare expressions-to-patterns)
 
 (defn- parse-for-each [[n expr] alias]
-  (let [pat [:for-each (parse-ref-or-expr n) (expression-to-pattern expr)]]
+  (let [pat [:for-each
+             (if (vector? n)
+               (mapv expression-to-pattern n)
+               (parse-ref-or-expr n))
+             (expression-to-pattern expr)]]
     (if alias
       (vec (concat pat [:as alias]))
       pat)))
@@ -137,12 +153,14 @@
     (symbol? expr) (u/symbol-as-keyword expr)
     :else
     (if (seqable? expr)
-      (case (first expr)
-        def (parse-binding (nth expr 2) (u/symbol-as-keyword (second expr)))
-        cond (parse-cond (rest expr) nil)
-        for-each (parse-for-each (rest expr) nil)
-        do (expressions-to-patterns expr)
-        (parse-binding expr nil))
+      (if (vector? expr)
+        [:eval `(vector ~@(mapv expression-to-pattern expr))]
+        (case (first expr)
+          def (parse-binding (nth expr 2) (u/symbol-as-keyword (second expr)))
+          cond (parse-cond (rest expr) nil)
+          for-each (parse-for-each (rest expr) nil)
+          do (expressions-to-patterns expr)
+          (parse-binding expr nil)))
       (u/throw-ex (str "Invalid expression: " expr)))))
 
 (defn maybe-an-expression? [expr]
@@ -203,6 +221,7 @@
           customers
           (make :Acme.Core/PlatinumCustomer {:Email (:Email %)})))
        "\nThe special variable `%` will be bound to each element in the sequence, i.e `customers` in this example.\n"
+       "DO NOT EXPLICITLY DEFINE `%`, it is automatically defined for for-each.\n"
        "The other two operations you can do on entities are `update` and `delete`. The following example shows how to change "
        "a customer's name and address. The customer is looked-up by email:\n"
        (u/pretty-str
@@ -279,12 +298,18 @@
         '(cond
            (= summary-result "trip to USA") "YES"
            :else "NO"))
-       "\nAlso keep in mind that you can call only `make` on events - `make-child`, `update`, `delete`, `lookup-one` and `lookup-many` "
-       "are reserved for entities.\n"
+       "\nIf you are asked to return more than one result, pack them into a list. For example, if you are asked to lookup and return both the "
+       "husband and wife, you may do the following:\n"
+       (u/pretty-str
+        '(do (def wife (lookup-one :Family.Core/Spouse {:Wife "mary@family.org"}))
+             (def husband (lookup-one :Family.Core/Person {:Email (:Husband spouse)}))
+             [husband wife]))
+       "\nAlso keep in mind that you can call only `make` on events, `update`, `delete`, `lookup-one` and `lookup-many` are reserved for entities.\n"
        "Note that you are generating code in a subset of Clojure. In your response, you should not use "
        "any feature of the language that's not present in the above examples. "
        "This means, for conditionals you should always return a `cond` expression, and must not return an `if`.\n"
-       "A `def` must always bind to the result of `make`, `make-child`, `update`, `delete`, `lookup-one` and `lookup-many` and nothing else.\n"
+       "A `def` must always bind to the result of `make`, `update`, `delete`, `lookup-one` and `lookup-many` and nothing else.\n"
+       "You must not call functions like `map` or invent functional-syntax like `[data in [1 2 3]]`\n\n"
        "Now consider the entity definitions and user-instructions that follows to generate fresh dataflow patterns. "
        "An important note: do not return any plain text in your response, only return valid clojure expressions. "
        "\nAnother important thing you should keep in mind: your response must not include any objects from the previous "

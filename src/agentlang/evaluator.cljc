@@ -198,7 +198,8 @@
         (gs/set-active-txn! txn)
         (reset! txn-set true))
       (try
-        (let [{susp-env :env susp-opcc :opcc} sp/suspension-info
+        (let [_ (sp/init-suspension-id)
+              {susp-env :env susp-opcc :opcc} sp/suspension-info
               env (if susp-env (merge env susp-env) env)
               is-internal (or (internal-event? event-instance) internal-post-events)
               event-instance0 (if is-internal

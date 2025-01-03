@@ -3,14 +3,33 @@
             [agentlang.util :as u]
             [agentlang.lang :as ln]
             [agentlang.env :as env]
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])
             [agentlang.component :as cn]
             [agentlang.evaluator.state :as gs]))
 
 (ln/component :Agentlang.Kernel.Eval)
 
+(def ^:private active-suspension-id #?(:clj (ThreadLocal.)
+                                       :cljs (atom nil)))
+
+(defn init-suspension-id []
+  (let [id (u/uuid-string)]
+    #?(:clj (.set active-suspension-id id)
+       :cljs (reset! active-suspension-id id))
+    id))
+
+(defn get-suspension-id []
+  #?(:clj (.get active-suspension-id)
+     :cljs @active-suspension-id))
+
+(defn- fetch-suspension-id-once []
+  (let [id (get-suspension-id)]
+    (and (init-suspension-id) id)))
+
 (ln/entity
  :Agentlang.Kernel.Eval/Suspension
- {:Id {:type :String :default u/uuid-string :guid true}
+ {:Id {:type :String :guid true}
   :Event :Any
   :OPCC :Int ;; opcode-counter
   :Env :Map
@@ -46,7 +65,11 @@
   (let [r (first (evaluator {:Agentlang.Kernel.Eval/Create_Suspension
                              {:Instance
                               {:Agentlang.Kernel.Eval/Suspension
-                               {:Event event :OPCC opcc :Env env :ValueAlias alias}}}}))]
+                               {:Id (fetch-suspension-id-once)
+                                :Event event
+                                :OPCC opcc
+                                :Env env
+                                :ValueAlias alias}}}}))]
     (when (= :ok (:status r))
       (:Id (first (:result r))))))
 
@@ -54,3 +77,35 @@
   (let [r (first (evaluator {:Agentlang.Kernel.Eval/LoadSuspension {:Id id}}))]
     (when (= :ok (:status r))
       (first (:result r)))))
+
+(ln/entity
+ :Agentlang.Kernel.Eval/Continue
+ {:Id {:type :String :guid true}
+  :Result {:type :Any :optional true}})
+
+(defn- parse-restarter-id [id]
+  (let [[sid vs :as r] (s/split id #"\$")]
+    (if vs
+      [sid (into {} (mapv #(let [[k v] (s/split % #":")] [(keyword k) (read-string v)]) (s/split vs #",")))]
+      r)))
+
+(defn- query-suspension-restarter [[_ {where :where}]]
+  (when-let [[_ _ id] where]
+    (let [[susp-id value] (parse-restarter-id id)
+          result
+          (first
+           ((gs/get-active-evaluator)
+            {:Agentlang.Kernel.Eval/RestartSuspension
+             {:Id susp-id :Value value}}))]
+      (if (= :ok (:status result))
+        [(cn/make-instance
+          :Agentlang.Kernel.Eval/Continue
+          {:Id id :Result (:result result)})]
+        (log/error result)))))
+
+(ln/resolver
+ :Agentlang.Kernel.Eval/SuspensionRestarterResolver
+ {:with-methods
+  {:create identity
+   :query query-suspension-restarter}
+  :paths [:Agentlang.Kernel.Eval/Continue]})
