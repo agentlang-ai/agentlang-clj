@@ -1354,7 +1354,7 @@
          contains-graph-map (gg/generate-contains-graph schema)
          [auth _ :as auth-info] (make-auth-handler config)
          app-config (gs/get-app-config)
-         graphql-enabled (get-in app-config [:graphql :enabled] true)
+         graphql-enabled (get-in app-config [:graphql :enabled] false)
          nrepl-env-value (System/getenv "NREPL_ENDPOINT_ENABLED")
          nrepl-config-enabled (get-in app-config [:nrepl :enabled] false)
          nrepl-enabled (if (some? nrepl-env-value)
