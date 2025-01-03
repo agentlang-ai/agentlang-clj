@@ -3,6 +3,7 @@
             [clojure.string :as s]
             [agentlang.component :as cn]
             [agentlang.util :as u]
+            [agentlang.util.seq :as su]
             [agentlang.util.logger :as log]
             [agentlang.datafmt.json :as json]
             [agentlang.global-state :as gs]
@@ -132,41 +133,6 @@
     (:Response (@generic-agent-handler (assoc agent :UserInstruction user-instruction)))
     [(str "No delegate with name " agent-name) nil]))
 
-(defn- compose-agents [agent-instance result]
-  (if (vector? result)
-    (let [[response model-info] result
-          delegates (model/find-agent-post-delegates agent-instance)
-          ins (:UserInstruction agent-instance)]
-      (log/debug (str "Response from agent " (:Name agent-instance) " - " response))
-      (if-let [agent-name (when (model/classifier-agent? agent-instance) response)]
-        (respond-with-agent agent-name delegates (or (get-in agent-instance [:Context :UserInstruction]) ins))
-        (if (seq delegates)
-          (let [n (:Name agent-instance)
-                rs (mapv #(let [ins (str (or (:UserInstruction %) "") "\n" response)
-                                ctx (assoc (:Context ins) :ParentResponse response)]
-                            (format-as-agent-response % (@generic-agent-handler (assoc % :UserInstruction ins :Context ctx))))
-                         delegates)]
-            [(apply str rs) model-info])
-          result)))
-    result))
-
-(defn- update-delegate-user-instruction [delegate agent-instance]
-  (if (model/ocr-agent? agent-instance)
-    (assoc delegate :Context (:Context agent-instance))
-    (assoc delegate
-           :Context (:Context agent-instance)
-           :UserInstruction (str (or (:UserInstruction delegate) "")
-                                 "\n"
-                                 (or (get-in agent-instance [:Context :UserInstruction])
-                                     (:UserInstruction agent-instance))))))
-
-(defn- call-preprocess-agents [agent-instance]
-  (when-let [delegates (seq (model/find-agent-pre-delegates agent-instance))]
-    (let [d (first delegates)
-          [response model-info]
-          (:Response (@generic-agent-handler (update-delegate-user-instruction d agent-instance)))]
-      response)))
-
 (defn- maybe-add-docs [docs user-ins]
   (if (seq docs)
     (str user-ins "\n Make use of the following knowledge-base:\n" (json/encode docs))
@@ -190,13 +156,9 @@
    (model/ensure-llm-for-agent instance)
    #(let [ins (:UserInstruction instance)
           docs (maybe-lookup-agent-docs instance)
-          preprocessed-instruction (call-preprocess-agents instance)
-          ins (if (or (model/planner-agent? instance) (model/eval-agent? instance))
-                (str ins (if preprocessed-instruction (str "\n" preprocessed-instruction) ""))
-                (or preprocessed-instruction ins))
           final-instruction (maybe-add-docs docs ins)
           instance (assoc instance :UserInstruction final-instruction)]
-      (compose-agents instance (provider/make-completion instance)))))
+      (provider/make-completion instance))))
 
 (defn handle-agent-gen-agent [instance]
   (let [s (str (:UserInstruction instance) "\nGenerate an agent with `core.al` file contents and `model.al` file contents.\n")]
@@ -243,10 +205,9 @@
    (model/ensure-llm-for-agent instance)
    #(let [ins (:UserInstruction instance)
           docs (maybe-lookup-agent-docs instance)
-          preprocessed-instruction (call-preprocess-agents instance)
-          final-instruction (maybe-add-docs docs (or preprocessed-instruction ins))
+          final-instruction (maybe-add-docs docs ins)
           instance (assoc instance :UserInstruction final-instruction)]
-      (compose-agents instance (make-chat-completion instance)))))
+      (make-chat-completion instance))))
 
 (defn- maybe-eval-patterns [[response _]]
   (if (string? response)
@@ -261,15 +222,6 @@
 
 (defn handle-eval-agent [instance]
   (maybe-eval-patterns (handle-chat-agent instance)))
-
-(defn- maybe-add-tool-params [tool-instance]
-  (let [f ((keyword (:type tool-instance)) tool-instance)]
-    (if-not (:parameters f)
-      (let [n (keyword (:name f))]
-        (if (cn/entity? n)
-          (tools/entity-to-tool n)
-          (tools/event-to-tool n)))
-      tool-instance)))
 
 (defn- format-planner-result [r]
   (cond
@@ -319,22 +271,28 @@
         orig-exprs)
       orig-exprs)))
 
+(defn- add-delegates-as-tools [instance delegate-events]
+  (let [ins (:UserInstruction instance)
+        tools (tools/as-raw-tools delegate-events)]
+    (assoc instance :UserInstruction
+           (str "You can use these additional definitions:\n"
+                tools
+                "\nNote that these events will return plain text - " (s/join ", " delegate-events) "."
+                "Do not try to reference attributes in their results.\n\n"
+                ins))))
+
 (defn handle-planner-agent [instance]
   (log-trigger-agent! instance)
-  (let [tools [] #_(vec (concat
-                         (apply concat (mapv tools/all-tools-for-component (:ToolComponents instance)))
-                         (mapv maybe-add-tool-params (model/lookup-agent-tools instance))))
-        has-tools (seq tools)
-        [orig-result model-name] (handle-chat-agent
-                                  (if has-tools
-                                    (assoc instance :tools tools)
-                                    instance))
+  (let [deleg-events (su/nonils (mapv #(when-let [s (:Input %)] (keyword s)) (model/find-agent-post-delegates instance)))
+        instance (if (seq deleg-events)
+                   (add-delegates-as-tools instance deleg-events)
+                   instance)
+        [orig-result model-name] (handle-chat-agent instance)
         _ (log/debug (str "Planner " (:Name instance) " raw result: " orig-result))
         insts? (instance-results? orig-result)
         result (if insts? orig-result (splice-parent-expressions instance (normalize-planner-expressions orig-result)))
         _ (log/debug (str "Planner " (:Name instance) " final result: " result))
         patterns (cond
-                   has-tools (mapv tools/tool-call-to-pattern result)
                    insts? result
                    :else (planner/expressions-to-patterns
                           (planner/validate-expressions

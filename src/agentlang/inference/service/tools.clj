@@ -125,8 +125,20 @@
       {recname attrs})
     (u/throw-ex (str "Invalid tool-call: " tool-call))))
 
+(defn- maybe-merge-parent-attrs [spec]
+  (dissoc
+   (if-let [parent (get-in spec [:meta :inherits])]
+     (merge
+      (cond
+        (cn/entity? parent) (raw/find-entity parent)
+        (cn/event? parent) (raw/find-event parent)
+        :else (raw/find-record parent))
+      spec)
+     spec)
+   :meta :rbac :ui))
+
 (defn- raw-tool [tag find-spec n]
-  (when-let [spec (find-spec n)]
+  (when-let [spec (maybe-merge-parent-attrs (find-spec n))]
     (u/pretty-str `(~tag ~n ~spec))))
 
 (def ^:private raw-event-tool (partial raw-tool 'event raw/find-event))

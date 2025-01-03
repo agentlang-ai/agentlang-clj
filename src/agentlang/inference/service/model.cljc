@@ -195,11 +195,14 @@
             from (assoc :From (u/keyword-as-string from))
             to (assoc :To (u/keyword-as-string to))))))
 
+(defn- normalize-deleg-spec [spec]
+  (mapv (fn [d] (if (map? d) d {:To d})) spec))
+
 (defn- preproc-agent-delegates [delegs]
   (when delegs
     (cond
       (map? delegs) (preproc-agent-delegate delegs)
-      (vector? delegs) (mapv preproc-agent-delegates delegs)
+      (vector? delegs) (mapv preproc-agent-delegates (normalize-deleg-spec delegs))
       :else delegs)))
 
 (defn- preproc-agent-docs [docs]
