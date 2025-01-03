@@ -74,22 +74,26 @@
    [:subscriptions {:optional true} :boolean]
    [:tools {:optional true} [:vector :keyword]]])
 
-(def ^:private conn-type-keys #{:type :title :description})
+(def ^:private conn-type-keys #{:name :type :title :description})
+
+(defn- connection-type-entry? [v]
+  (and (map? v)
+       (= conn-type-keys (set/union conn-type-keys (set (keys v))))))
 
 (defn connection-type-spec? [obj]
-  (and (map? obj)
-       (every?
-        (fn [k]
-          (and (or (keyword? k) (string? k))
-               (let [v (get obj k)]
-                 (map? v)
-                 (= conn-type-keys (set/union conn-type-keys (set (keys v)))))))
-        (keys obj))))
+  (if (vector? obj)
+    (every? connection-type-entry? obj)
+    (and (map? obj)
+         (every?
+          (fn [k]
+            (and (or (keyword? k) (string? k))
+                 (connection-type-entry? (get obj k))))
+          (keys obj)))))
 
 (def model-spec
   {(gs/agentlang-version)
    [:map
-    {:closed true}
+    {:closed false}
     [:description {:optional true} :string]
     [:workspace {:optional true} :string]
     [:config {:optional true} config-spec]
