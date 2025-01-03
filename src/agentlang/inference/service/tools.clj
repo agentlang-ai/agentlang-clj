@@ -7,7 +7,7 @@
             [agentlang.lang.raw :as raw]
             [agentlang.lang.internal :as li]
             [agentlang.lang.kernel :as k]
-            #?(:clj [agentlang.util.logger :as log])))
+            [agentlang.util.logger :as log]))
 
 (defn- record-name-as-function-name [rec-name]
   (let [rec-name (li/make-path rec-name)]
@@ -94,8 +94,7 @@
                          :properties (into {} (mapv (comp vec (partial take 2)) props))
                          :required (vec (mapv first (filter last props)))}}})
                     (do
-                      #?(:clj (log/warn (str "cannot generate tool, no schema found for - " rec-name))
-                         :cljs (println (str "cannot generate tool, no schema found for - " rec-name)))
+                      (log/warn (str "cannot generate tool, no schema found for - " rec-name))
                       nil))]
          (swap! tool-cache assoc rec-name tool-spec)
          tool-spec)))
