@@ -1415,10 +1415,29 @@
     (first (keys (dissoc pat :as :async :throws)))
     pat))
 
+(defn- create-pattern? [attrs]
+  (every? (fn [[k v]] (not (li/query-pattern? k))) attrs))
+
+(defn- maybe-update-old-instance [pat]
+  (when (map? pat)
+    (when-let [entity-name (when-let [n (li/record-name pat)]
+                             (when (cn/entity? n) n))]
+      (let [attrs (li/record-attributes pat)
+            id-attr-name (cn/identity-attribute-name entity-name)]
+        (when (create-pattern? attrs)
+          (when-let [id-attr (id-attr-name attrs)]
+            (let [raw-pat {entity-name (assoc attrs (li/name-as-query-pattern id-attr-name) id-attr)}]
+              `[:try
+                ~raw-pat
+                :error [:eval (~'quote (~'agentlang.lang/standalone-pattern-error
+                                        :Error [:q# ~raw-pat]))]])))))))
+
 (defn pattern [raw-pat]
   (let [pat (preprocess-standalone-pattern raw-pat)
-        final-pat `[:try ~pat :error
-                    [:eval (~'quote (~'agentlang.lang/standalone-pattern-error
-                                     :Error [:q# ~(cleanup-standalone-pattern raw-pat)]))]]]
+        update-pat (maybe-update-old-instance pat)
+        final-pat [:try pat :error
+                   (or update-pat
+                       [:eval `(~'quote (~'agentlang.lang/standalone-pattern-error
+                                         :Error [:q# ~(cleanup-standalone-pattern raw-pat)]))])]]
     (gs/install-init-pattern! final-pat)
     (raw/pattern raw-pat)))
