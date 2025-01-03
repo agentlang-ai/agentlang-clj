@@ -1,5 +1,5 @@
 (defproject com.github.agentlang-ai/agentlang "0.6.2-alpha"
-  :dependencies [[org.clojure/clojure "1.12.0"]
+  :dependencies [[org.clojure/clojure "1.11.1"]
                  [org.clojure/clojurescript "1.11.132"
                   :exclusions [com.google.code.findbugs/jsr305]]
                  [org.clojure/core.memoize "1.0.257"]
@@ -15,7 +15,6 @@
                  [environ "1.2.0"]
                  [commons-io/commons-io "2.11.0"]
                  [org.apache.commons/commons-exec "1.3"]
-                 [cheshire "5.10.1"]
                  [com.github.seancorfield/next.jdbc "1.3.883"]
                  [c3p0/c3p0 "0.9.1.2"]
                  [selmer "1.12.58"]
@@ -48,6 +47,7 @@
                  [metosin/ring-swagger "0.26.2"]
                  [cheshire "5.11.0"]
                  [metosin/malli "0.16.4"]
+                 [thheller/shadow-cljs "2.28.20" :exclusions [org.clojure/clojure]]
                  [com.github.scribejava/scribejava-core "8.3.3"]
                  [com.github.scribejava/scribejava-apis "8.3.3"]
                  [org.apache.kafka/kafka-clients "3.6.1"]
@@ -62,7 +62,6 @@
                  [org.xerial/sqlite-jdbc "3.47.1.0"]]
 
   :license {:name "Apache2"}
-
   :java-source-paths ["src/java"]
 
   :main agentlang.core
@@ -73,8 +72,7 @@
 
   :uberjar-exclusions [#"(?:^|/).agentlang/" #"(?:^|/).db/" #"(?:^|/).json/"]
 
-  :plugins [[lein-cljsbuild "1.1.8" :exclusions [[org.clojure/clojure]]]
-            [lein-environ "1.2.0"]
+  :plugins [[lein-environ "1.2.0"]
             [s3-wagon-private "1.3.4"]
             [lein-doo "0.1.10"]
             [reifyhealth/lein-git-down "0.4.0"]

@@ -25,6 +25,10 @@
 (def schema-type-tag type-tag-key)
 (def instance-type type-key)
 
+(defn my-function
+  [x]
+  (* x 2)) ; Example function
+
 (def additional-internal-component-names
   #{:Agentlang.Kernel.Store
     :raw

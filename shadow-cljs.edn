@@ -1,0 +1,9 @@
+{:lein true
+ :source-paths ["src"]
+ :builds
+ {:node-library
+  {:target :node-library
+   :output-to "dist/index.js"
+   :exports {:id-type agentlang.component/id-attr-type
+             :my-function agentlang.component/my-function}
+   :compiler-options {:closure-defines {goog.DEBUG false}}}}}
