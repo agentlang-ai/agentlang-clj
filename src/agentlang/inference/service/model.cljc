@@ -19,8 +19,10 @@
             [agentlang.datafmt.json :as json]
             [agentlang.lang.internal :as li]
             [agentlang.global-state :as gs]
-            [agentlang.inference.service.planner :as planner]
-            [agentlang.inference.service.agent-gen :as agent-gen]))
+            #?(:clj [agentlang.inference.service.planner :as planner])
+            [agentlang.inference.service.agent-gen :as agent-gen]
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])))
 
 (component :Agentlang.Core {:model :Agentlang})
 
@@ -81,8 +83,11 @@
         (apply str (concat (:chunks body))))
       (u/throw-ex (str "failed to load document from: " url ", status: " (:status response))))))
 
-(def ^:private doc-scheme-handlers {"file" slurp
-                                    "rs" read-from-retrieval-service})
+#?(:clj
+   (def ^:private doc-scheme-handlers {"file" slurp
+                                      "rs" read-from-retrieval-service})
+   :cljs
+   (def ^:private doc-scheme-handlers {"rs" read-from-retrieval-service}))
 (def ^:private doc-schemes (keys doc-scheme-handlers))
 (def ^:private scheme-suffix "://")
 
@@ -262,7 +267,10 @@
        (maybe-register-subscription-handlers! channels (keyword input)))
      (assoc pat :Agentlang.Core/Agent
             (cond
-              (planner-agent? new-attrs) (planner/with-instructions new-attrs)
+              (planner-agent? new-attrs) #?(:clj
+                                            (planner/with-instructions new-attrs)
+                                            :cljs
+                                            (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
               (agent-gen-agent? new-attrs) (agent-gen/with-instructions new-attrs)
               (classifier-agent? new-attrs) (classifier-with-instructions new-attrs)
               :else new-attrs)))))
