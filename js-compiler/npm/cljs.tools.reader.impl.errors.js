@@ -1,0 +1,2 @@
+var window=global;var $CLJS=require("./cljs_env.js");require("./cljs.core.js");require("./clojure.string.js");require("./cljs.tools.reader.impl.inspect.js");
+'use strict';$CLJS.Aq=new $CLJS.N(null,"reader-exception","reader-exception",-1938323098);$CLJS.Bq=new $CLJS.N(null,"ex-kind","ex-kind",1581199296);$CLJS.Cq=new $CLJS.N(null,"eof","eof",-489063237);$CLJS.Dq=new $CLJS.N(null,"illegal-argument","illegal-argument",-1845493170);$CLJS.Eq=new $CLJS.N(null,"reader-error","reader-error",1610253121);

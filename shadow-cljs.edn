@@ -1,9 +1,14 @@
 {:lein true
- :source-paths ["src"]
  :builds
- {:node-library
+ {:esm {:target :esm
+        :output-dir "js-compiler/esm"
+        :compiler-options {:optimizations :advanced}
+        :modules {:agentlang {:exports {:myFunction agentlang.component/my-function}}}}
+  :node-library
   {:target :node-library
-   :output-to "dist/index.js"
-   :exports {:id-type agentlang.component/id-attr-type
-             :my-function agentlang.component/my-function}
-   :compiler-options {:closure-defines {goog.DEBUG false}}}}}
+   :output-to "js-compiler/node/index.js"
+   :exports {:myFunction agentlang.component/my-function}}
+  :npm-module
+  {:target :npm-module
+   :output-dir "js-compiler/npm"
+   :entries [:agentlang.component]}}}

@@ -1,0 +1,2 @@
+var window=global;var $CLJS=require("./cljs_env.js");require("./cljs.core.js");require("./clojure.string.js");require("./agentlang.util.js");
+'use strict';$CLJS.U.h($CLJS.$i,$CLJS.ui.j($CLJS.ug(0,1),$CLJS.ug(0,1),$CLJS.G([$CLJS.ug(0,10)])));

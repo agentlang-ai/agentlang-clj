@@ -1,0 +1,2 @@
+var window=global;var $CLJS=require("./cljs_env.js");require("./cljs.core.js");
+'use strict';$CLJS.$t=new $CLJS.N(null,"as-alias","as-alias",82482467);$CLJS.au=new $CLJS.N(null,"as-aliases","as-aliases",1485064798);$CLJS.bu=new $CLJS.N(null,"refer-clojure","refer-clojure",813784440);$CLJS.cu=new $CLJS.N(null,"libspec","libspec",1228503756);$CLJS.du=new $CLJS.N(null,"libspecs","libspecs",59807195);

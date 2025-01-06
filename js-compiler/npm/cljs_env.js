@@ -1,0 +1,8 @@
+var $CLJS = module.exports = {};
+/*
+
+ Copyright The Closure Library Authors.
+ SPDX-License-Identifier: Apache-2.0
+*/
+'use strict';var ca,da,ea,fa,ha,ia;$CLJS.aa=function(a,b){return-1!=a.indexOf(b)};ca=function(){var a=$CLJS.ba.navigator;return a&&(a=a.userAgent)?a:""};da=function(a){return $CLJS.aa(ca(),a)};ea=function(){return da("Firefox")||da("FxiOS")};fa=function(){return(da("Chrome")||da("CriOS"))&&!da("Edge")||da("Silk")};ha=function(){return da("iPhone")&&!da("iPod")&&!da("iPad")};ia=function(){ha()||da("iPad")||da("iPod")};$CLJS.ba=global;$CLJS.ja="closure_uid_"+(1E9*Math.random()>>>0);$CLJS.ba=global;$CLJS.ka=String.prototype.trim?function(a){return a.trim()}:function(a){return/^[\s\xa0]*([\s\S]*?)[\s\xa0]*$/.exec(a)[1]};var la=da("Opera"),ma=da("Trident")||da("MSIE"),na=da("Edge"),pa=da("Gecko")&&!($CLJS.aa(ca().toLowerCase(),"webkit")&&!da("Edge"))&&!(da("Trident")||da("MSIE"))&&!da("Edge"),qa=$CLJS.aa(ca().toLowerCase(),"webkit")&&!da("Edge");qa&&da("Mobile");da("Macintosh");da("Windows");da("Linux")||da("CrOS");var ra=$CLJS.ba.navigator||null;ra&&$CLJS.aa(ra.appVersion||"","X11");da("Android");ha();da("iPad");da("iPod");ia();$CLJS.aa(ca().toLowerCase(),"kaios");
+(function(){var a=ca();if(pa)return/rv:([^\);]+)(\)|;)/.exec(a);if(na)return/Edge\/([\d\.]+)/.exec(a);if(ma)return/\b(?:MSIE|rv)[: ]([^\);]+)(\)|;)/.exec(a);if(qa)return/WebKit\/(\S+)/.exec(a);if(la)return/(?:Version)[ \/]?(\S+)/.exec(a)})();ea();ha()||da("iPod");da("iPad");!da("Android")||fa()||ea()||da("Opera")||da("Silk");fa();!da("Safari")||fa()||da("Coast")||da("Opera")||da("Edge")||da("Edg/")||da("OPR")||ea()||da("Silk")||da("Android")||ia();

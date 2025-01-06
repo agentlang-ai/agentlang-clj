@@ -1,0 +1,2 @@
+var window=global;var $CLJS=require("./cljs_env.js");require("./cljs.core.js");
+'use strict';var lq=function(a,b){return $CLJS.Ji.j($CLJS.G([[$CLJS.t.g((new Date).toISOString())," ",$CLJS.ng(a)," ",$CLJS.t.g(b)].join("")]))};$CLJS.mq=$CLJS.qe(lq,new $CLJS.N(null,"DEBUG","DEBUG",-56433076));$CLJS.nq=$CLJS.qe(lq,new $CLJS.N(null,"INFO","INFO",-1061657090));

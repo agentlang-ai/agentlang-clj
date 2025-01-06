@@ -1,0 +1,2 @@
+var window=global;var $CLJS=require("./cljs_env.js");require("./cljs.core.js");require("./clojure.string.js");require("./cljs.source_map.base64.js");
+'use strict';$CLJS.VF=new $CLJS.N(null,"gcol","gcol",309250807);$CLJS.WF=new $CLJS.N(null,"gline","gline",-1086242431);

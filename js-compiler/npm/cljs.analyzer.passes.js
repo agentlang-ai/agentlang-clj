@@ -1,0 +1,2 @@
+var window=global;var $CLJS=require("./cljs_env.js");require("./cljs.core.js");
+'use strict';$CLJS.eu=new $CLJS.N(null,"env","env",-1815813235);$CLJS.fu=new $CLJS.N(null,"children","children",-940561982);

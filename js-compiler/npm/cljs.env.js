@@ -1,0 +1,2 @@
+var window=global;var $CLJS=require("./cljs_env.js");require("./cljs.core.js");
+'use strict';$CLJS.Zs=new $CLJS.N("cljs.analyzer","namespaces","cljs.analyzer/namespaces",-260788927);$CLJS.$s=new $CLJS.y(null,"cljs.user","cljs.user",877795071,null);$CLJS.at=new $CLJS.N("cljs.analyzer","constant-table","cljs.analyzer/constant-table",-114131889);$CLJS.bt=new $CLJS.N(null,"options","options",99638489);$CLJS.ct=new $CLJS.N("cljs.analyzer","externs","cljs.analyzer/externs",893359239);

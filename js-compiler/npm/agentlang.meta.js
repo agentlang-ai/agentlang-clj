@@ -1,0 +1,2 @@
+var window=global;var $CLJS=require("./cljs_env.js");require("./cljs.core.js");require("./agentlang.util.seq.js");
+'use strict';$CLJS.PL=new $CLJS.N(null,"policy","policy",902736495);$CLJS.QL=new $CLJS.N(null,"-*-meta-*-","-*-meta-*-",-1383793507);$CLJS.RL=$CLJS.se($CLJS.Q);$CLJS.SL=new $CLJS.S(null,1,5,$CLJS.T,[new $CLJS.N(null,"views","views",1450155487)],null);

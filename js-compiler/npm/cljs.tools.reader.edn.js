@@ -1,0 +1,2 @@
+var window=global;var $CLJS=require("./cljs_env.js");require("./cljs.core.js");require("./cljs.tools.reader.impl.errors.js");require("./clojure.string.js");require("./cljs.tools.reader.js");
+'use strict';$CLJS.Oq=new $CLJS.N(null,"readers","readers",-2118263030);

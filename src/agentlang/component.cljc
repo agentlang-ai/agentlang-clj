@@ -635,7 +635,7 @@
 
 (def path-id-attrs (make-attributes-filter li/path-identity))
 
-(defn path-identity-attribute-name 
+(defn path-identity-attribute-name
   ([type-name-or-scm version]
    (first (path-id-attrs (maybe-fetch-entity-schema type-name-or-scm version))))
   ([type-name-or-scm]
@@ -893,8 +893,8 @@
                    (ensure-attribute-is-instance-of typname aname attributes)))))
             attributes)))))
 
-(defn validate-attribute-value 
-  ([attr-name attr-val schema version] 
+(defn validate-attribute-value
+  ([attr-name attr-val schema version]
    (if-let [typname (li/extract-attribute-name (get (:schema schema) attr-name))]
      (let [[component aref] (li/split-path typname)]
        (if-let [ascm (find-attribute-schema component version aref)]
@@ -911,7 +911,7 @@
     (inferred-event-schema? scm)
     (:inferred schema)))
 
-(defn ensure-schema 
+(defn ensure-schema
   ([recname version]
    (if-let [rec (find-record-schema-version version recname)]
      (:schema rec)
@@ -1350,7 +1350,7 @@
   "Return the expression or query functions attached to computed attributes
   as a mapping of [[attrname fn], ...]"
   ([prop schema version]
-   (let [schema (dissoc (or (:schema schema) schema) :meta) 
+   (let [schema (dissoc (or (:schema schema) schema) :meta)
          exps (mapv (fn [[k v]]
                       (let [[component aref] (li/split-path v)]
                         (when-let [f (prop (find-attribute-schema
@@ -1361,7 +1361,7 @@
   ([prop schema]
    (computed-attribute-fns prop schema nil)))
 
-(defn future-attrs 
+(defn future-attrs
   ([record-name rec-version]
    (computed-attribute-fns :future (find-object-schema record-name rec-version)))
   ([record-name]
@@ -1774,7 +1774,7 @@
          id (when (and c r) (identity-attribute-name [c r]))]
      (append-id path (or id id-attr)))))
 
-(defn find-relationships 
+(defn find-relationships
   ([recname recversion]
    (or (component-find :entity-relationship recname recversion) #{}))
   ([recname]

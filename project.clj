@@ -8,7 +8,7 @@
                  [org.clojure/data.csv "1.0.0"]
                  [org.clojure/tools.logging "1.2.4"]
                  [org.slf4j/slf4j-api "2.0.12"]
-                 [org.clojure/core.async "1.6.681"]
+                 [org.clojure/core.async "1.5.648"]
                  [clojure.java-time "1.4.2"]
                  [org.clojure/test.check "1.1.1"]
                  [ch.qos.logback/logback-classic "1.5.3"]
@@ -28,16 +28,13 @@
                  [ring-cors "0.1.13"]
                  [keycloak-clojure "1.31.2"]
                  [net.cgrand/macrovich "0.2.1"]
-                 [cljsjs/alasql "0.6.5-0"]
                  [org.postgresql/postgresql "42.3.1"]
                  [com.pgvector/pgvector "0.1.4"]
                  [com.widdindustries/cljc.java-time "0.1.21"]
                  [com.cognitect/transit-clj "1.0.324"]
-                 [com.cognitect/transit-cljs "0.8.269"]
                  [buddy/buddy-auth "3.0.323"]
                  [org.bitbucket.b_c/jose4j "0.7.12"]
                  [reagent "1.1.0"]
-                 [cljsjs/react "17.0.2-0"]
                  [tick "0.5.0-RC1"]
                  [spec-provider "0.4.14"]
                  [amazonica "0.3.162"]
@@ -47,7 +44,10 @@
                  [metosin/ring-swagger "0.26.2"]
                  [cheshire "5.11.0"]
                  [metosin/malli "0.16.4"]
-                 [thheller/shadow-cljs "2.28.20" :exclusions [org.clojure/clojure]]
+                 [thheller/shadow-cljs "2.28.20"]
+                 [com.google.javascript/closure-compiler-unshaded "v20240317"]
+                 [org.clojure/google-closure-library "0.0-20230227-c7c0a541"]
+                 [org.clojure/google-closure-library-third-party "0.0-20230227-c7c0a541"]
                  [com.github.scribejava/scribejava-core "8.3.3"]
                  [com.github.scribejava/scribejava-apis "8.3.3"]
                  [org.apache.kafka/kafka-clients "3.6.1"]
@@ -90,7 +90,7 @@
   :deploy-repositories [["clojars" {:url "https://clojars.org/repo"
                                     :sign-releases false}]]
 
-  :repl {:dependencies [[nrepl "1.1.1"]]}
+  :repl {:dependencies [[nrepl "1.3.0"]]}
 
   :resource-paths ["resources" "target/classes"]
 
