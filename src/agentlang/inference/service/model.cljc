@@ -20,7 +20,7 @@
             [agentlang.lang.internal :as li]
             [agentlang.global-state :as gs]
             #?(:clj [agentlang.inference.service.planner :as planner])
-            [agentlang.inference.service.agent-gen :as agent-gen]
+            #?(:clj [agentlang.inference.service.agent-gen :as agent-gen])
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
@@ -271,7 +271,10 @@
                                             (planner/with-instructions new-attrs)
                                             :cljs
                                             (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
-              (agent-gen-agent? new-attrs) (agent-gen/with-instructions new-attrs)
+              (agent-gen-agent? new-attrs) #? (:clj
+                                               (agent-gen/with-instructions new-attrs)
+                                               :cljs
+                                               (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
               (classifier-agent? new-attrs) (classifier-with-instructions new-attrs)
               :else new-attrs)))))
 
