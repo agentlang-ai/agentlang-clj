@@ -139,7 +139,11 @@
 
 (defn- raw-tool [tag find-spec n]
   (when-let [spec (maybe-merge-parent-attrs (find-spec n))]
-    (u/pretty-str `(~tag ~n ~spec))))
+    (let [doc (cn/docstring n)
+          expr (u/pretty-str `(~tag ~n ~spec))]
+      (if (seq doc)
+        (str ";; " doc "\n" expr)
+        expr))))
 
 (def ^:private raw-event-tool (partial raw-tool 'event raw/find-event))
 (def ^:private raw-entity-tool (partial raw-tool 'entity raw/find-entity))

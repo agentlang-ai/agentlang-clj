@@ -2,7 +2,10 @@
 
 {:Agentlang.Core/LLM {:Name :llm01}}
 
-(event :VerifyAnswer {:UserInstruction :String})
+(event
+ :VerifyAnswer
+ {:meta {:doc "Returns one of the strings: \"YES\" or \"NO\""}
+  :UserInstruction :String})
 
 ;; Demonstrates agent-composition, where the answer of one agent is verified by another.
 {:Agentlang.Core/Agent
@@ -11,7 +14,7 @@
   :Input :Verification.Core/VerifyAnswer
   :UserInstruction
   (str "You are an agent who verifies the answer returned by another agent. "
-       "Analyse the chain-of-thought returned by the other agent and return YES "
+       "Analyse the reasoning and ANSWER returned by the other agent and return YES "
        "if its conlusion is correct. Otherwise return NO. "
        "You must reply either `YES` or `NO` and nothing else.")}}
 

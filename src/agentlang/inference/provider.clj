@@ -63,7 +63,8 @@
   (make-provider-request
    p/make-ocr-completion
    {:user-instruction (:UserInstruction agent-instance)
-    :image-url (get-in agent-instance [:Context :UserInstruction])}))
+    :image-url (let [ctx (:Context agent-instance)]
+                 (or (:Url ctx) (:UserInstruction ctx)))}))
 
 (def get-embedding (comp first make-embedding))
 (def get-completion (comp first make-completion))

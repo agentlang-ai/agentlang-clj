@@ -13,9 +13,15 @@
 
 {:Agentlang.Core/LLM {:Name :llm01}}
 
+(event
+ :CallTechnicalHelp
+ {:meta {:doc "UserInstruction must be set to the original user request."}
+  :UserInstruction :String})
+
 {:Agentlang.Core/Agent
  {:Name :technical-support
   :LLM :llm01
+  :Input :Customer.Support.Core/CallTechnicalHelp
   :UserInstruction
   (str "You are a support agent for a Camera store. "
        "You are supposed to handle technical queries that customers ask on camera gear. "
@@ -23,9 +29,15 @@
        "camera manufacturer to answer these queries. "
        "If you get a query on the pricing of camera gear, respond with the text: NA")}}
 
+(event
+ :CallPriceLookup
+ {:meta {:doc "UserInstruction must be set to the original user request."}
+  :UserInstruction :String})
+
 {:Agentlang.Core/Agent
  {:Name :price-enquiry
   :LLM :llm01
+  :Input :Customer.Support.Core/CallPriceLookup
   :UserInstruction
   (str "You are a support agent for a Camera store. "
        "Customers will raise price enquiries for camera gear. "
@@ -43,13 +55,25 @@
 ;;     :Uri "file://./docs/xyz_prices.txt"
 ;;     :Agent price-enquiry-agent}]}
 
+(event
+ :ClassifyRequest
+ {:meta {:doc "Returns a text, either \"technical-support\" or \"price-enquiry\""}
+  :UserInstruction :String})
+
+{:Agentlang.Core/Agent
+ {:Name :request-classifier-agent
+  :LLM :llm01
+  :UserInstruction "Classify the request as either one of \"technical-support\" or \"price-enquiry\"."
+  :Input :Customer.Support.Core/ClassifyRequest}}
+
 {:Agentlang.Core/Agent
  {:Name :camera-support-agent
-  :Type :classifier
+  :Type :planner
   :LLM :llm01
-  :Delegates
-  [{:To :technical-support}
-   {:To :price-enquiry}]
+  :Delegates [:request-classifier-agent :technical-support :price-enquiry]
+  :UserInstruction (str "1. Get the user request classified.\n"
+                        "2. If the classification is \"technical-support\", call technical help. "
+                        "Otherwise, call price lookup.")
   :Input :Customer.Support.Core/CameraStore}}
 
 ;; Usage:
