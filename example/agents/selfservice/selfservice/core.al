@@ -23,6 +23,11 @@ If you are unable to classify the text, simply return `reject`.
 Now please classify the following text based on these rules.\n\n"
   :Input :Selfservice.Core/InvokeResponseClassifierAgent}}
 
+(event
+ :Selfservice.Core/StartSelfServiceWorkFlow
+ {:meta {:doc "Pass instances of Request to UserInstruction."}
+  :UserInstruction :Any})
+
 {:Agentlang.Core/Agent
  {:Name :WorkflowAgent
   :Type :planner
@@ -33,6 +38,7 @@ Now please classify the following text based on these rules.\n\n"
           :Ticket.Core/TicketComment
           :Ticket.Core/GithubMember
           :Ticket.Core/TicketManager]
+  :Input :Selfservice.Core/StartSelfServiceWorkFlow
   :UserInstruction "You'll receive some tickets with requests from users to join GitHub organizations. Follow the following steps:
 1. Find the manager for the ticket, you can query on the ticket Id.
 2. Find the slack-channel for the manager.
@@ -54,8 +60,9 @@ Now please classify the following text based on these rules.\n\n"
   :UserInstruction
   "You are an agent that identifies a self-service ticket for adding a user to a github organization.
 Tickets will be passed to you as a JSON payload. Analyze the tickets and return instances of Request with the
-github org, email and ticket id as attributes. If the org or email is empty, ignore that ticket."
-  :Delegates {:To :WorkflowAgent}
+github org, email and ticket id as attributes. If the org or email is empty, ignore that ticket. Then start the
+self-service workflow with the requests."
+  :Delegates [:WorkflowAgent]
   :Integrations ["ticket" "slack"]
   :Input :Selfservice.Core/InvokeSelfService}}
 
