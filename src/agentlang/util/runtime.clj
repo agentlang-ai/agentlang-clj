@@ -144,13 +144,13 @@
                          (merge {:Name llm-name} llm-attrs)})}})))]
       (when (not= :ok (:status r))
         (log/error (str "failed to initialize LLM - " llm-name)))))
-  (when-let [cm-config (:connection-manager config)]
-    (doseq [integ-name (:integrations cm-config)]
+  (when-let [im-config (:integration-manager config)]
+    (doseq [integ-name (:integrations im-config)]
       (cc/create-new-integration integ-name))
-    (doseq [[integ-name cfgs] (:configurations cm-config)]
+    (doseq [[integ-name cfgs] (:configurations im-config)]
       (doseq [[conn-name conn-attrs] cfgs]
         (cc/configure-new-connection integ-name conn-name conn-attrs)))
-    (doseq [conn (:connections cm-config)]
+    (doseq [conn (:connections im-config)]
       (let [[conn-name conn-config-name]
             (cond
               (vector? conn) conn
