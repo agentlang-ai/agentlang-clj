@@ -1,6 +1,5 @@
 (component :Recruitment.Workflow)
 
-;; TODO: add doc-search support
 (entity
  :InterviewSlot
  {:Id :Identity
@@ -56,41 +55,53 @@
    :Slot :UpdatedSlot}}
  :UpdatedSlot)
 
-(event :ProfileRejected {:CandidateEmail :Email :Reason :String})
+(event :RejectProfile {:CandidateEmail :Email :Reason :String})
 
 (dataflow
- :ProfileRejected
- [:eval '(println "Rejected profile: " :ProfileRejected.CandidateEmail)])
+ :RejectProfile
+ [:eval '(println "Rejected profile: " :RejectProfile.CandidateEmail)]
+ :RejectProfile.Reason)
 
 {:Agentlang.Core/LLM {:Name :llm01}}
 
+(event
+ :CreateProfileSummaryTextFromResume
+ {:meta {:doc "Returns profile summary as text."}
+  :UserInstruction :String})
+
 {:Agentlang.Core/Agent
- {:Name :summary-agent
+ {:Name :profile-summary-agent
+  :Input :Recruitment.Workflow/CreateProfileSummaryTextFromResume
   :UserInstruction (str "You are a recruiter that analyses a resume and provides a summary of the "
                         "skills and experience of the candidate. The summary must be in the format - "
                         "Skills: <major-skills-of-the-candidate>, Experience in years: <years>, "
                         "Name: <candidate-name>, Email: <candidate-email>")
   :LLM :llm01}}
 
+(event
+ :CheckProfileSummary
+ {:meta {:doc "Returns either \"yes\" or \"no\"."}
+  :UserInstruction :String})
+
 {:Agentlang.Core/Agent
- {:Name :interview-scheduler-agent
-  :Type :eval
+ {:Name :check-summary-agent
+  :LLM :llm01
+  :Input :Recruitment.Workflow/CheckProfileSummary
+  :UserInstruction
+  (str "If the profile passed to you is for an experienced C++ programmer, return `yes`, otherwise return `no`.")}}
+
+{:Agentlang.Core/Agent
+ {:Name :interview-director-agent
+  :Type :planner
   :LLM :llm01
   :Input :Recruitment.Workflow/InvokeAgent
-  :UserInstruction
-  (str "You are an intelligent agent who schedules an interview if the profile summary of a candidate meets "
-       "the specified requirements. For example, if the profile summary is "
-       "\"Python programmer with 3+ years experience. Name: Sam, Email: sam@me.com\" and the requirement is "
-       "\"We need to hire python programmers with 2+ years experience. Possible interviewers are ravi@acme.com, "
-       "joe@acme.com and sally@acme.com.\" then schedule an interview as: "
-       "[{:Recruitment.Workflow/ScheduleInterview {:CandidateEmail \"sam@me.com\" :CandidateName \"Sam\" :CandidateProfile \"Python programmer with 3+ years experience.\" :AssignedTo \"ravi@acme.com\"}}]."
-       "Make sure to distribute interview assignments as evenly as possible. If the profile summary does not match "
-       "the requirement, the return: "
-       "[{:Recruitment.Workflow/ProfileRejected {:CandidateEmail \"sam@me.com\", :Reason \"not enough experience\"}}]"
-       "\n"
-       "In the current application, you need to review summarized resumes of C++ programmers "
-       "and schedule interviews  with candidates with good experience.")
-  :Delegates {:To :summary-agent :Preprocessor true}}}
+  :UserInstruction (str "1. Create a profile-summary text from the given resume.\n"
+                        "2. Check the profile-summary text from step (1) by calling the CheckProfileSummary event.\n"
+                        "3. If the result of step (2) is \"yes\", then schedule an interview for the candidate. Otherwise, reject the candidate's profile. "
+                        "(An interview may be assigned to one of sam@acme.com, joe@amce.com and susan@acme.com).\n"
+                        "Do not skip any of the steps 1, 2 and 3.\n")
+  :Tools [:Recruitment.Workflow/ScheduleInterview :Recruitment.Workflow/RejectProfile]
+  :Delegates [:profile-summary-agent :check-summary-agent]}}
 
 ;; Usage:
 ;; POST api/Recruitment.Workflow/InvokeAgent

@@ -164,6 +164,7 @@
   :Context {:type :Map :optional true}
   :Response {:type :Any :read-only true}
   :Integrations {:listof :String :optional true}
+  :Delegates {:listof :String :optional true}
   :Channels {:listof :Any :optional true}
   :CacheChatSession {:type :Boolean :default true}})
 
@@ -175,6 +176,20 @@
 (def planner-agent? (partial agent-of-type? "planner"))
 (def agent-gen-agent? (partial agent-of-type? "agent-gen"))
 (def eval-agent? (partial agent-of-type? "eval"))
+
+(defn- eval-event
+  ([event callback atomic?]
+   (when-let [result (first ((if atomic?
+                               e/eval-all-dataflows-atomic
+                               e/eval-all-dataflows)
+                             event))]
+     (when (= :ok (:status result))
+       (callback (:result result)))))
+  ([event callback] (eval-event event callback true))
+  ([event] (eval-event event identity)))
+
+(defn- eval-internal-event [event & args]
+  (apply eval-event (e/mark-internal (cn/make-instance event)) args))
 
 (defn- preproc-agent-tools-spec [tools]
   (when tools
@@ -192,20 +207,6 @@
       (string? input) input
       (keyword? input) (subs (str input) 1)
       :else (u/throw-ex (str "Invalid agent input: " input)))))
-
-(defn- preproc-agent-delegate [d]
-  (let [from (:From d) to (:To d)]
-    (-> d
-        (cond->
-            from (assoc :From (u/keyword-as-string from))
-            to (assoc :To (u/keyword-as-string to))))))
-
-(defn- preproc-agent-delegates [delegs]
-  (when delegs
-    (cond
-      (map? delegs) (preproc-agent-delegate delegs)
-      (vector? delegs) (mapv preproc-agent-delegates delegs)
-      :else delegs)))
 
 (defn- preproc-agent-docs [docs]
   (mapv (fn [spec]
@@ -238,6 +239,10 @@
   (doseq [channel channels]
     (when (get-in (cn/fetch-model channel) [:channel :subscriptions])
       (register-subscription-event channel input))))
+
+(defn- preproc-agent-delegates [delegs]
+  (when (seq delegs)
+    (mapv u/keyword-as-string delegs)))
 
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
@@ -310,30 +315,13 @@
 (def set-agent-response-handler! (partial set-agent-callback! :rh))
 (def set-agent-prompt-fn! (partial set-agent-callback! :pfn))
 
-(relationship
- :Agentlang.Core/AgentDelegate
- {:meta {:between [:Agentlang.Core/Agent
-                   :Agentlang.Core/Agent
-                   :as [:From :To]]}
-  :Preprocessor {:type :Boolean :default false}})
-
-(attribute
- :Agentlang.Core/Delegates
- {:extend :Agentlang.Core/Agent
-  :type :Agentlang.Core/AgentDelegate
-  :relationship :Agentlang.Core/AgentDelegate})
-
 (defn concat-results [rs] (vec (apply concat rs)))
 
 (dataflow
  :Agentlang.Core/FindAgentDelegates
- {:Agentlang.Core/AgentDelegate
-  {:From? :Agentlang.Core/FindAgentDelegates.Agent
-   :Preprocessor? :Agentlang.Core/FindAgentDelegates.Preprocessor}
-  :as :Delegates}
- [:for-each :Delegates
+ [:for-each :Agentlang.Core/FindAgentDelegates.DelegateNames
   {:Agentlang.Core/Agent
-   {:Name? :%.To}}
+   {:Name? :%}}
   :as :Rs]
  [:eval '(agentlang.inference.service.model/concat-results :Rs)])
 
@@ -455,20 +443,6 @@
   {:Agentlang.Core/Document
    {:Id? :%.Document}}])
 
-(defn- eval-event
-  ([event callback atomic?]
-   (when-let [result (first ((if atomic?
-                               e/eval-all-dataflows-atomic
-                               e/eval-all-dataflows)
-                             event))]
-     (when (= :ok (:status result))
-       (callback (:result result)))))
-  ([event callback] (eval-event event callback true))
-  ([event] (eval-event event identity)))
-
-(defn- eval-internal-event [event & args]
-  (apply eval-event (e/mark-internal (cn/make-instance event)) args))
-
 (defn- maybe-agent-pattern [p]
   (when (and (map? p)
              (= :Agentlang.Core/Agent (li/record-name p)))
@@ -500,14 +474,11 @@
   (when-let [input (:Input agent-instance)]
     (u/string-as-keyword input)))
 
-(defn- find-agent-delegates [preproc agent-instance]
-  (eval-event
-   {:Agentlang.Core/FindAgentDelegates
-    {:Agent (:Name agent-instance)
-     :Preprocessor preproc}}))
-
-(def find-agent-pre-delegates (partial find-agent-delegates true))
-(def find-agent-post-delegates (partial find-agent-delegates false))
+(defn find-agent-delegates [agent-instance]
+  (when-let [ds (seq (:Delegates agent-instance))]
+    (eval-event
+     {:Agentlang.Core/FindAgentDelegates
+      {:DelegateNames ds}})))
 
 (defn- lookup-for-agent [event-name proc agent-instance]
   (eval-event

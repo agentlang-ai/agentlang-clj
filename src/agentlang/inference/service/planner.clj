@@ -309,7 +309,7 @@
        "any feature of the language that's not present in the above examples. "
        "This means, for conditionals you should always return a `cond` expression, and must not return an `if`.\n"
        "A `def` must always bind to the result of `make`, `update`, `delete`, `lookup-one` and `lookup-many` and nothing else.\n"
-       "You must not call functions like `map` or invent functional-syntax like `[data in [1 2 3]]`\n\n"
+       "You must not call functions like `map` or invent functional-syntax like `[data in [1 2 3]]`.\n\n"
        "Now consider the entity definitions and user-instructions that follows to generate fresh dataflow patterns. "
        "An important note: do not return any plain text in your response, only return valid clojure expressions. "
        "\nAnother important thing you should keep in mind: your response must not include any objects from the previous "
@@ -326,7 +326,7 @@
 (defn with-instructions [instance]
   (assoc instance :UserInstruction
          (str generic-planner-instructions
-              "These are the application specific entity definitions shared by the user:\n\n" (agent-tools-as-definitions instance)
+              "These are the application specific entity and event definitions shared by the user:\n\n" (agent-tools-as-definitions instance)
               "Additional application specific instructions from the user follows:\n\n" (:UserInstruction instance))))
 
 (defn validate-expressions [exprs]
