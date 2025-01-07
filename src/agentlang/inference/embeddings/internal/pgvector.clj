@@ -13,12 +13,11 @@
 (def ^:private dbtype "postgresql")
 
 (defn open-connection [config]
-  (jdbc/get-connection
-   (merge {:dbtype dbtype} config)))
+  (merge {:dbtype dbtype} config))
 
 (defn close-connection [db-conn]
-  (.close db-conn)
-  true)
+  (when (= dbtype (:dbtype db-conn))
+    true))
 
 (def ^:private init-table
   "CREATE TABLE IF NOT EXISTS text_embedding
