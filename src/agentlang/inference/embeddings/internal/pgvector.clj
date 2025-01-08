@@ -19,6 +19,25 @@
   (when (= dbtype (:dbtype db-conn))
     true))
 
+(def ^:private init-table
+  "CREATE TABLE IF NOT EXISTS text_embedding
+(
+    embedding_uuid      UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    embedding_classname VARCHAR(128), -- may be repeated
+    text_content        TEXT        NOT NULL,
+    meta_content        JSON,
+    embedding_model     VARCHAR(64) NOT NULL,
+    embedding_1536      VECTOR(1536),
+    embedding_3072      VECTOR(3072),
+    created_at          TIMESTAMP   NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMP   NOT NULL DEFAULT NOW(),
+    readers             VARCHAR(64)
+);")
+
+(defn initialize-vector-table [db-conn]
+  (jdbc/execute! db-conn ["CREATE EXTENSION IF NOT EXISTS vector"])
+  (jdbc/execute! db-conn [init-table]))
+
 (defn- pg-floats
   "Turn supplied collection of floating-point values into a PostgreSQL
   PGVector object suitable for use as SQL param."

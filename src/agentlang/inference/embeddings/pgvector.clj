@@ -20,6 +20,7 @@
     (reify p/EmbeddingDb
       (open-connection [this config]
         (u/safe-set-once db-conn #(pgv/open-connection (dissoc config :llm-provider)))
+        (pgv/initialize-vector-table @db-conn)
         (u/safe-set-once provider-name #(:llm-provider config))
         this)
       (close-connection [_]
