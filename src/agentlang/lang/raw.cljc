@@ -171,11 +171,11 @@
 (defn delete-definition [component-name varname]
   (remove-from-component component-name (partial clj-def? varname)))
 
-(defn- find-def [component-name varname]
+(defn- find-def-expr [component-name varname]
   (first (find-in-component component-name (partial clj-def? varname))))
 
 (defn get-definition-expr [component-name varname]
-  (nth (find-def component-name varname) 2))
+  (nth (find-def-expr component-name varname) 2))
 
 (defn update-component-spec! [component-name spec-key spec]
   (when-let [cdef (get @raw-store component-name)]
