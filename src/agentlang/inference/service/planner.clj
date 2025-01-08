@@ -331,11 +331,12 @@
 
 (defn validate-expressions [exprs]
   (doseq [expr (rest exprs)]
-    (when-not (seqable? expr)
+    (when-not (or (seqable? expr) (symbol? expr))
       (u/throw-ex (str "Unexpected expression - " expr)))
     ;; An embedded def could mean mismatched parenthesis.
-    (w/postwalk
-     #(when (and (seqable? %) (= (first %) 'def))
-        (u/throw-ex (str "Maybe there is a parenthesis mismatch in this expression - " expr)))
-     (rest expr)))
+    (when (seqable? expr)
+      (w/postwalk
+       #(when (and (seqable? %) (= (first %) 'def))
+          (u/throw-ex (str "Maybe there is a parenthesis mismatch in this expression - " expr)))
+       (rest expr))))
   exprs)
