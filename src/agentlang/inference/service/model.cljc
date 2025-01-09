@@ -260,7 +260,8 @@
     (= :planner (u/string-as-keyword (:Type attrs)))
     attrs
 
-    (seq (:Delegates attrs))
+    (or (seq (:Tools attrs))
+        (seq (:Delegates attrs)))
     (assoc attrs :Type :planner)
 
     (seq (:Features attrs))
