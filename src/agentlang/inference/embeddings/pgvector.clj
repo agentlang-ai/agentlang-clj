@@ -3,7 +3,8 @@
             [agentlang.inference.provider.core :as provider]
             [agentlang.inference.embeddings.protocol :as p]
             [agentlang.inference.embeddings.internal.registry :as r]
-            [agentlang.inference.embeddings.internal.pgvector :as pgv]))
+            [agentlang.inference.embeddings.internal.pgvector :as pgv]
+            [agentlang.inference.embeddings.internal.common :as vc]))
 
 ;;;; sample config.edn entry:
 ;; {:embeddings {:vectordb :pgvector
@@ -36,9 +37,9 @@
       (embed-document-chunk [_ app-uuid text-chunk]
         (cwp #(pgv/add-document-chunk @db-conn app-uuid text-chunk)))
       (get-document-classname [_ app-uuid]
-        (pgv/get-document-classname app-uuid))
+        (vc/get-document-classname app-uuid))
       (get-planner-classname [_ app-uuid]
-        (pgv/get-planner-classname app-uuid))
+        (vc/get-planner-classname app-uuid))
       (append-reader-for-rbac [db app-uuid document-id user]
         (pgv/append-reader-for-rbac @db-conn app-uuid document-id user))
       (find-similar-objects [_ query-spec limit]

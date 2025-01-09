@@ -2,12 +2,12 @@
   (:require [agentlang.util :as u]
             [agentlang.inference.provider.core :as provider]
             [agentlang.inference.embeddings.protocol :as p]
-            [next.jdbc :as jdbc]
             [agentlang.inference.embeddings.internal.registry :as r]
-            [agentlang.inference.embeddings.internal.sqlitevector :as sqv]))
+            [agentlang.inference.embeddings.internal.sqlitevector :as sqv]
+            [agentlang.inference.embeddings.internal.common :as vc]))
 
 ;;;; sample config.edn entry:
-;; {:embeddings {:vectordb :sqlite
+;; {:embeddings {:vectordb :sqlitevector
 ;;               :config {:dbname "./test1.db"}]}}}
 
 (defn make []
@@ -17,7 +17,7 @@
     (reify p/EmbeddingDb
       (open-connection [this config]
         (let [conn (sqv/open-connection config)] 
-          (sqv/load-sqlite-vec0-extension conn)
+          (sqv/initialize-vector-table conn)
           (u/safe-set db-conn conn))
          (u/safe-set-once provider-name #(:llm-provider config))
         this)
@@ -34,9 +34,9 @@
       (embed-document-chunk [_ app-uuid text-chunk]
         (cwp #(sqv/add-document-chunk @db-conn app-uuid text-chunk)))
       (get-document-classname [_ app-uuid]
-        (sqv/get-document-classname app-uuid))
+        (vc/get-document-classname app-uuid))
       (get-planner-classname [_ app-uuid]
-        (sqv/get-planner-classname app-uuid))
+        (vc/get-planner-classname app-uuid))
       (append-reader-for-rbac [db app-uuid document-id user]
         (sqv/append-reader-for-rbac @db-conn app-uuid document-id user))
       (find-similar-objects [_ query-spec limit]
