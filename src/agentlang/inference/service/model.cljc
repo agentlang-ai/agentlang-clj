@@ -1,12 +1,14 @@
 (ns agentlang.inference.service.model
   (:require [clojure.string :as s]
             [clojure.set :as set]
+            [camel-snake-kebab.core :as csk]
             [agentlang.lang
              :refer [component
                      dataflow
                      inference
                      entity
                      event
+                     event-internal
                      record
                      attribute
                      relationship]
@@ -201,12 +203,19 @@
               :else (u/throw-ex (str "Invalid tool: " x))))
           tools)))
 
-(defn- preproc-agent-input-spec [input]
-  (when input
+(defn- as-event-name [agent-name]
+  (let [n (csk/->PascalCase agent-name)]
+    (cn/canonical-type-name n)))
+
+(defn- preproc-agent-input-spec [agent-name input]
+  (if input
     (cond
       (string? input) input
       (keyword? input) (subs (str input) 1)
-      :else (u/throw-ex (str "Invalid agent input: " input)))))
+      :else (u/throw-ex (str "Invalid agent input: " input)))
+    (let [event-name (as-event-name agent-name)]
+      (and (event-internal event-name {:UserInstruction :String})
+           (preproc-agent-input-spec nil event-name)))))
 
 (defn- preproc-agent-docs [docs]
   (mapv (fn [spec]
@@ -249,7 +258,7 @@
  (fn [pat]
    (let [attrs (li/record-attributes pat)
          nm (:Name attrs)
-         input (preproc-agent-input-spec (:Input attrs))
+         input (preproc-agent-input-spec nm (:Input attrs))
          tools (preproc-agent-tools-spec (:Tools attrs))
          delegates (preproc-agent-delegates (:Delegates attrs))
          tp (:Type attrs)
@@ -299,7 +308,8 @@
 
 (dataflow
  [:before :create :Agentlang.Core/Agent]
- [:eval '(agentlang.inference.service.model/maybe-input-as-inference :Instance)])
+ [:eval '(agentlang.inference.service.model/maybe-input-as-inference :Instance)]
+ :Instance)
 
 (def ^:private agent-callbacks (atom nil))
 

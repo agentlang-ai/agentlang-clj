@@ -137,8 +137,27 @@
      spec)
    :meta :rbac :ui))
 
+(defn- normalize-attributes [attrs]
+  (let [xs (mapv (fn [[k v]]
+                   [k (if (keyword? v)
+                        (let [[c n] (li/split-path v)]
+                          (if (and c n) ; (= c :Agentlang.Kernel.Lang)
+                            n
+                            v))
+                        v)])
+                 attrs)]
+    (into {} xs)))
+
+(defn- force-find-spec [n]
+  (when-let [[tag obj] (cn/find-schema n)]
+    (let [scm (:schema obj)]
+      (normalize-attributes
+       (if (= :event tag)
+         (dissoc scm :EventContext)
+         scm)))))
+
 (defn- raw-tool [tag find-spec n]
-  (when-let [spec (maybe-merge-parent-attrs (find-spec n))]
+  (when-let [spec (maybe-merge-parent-attrs (or (find-spec n) (force-find-spec n)))]
     (let [doc (cn/docstring n)
           expr (u/pretty-str `(~tag ~n ~spec))]
       (if (seq doc)

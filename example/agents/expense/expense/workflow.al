@@ -21,14 +21,11 @@
   :Input :Expense.Workflow/ReceiptImageToExpenseReport
   :LLM :llm01}}
 
-(event :ConvertReportToExpenses {:UserInstruction :String})
-
 {:Agentlang.Core/Agent
- {:Name :report-to-expense-agent
+ {:Name :convert-report-to-expense-agent
   :Type :planner
   :UserInstruction "Convert an expense report to individual instances of the expense entity."
-  :Tools [:Expense.Workflow/Expense]
-  :Input :Expense.Workflow/ConvertReportToExpenses}}
+  :Tools [:Expense.Workflow/Expense]}}
 
 {:Agentlang.Core/Agent
  {:Name :expense-agent
@@ -37,7 +34,7 @@
   :UserInstruction (str "1. Extract an expense report from the given receipt image url.\n"
                         "2. Convert this report to individual expenses.")
   :Input :Expense.Workflow/SaveExpenses
-  :Delegates [:receipt-ocr-agent :report-to-expense-agent]}}
+  :Delegates [:receipt-ocr-agent :convert-report-to-expense-agent]}}
 
 ;; Usage:
 ;; POST api/Expense.Workflow/SaveExpenses

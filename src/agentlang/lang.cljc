@@ -530,7 +530,7 @@
   ([schema]
    (parse-and-define record schema)))
 
-(defn- event-internal
+(defn event-internal
   ([n attrs verify-name?]
    (let [cn (if verify-name?
               (validated-canonical-type-name n)
