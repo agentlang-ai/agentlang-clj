@@ -297,13 +297,14 @@
         (load-components component-scripts model-root false)))
 
      (defn- script-name-from-component-name [component-name]
-       (loop [s (subs (str component-name) 1), sep "", result []]
-         (if-let [c (first s)]
-           (cond
-             (Character/isUpperCase c) (recur (rest s) "_" (conj result sep (Character/toLowerCase c)))
-             (or (= \/ c) (= \. c)) (recur (rest s) "" (conj result java.io.File/separator))
-             :else (recur (rest s) sep (conj result c)))
-           (str (s/join result) (u/get-script-extn)))))
+       (-> component-name
+           name
+           (s/replace #"\." "/")
+           (s/replace #"([a-zA-Z])([0-9])" "$1_$2")
+           (s/replace #"([a-z])([A-Z])" "$1_$2")
+           (s/replace #"([A-Z][A-Z])([a-z])" "$1_$2")
+           s/lower-case
+           (str (u/get-script-extn))))
 
      (defn load-components-from-model
        ([model model-root load-from-resource]
