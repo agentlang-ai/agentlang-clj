@@ -21,7 +21,10 @@
     (us/nonils
      (mapv (fn [[agent-name spec]]
              (when-let [docs (:Documents spec)]
-               [(name agent-name) (mapv preproc-doc-spec docs)]))
+               [(if (string? agent-name)
+                  agent-name
+                  (subs (str agent-name) 1))
+                (mapv preproc-doc-spec docs)]))
            agents))))
 
 (defn setup-agent-documents []
