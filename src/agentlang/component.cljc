@@ -2476,6 +2476,13 @@
 
 (def register-inference (partial register-llm-construct :inferences))
 
+(defn inference? [n]
+  (let [[c n] (li/split-path n)
+        path [c (get-model-version c) :inferences n]]
+    (if (get-in @components path)
+      true
+      false)))
+
 (defn docstring [n]
   (:doc (fetch-meta n)))
 

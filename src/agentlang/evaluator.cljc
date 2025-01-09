@@ -27,6 +27,7 @@
             [agentlang.evaluator.internal :as i]
             [agentlang.evaluator.root :as r]
             [agentlang.evaluator.suspend :as sp]
+            [agentlang.evaluator.exec-graph :as exec-graph]
             [agentlang.evaluator.intercept.core :as interceptors]))
 
 (declare eval-all-dataflows evaluator-with-env safe-eval-pattern)
@@ -186,6 +187,10 @@
 (defn- fire-post-event-for [tag inst]
   (fire-post-events-for tag [inst]))
 
+(defn- init-exec-state [event-instance]
+  (and (exec-graph/init event-instance)
+       (sp/init-suspension-id)))
+
 (def eval-after-create (partial fire-post-event-for :create))
 (def eval-after-update (partial fire-post-event-for :update))
 (def eval-after-delete (partial fire-post-event-for :delete))
@@ -198,7 +203,7 @@
         (gs/set-active-txn! txn)
         (reset! txn-set true))
       (try
-        (let [_ (sp/init-suspension-id)
+        (let [_ (init-exec-state event-instance)
               {susp-env :env susp-opcc :opcc} sp/suspension-info
               env (if susp-env (merge env susp-env) env)
               is-internal (or (internal-event? event-instance) internal-post-events)
