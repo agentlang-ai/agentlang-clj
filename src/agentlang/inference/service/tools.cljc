@@ -7,7 +7,8 @@
             [agentlang.lang.raw :as raw]
             [agentlang.lang.internal :as li]
             [agentlang.lang.kernel :as k]
-            [agentlang.util.logger :as log]))
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])))
 
 (defn- record-name-as-function-name [rec-name]
   (let [rec-name (li/make-path rec-name)]
