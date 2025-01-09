@@ -45,7 +45,7 @@
   (load-sqlite-vec0-extension db-conn)
   (jdbc/execute! db-conn [init-table]))
 
-(defn- pg-floats
+(defn- sqvec-floats
   "Turn supplied collection of floating-point values into a Sqlite
   object suitable for use as SQL param."
   [float-coll]
@@ -107,12 +107,12 @@
                             text-content
                             (str meta-content)
                             embedding-model
-                            (pg-floats embedding)
+                            (sqvec-floats embedding)
                             (or (gs/active-user) "")])))
 
 (defn find-similar-objects [db-conn {classname :classname embedding :embedding :as obj} limit]
   (vc/assert-object! obj)
-  (let [embedding-sql-param (pg-floats embedding)
+  (let [embedding-sql-param (sqvec-floats embedding)
         dimension-count (count embedding)
         user (gs/active-user)
         find-similar-objects-sql (format find-similar-objects-sql-template
