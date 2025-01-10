@@ -70,7 +70,7 @@
   :UserInstruction :String})
 
 {:Agentlang.Core/Agent
- {:Name :profile-summary-agent
+ {:Name :Recruitment.Workflow/CreateProfileSummaryTextFromResumeAgent
   :Input :Recruitment.Workflow/CreateProfileSummaryTextFromResume
   :UserInstruction (str "You are a recruiter that analyses a resume and provides a summary of the "
                         "skills and experience of the candidate. The summary must be in the format - "
@@ -84,28 +84,27 @@
   :UserInstruction :String})
 
 {:Agentlang.Core/Agent
- {:Name :check-summary-agent
+ {:Name :Recruitment.Workflow/CheckProfileSummaryAgent
   :LLM :llm01
   :Input :Recruitment.Workflow/CheckProfileSummary
   :UserInstruction
   (str "If the profile passed to you is for an experienced C++ programmer, return `yes`, otherwise return `no`.")}}
 
 {:Agentlang.Core/Agent
- {:Name :interview-director-agent
-  :Type :planner
+ {:Name :Recruitment.Workflow/InterviewDirectorAgent
   :LLM :llm01
-  :Input :Recruitment.Workflow/InvokeAgent
   :UserInstruction (str "1. Create a profile-summary text from the given resume.\n"
                         "2. Check the profile-summary text from step (1) by calling the CheckProfileSummary event.\n"
                         "3. If the result of step (2) is \"yes\", then schedule an interview for the candidate. Otherwise, reject the candidate's profile. "
                         "(An interview may be assigned to one of sam@acme.com, joe@amce.com and susan@acme.com).\n"
                         "Do not skip any of the steps 1, 2 and 3.\n")
   :Tools [:Recruitment.Workflow/ScheduleInterview :Recruitment.Workflow/RejectProfile]
-  :Delegates [:profile-summary-agent :check-summary-agent]}}
+  :Delegates [:Recruitment.Workflow/CreateProfileSummaryTextFromResumeAgent
+              :Recruitment.Workflow/CheckProfileSummaryAgent]}}
 
 ;; Usage:
-;; POST api/Recruitment.Workflow/InvokeAgent
-;; {"Recruitment.Workflow/InvokeAgent":
+;; POST api/Recruitment.Workflow/InterviewDirectorAgent
+;; {"Recruitment.Workflow/InterviewDirectorAgent":
 ;;  {"UserInstruction": "Here's a resume: <some-resume-text>"}}
 
 (def slot-data

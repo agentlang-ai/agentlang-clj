@@ -105,8 +105,8 @@
 (defn- parse-update [[n attrs new-attrs] alias]
   (let [qexpr (parse-lookup-one [n attrs] nil)
         qattrs (li/record-attributes qexpr)]
-    {n (merge qattrs (parse-value-refs-and-exprs new-attrs)
-              (when alias {:as alias}))}))
+    (merge {n (merge qattrs (parse-value-refs-and-exprs new-attrs))}
+           (when alias {:as alias}))))
 
 (defn- parse-delete [[n attrs] alias]
   (let [pat [:delete n attrs]]
