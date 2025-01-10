@@ -23,7 +23,6 @@
 
 {:Agentlang.Core/Agent
  {:Name :Expense.Workflow/ConvertReportToExpenseAgent
-  :Features [:planner]
   :UserInstruction "Convert an expense report to individual instances of the expense entity."
   :Tools [:Expense.Workflow/Expense]}}
 

@@ -21,8 +21,8 @@
             [agentlang.datafmt.json :as json]
             [agentlang.lang.internal :as li]
             [agentlang.global-state :as gs]
-            #?(:clj [agentlang.inference.service.planner :as planner])
-            #?(:clj [agentlang.inference.service.agent-gen :as agent-gen])
+            [agentlang.inference.service.planner :as planner]
+            [agentlang.inference.service.agent-gen :as agent-gen]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
@@ -305,14 +305,16 @@
        (maybe-register-subscription-handlers! channels (keyword input)))
      (assoc pat :Agentlang.Core/Agent
             (cond
-              (planner-agent? new-attrs) #?(:clj
-                                            (planner/with-instructions new-attrs)
-                                            :cljs
-                                            (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
-              (agent-gen-agent? new-attrs) #? (:clj
-                                               (agent-gen/with-instructions new-attrs)
-                                               :cljs
-                                               (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
+              (planner-agent? new-attrs)
+              #?(:clj
+                 (planner/with-instructions new-attrs)
+                 :cljs
+                 (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
+              (agent-gen-agent? new-attrs)
+              #?(:clj
+                 (agent-gen/with-instructions new-attrs)
+                 :cljs
+                 (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
               :else new-attrs)))))
 
 (defn maybe-define-inference-event [event-name]

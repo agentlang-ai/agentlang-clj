@@ -32,7 +32,6 @@
 
 {:Agentlang.Core/Agent
  {:Name :Weather.Service.Core/WeatherPlannerAgent
-  :Features [:planner]
   :Tools [:Weather.Service.Core/GetWeatherForCity]
   :UserInstruction "You are an agent that figures out which tool to use to answer a user query."
   :LLM :llm01}}
