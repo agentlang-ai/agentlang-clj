@@ -21,8 +21,8 @@
             [agentlang.datafmt.json :as json]
             [agentlang.lang.internal :as li]
             [agentlang.global-state :as gs]
-            #?(:clj [agentlang.inference.service.planner :as planner])
-            #?(:clj [agentlang.inference.service.agent-gen :as agent-gen])
+            [agentlang.inference.service.planner :as planner]
+            [agentlang.inference.service.agent-gen :as agent-gen]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
@@ -140,12 +140,18 @@
 (def ^:private feature-set {"chain-of-thought" ft-chain-of-thought
                             "self-critique" ft-self-critique})
 
-(def ^:private feature-set-keys (set (keys feature-set)))
+(def ^:private feature-set-keys (set (concat (keys feature-set) ["planner" "ocr"])))
 
 (defn- feature-list? [xs]
   (when (seq xs)
     (and (vector? xs)
          (= feature-set-keys (set/union feature-set-keys (set xs))))))
+
+(defn- has-feature? [x xs]
+  (some #{x} (map u/keyword-as-string xs)))
+
+(def ^:private has-planner? (partial has-feature? "planner"))
+(def ^:private has-ocr? (partial has-feature? "ocr"))
 
 (defn get-feature-prompt [ft] (get feature-set ft ""))
 
@@ -174,10 +180,8 @@
   (= typ (:Type agent-instance)))
 
 (def ocr-agent? (partial agent-of-type? "ocr"))
-(def classifier-agent? (partial agent-of-type? "classifier"))
 (def planner-agent? (partial agent-of-type? "planner"))
 (def agent-gen-agent? (partial agent-of-type? "agent-gen"))
-(def eval-agent? (partial agent-of-type? "eval"))
 
 (defn- eval-event
   ([event callback atomic?]
@@ -204,8 +208,11 @@
           tools)))
 
 (defn- as-event-name [agent-name]
-  (let [n (csk/->PascalCase agent-name)]
-    (cn/canonical-type-name n)))
+  (if (and (keyword? agent-name)
+           (= 2 (count (li/split-path agent-name))))
+    agent-name
+    (let [n (csk/->PascalCase agent-name)]
+      (cn/canonical-type-name n))))
 
 (defn- preproc-agent-input-spec [agent-name input]
   (if input
@@ -235,11 +242,6 @@
     (assoc agent-instance :UserInstruction s)
     agent-instance))
 
-(defn- verify-name [n]
-  (when (or (s/index-of n "/") (s/index-of n "."))
-    (u/throw-ex (str "Invalid name " n ", cannot contain `/` or `.`")))
-  n)
-
 (defn- fetch-channel-tools [channel]
   (when-let [tools (get-in (cn/fetch-model channel) [:channel :tools])]
     (preproc-agent-tools-spec tools)))
@@ -253,14 +255,35 @@
   (when (seq delegs)
     (mapv u/keyword-as-string delegs)))
 
+(defn- maybe-cast-to-planner [attrs]
+  (cond
+    (= :planner (u/string-as-keyword (:Type attrs)))
+    attrs
+
+    (or (seq (:Tools attrs))
+        (seq (:Delegates attrs)))
+    (assoc attrs :Type :planner)
+
+    (seq (:Features attrs))
+    (let [fs (:Features attrs)]
+      (cond
+        (has-planner? fs)
+        (assoc attrs :Type :planner)
+        (has-ocr? fs)
+        (assoc attrs :Type :ocr)
+        :else attrs))
+
+    :else attrs))
+
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
  (fn [pat]
-   (let [attrs (li/record-attributes pat)
+   (let [attrs (maybe-cast-to-planner (li/record-attributes pat))
          nm (:Name attrs)
          input (preproc-agent-input-spec nm (:Input attrs))
          tools (preproc-agent-tools-spec (:Tools attrs))
          delegates (preproc-agent-delegates (:Delegates attrs))
+         features (when-let [ftrs (:Features attrs)] (mapv u/keyword-as-string ftrs))
          tp (:Type attrs)
          llm (or (:LLM attrs) {:Type "openai"})
          docs (:Documents attrs)
@@ -269,27 +292,29 @@
          new-attrs
          (-> attrs
              (cond->
-                 nm (assoc :Name (verify-name (u/keyword-as-string nm)))
+                 nm (assoc :Name (u/keyword-as-string nm))
                  input (assoc :Input input)
                  tools (assoc :Tools tools)
                  delegates (assoc :Delegates delegates)
                  docs (assoc :Documents (preproc-agent-docs docs))
                  tp (assoc :Type (u/keyword-as-string tp))
+                 features (assoc :Features features)
                  channels (assoc :Channels (mapv name channels))
                  llm (assoc :LLM (u/keyword-as-string llm))))]
      (when (seq channels)
        (maybe-register-subscription-handlers! channels (keyword input)))
      (assoc pat :Agentlang.Core/Agent
             (cond
-              (planner-agent? new-attrs) #?(:clj
-                                            (planner/with-instructions new-attrs)
-                                            :cljs
-                                            (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
-              (agent-gen-agent? new-attrs) #? (:clj
-                                               (agent-gen/with-instructions new-attrs)
-                                               :cljs
-                                               (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
-              (classifier-agent? new-attrs) (classifier-with-instructions new-attrs)
+              (planner-agent? new-attrs)
+              #?(:clj
+                 (planner/with-instructions new-attrs)
+                 :cljs
+                 (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
+              (agent-gen-agent? new-attrs)
+              #?(:clj
+                 (agent-gen/with-instructions new-attrs)
+                 :cljs
+                 (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
               :else new-attrs)))))
 
 (defn maybe-define-inference-event [event-name]

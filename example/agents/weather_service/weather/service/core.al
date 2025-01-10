@@ -31,16 +31,14 @@
            :CompletionModel "gpt-3.5-turbo"}}}
 
 {:Agentlang.Core/Agent
- {:Name :weather-planner-agent
-  :Type :planner
+ {:Name :Weather.Service.Core/WeatherPlannerAgent
   :Tools [:Weather.Service.Core/GetWeatherForCity]
   :UserInstruction "You are an agent that figures out which tool to use to answer a user query."
-  :LLM :llm01
-  :Input :Weather.Service.Core/InvokePlanner}}
+  :LLM :llm01}}
 
 ;; Usage:
-;; POST api/Weather.Service.Core/InvokePlanner
-;; {"Weather.Service.Core/InvokePlanner": {"UserInstruction": "What's the weather for Boston today?"}}
+;; POST api/Weather.Service.Core/WeatherPlannerAgent
+;; {"Weather.Service.Core/WeatherPlannerAgent": {"UserInstruction": "What's the weather for Boston today?"}}
 
 (dataflow
  :Agentlang.Kernel.Lang/AppInit
