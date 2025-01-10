@@ -71,7 +71,8 @@
 (defn- dispatch-an-opcode [evaluator env opcode]
   (((opc/op opcode) i/dispatch-table) evaluator env (opc/arg opcode)))
 
-(defn dispatch [evaluator env {opcode :opcode}]
+(defn dispatch [evaluator env {opcode :opcode pat :pattern}]
+  (exec-graph/add-step! pat)
   (if (map? opcode)
     (dispatch-an-opcode evaluator env opcode)
     (loop [opcs opcode, env env, result nil]
@@ -235,7 +236,8 @@
                                    env0 (fire-post-events (:env result) is-internal)]
                                (assoc result :env env0)))]
           (interceptors/eval-intercept env0 event-instance continuation))
-        (finally (when @txn-set (gs/set-active-txn! nil)))))))
+        (finally (do (exec-graph/finalize!)
+                     (when @txn-set (gs/set-active-txn! nil))))))))
 
 (defn- maybe-init-event [event-obj]
   (if (cn/event-instance? event-obj)
