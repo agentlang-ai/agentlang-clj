@@ -21,8 +21,6 @@
 
 (def ^:private auth-token (atom nil))
 
-(defn get-auth-token [] @auth-token)
-
 (defn- reset-auth-token []
   (let [conn-config (integration-manager-config)]
     (if-let [token (:token conn-config)]
@@ -40,6 +38,11 @@
               (let [token (get-in (:body response) [:result :authentication-result :id-token])]
                 (reset! auth-token token)
                 token))))))))
+
+(defn get-auth-token []
+  (if-let [token @auth-token]
+    token
+    (reset-auth-token)))
 
 (defn- with-auth-token []
   (if-let [token @auth-token]
