@@ -39,6 +39,11 @@
                 (reset! auth-token token)
                 token))))))))
 
+(defn get-auth-token []
+  (if-let [token @auth-token]
+    token
+    (reset-auth-token)))
+
 (defn- with-auth-token []
   (if-let [token @auth-token]
     {:auth-token token}
