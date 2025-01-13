@@ -215,4 +215,7 @@
     obj))
 
 (defn vec-as-map [xs]
-  (into {} (mapv vec (partition 2 xs))))
+  (cond
+    (map? xs)  xs
+    (vector? (first xs)) (into {} xs)
+    :else (into {} (mapv vec (partition 2 xs)))))
