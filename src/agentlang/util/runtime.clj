@@ -145,7 +145,7 @@
       (when (not= :ok (:status r))
         (log/error (str "failed to initialize LLM - " llm-name)))))
   (when-let [im-config (:integration-manager config)]
-    (doseq [integ-name (:integrations im-config)]
+    (doseq [[_ integ-name] (su/vec-as-map (:integrations im-config))]
       (cc/create-new-integration integ-name))
     (doseq [[integ-name cfgs] (:configurations im-config)]
       (doseq [[conn-name conn-attrs] cfgs]

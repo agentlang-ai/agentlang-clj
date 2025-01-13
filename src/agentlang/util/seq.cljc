@@ -213,3 +213,6 @@
   (if (map? obj)
     (vec (apply concat obj))
     obj))
+
+(defn vec-as-map [xs]
+  (into {} (mapv vec (partition 2 xs))))

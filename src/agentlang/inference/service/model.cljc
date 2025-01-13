@@ -305,16 +305,8 @@
        (maybe-register-subscription-handlers! channels (keyword input)))
      (assoc pat :Agentlang.Core/Agent
             (cond
-              (planner-agent? new-attrs)
-              #?(:clj
-                 (planner/with-instructions new-attrs)
-                 :cljs
-                 (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
-              (agent-gen-agent? new-attrs)
-              #?(:clj
-                 (agent-gen/with-instructions new-attrs)
-                 :cljs
-                 (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
+              (planner-agent? new-attrs) (planner/with-instructions new-attrs)
+              (agent-gen-agent? new-attrs) (agent-gen/with-instructions new-attrs)
               :else new-attrs)))))
 
 (defn maybe-define-inference-event [event-name]
