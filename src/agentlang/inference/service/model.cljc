@@ -288,6 +288,7 @@
          llm (or (:LLM attrs) {:Type "openai"})
          docs (:Documents attrs)
          channels (:Channels attrs)
+         integs (when-let [xs (:Integrations attrs)] (mapv u/keyword-as-string xs))
          tools (vec (concat tools (flatten (us/nonils (mapv fetch-channel-tools channels)))))
          new-attrs
          (-> attrs
@@ -299,6 +300,7 @@
                  docs (assoc :Documents (preproc-agent-docs docs))
                  tp (assoc :Type (u/keyword-as-string tp))
                  features (assoc :Features features)
+                 integs (assoc :Integrations integs)
                  channels (assoc :Channels (mapv name channels))
                  llm (assoc :LLM (u/keyword-as-string llm))))]
      (when (seq channels)
