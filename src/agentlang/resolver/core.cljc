@@ -108,7 +108,7 @@
    (invoke-method method resolver handler nil env arg)))
 
 (defn- wrap-result [method resolver env arg]
-  (log/info (str "Calling method " method " in resolver " (:name resolver) " for " arg))
+  (log/debug (str "Calling method " method " in resolver " (:name resolver) " for " arg))
   (if-let [m (get-in resolver [method :handler])]
     {:resolver (:name resolver)
      :method method
