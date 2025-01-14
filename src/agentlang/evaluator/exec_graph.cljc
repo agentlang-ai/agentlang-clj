@@ -126,3 +126,8 @@
 (def pattern first)
 (defn result [n] (:result (second n)))
 (defn status [n] (:status (second n)))
+
+(defn suspended? [g]
+  (when-let [g0 (last (:nodes g))]
+    (when-let [n (last (and (graph? g0) (:nodes g0)))]
+      (cn/instance-of? :Agentlang.Kernel.Eval/Suspension (first (result n))))))

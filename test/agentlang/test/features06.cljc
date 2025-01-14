@@ -169,7 +169,8 @@
                             (is (cn/instance-of? :DfSusp/A (first (:result r))))
                             (is (seq (:suspension-id r)))
                             [(first (:result r)) (:suspension-id r)])
-        [a1 s1] (parse-susp-result (first (tu/eval-all-dataflows {:DfSusp/MakeB {:X 1}})))
+        [a1 s1] (parse-susp-result (first (tu/eval-all-dataflows {:DfSusp/MakeB {:X 1 :EventContext {:ExecId "1"}}})))
+        _ (is (exg/suspended? (exg/get-exec-graph "1")))
         [a2 s2] (parse-susp-result (first (tu/eval-all-dataflows {:DfSusp/MakeB {:X 2}})))]
     (is susp? (tu/first-result {:Agentlang.Kernel.Eval/LoadSuspension {:Id s1}}))
     (is susp? (tu/first-result {:Agentlang.Kernel.Eval/LoadSuspension {:Id s2}}))
