@@ -4,6 +4,7 @@
             [agentlang.component :as cn]
             [agentlang.util :as u]
             [agentlang.evaluator :as e]
+            [agentlang.evaluator.exec-graph :as exg]
             [agentlang.lang
              :refer [component entity event relationship dataflow
                      attribute pattern resolver]]
@@ -178,3 +179,26 @@
                               {:Id s2 :Value (assoc a2 :Flag false)}}))
     (is (nil? (tu/result {:Agentlang.Kernel.Eval/RestartSuspension
                           {:Id s1 :Value (assoc a1 :Flag false)}})))))
+
+(deftest exec-graph-01
+  (defcomponent :EG01
+    (entity :EG01/A {:Id :Identity :X :Int})
+    (entity :EG01/B {:Id :Identity :Y :Int})
+    (event :EG01/E {:Y :Int})
+    (dataflow
+     :EG01/F
+     {:EG01/A {:X :EG01/F.X} :as :A}
+     {:EG01/E {:Y :A.X}})
+    (dataflow :EG01/E {:EG01/B {:Y :EG01/E.Y}}))
+  (let [br (tu/first-result {:EG01/F {:X 100 :EventContext {:ExecId "0001"}}})
+        _   (is (cn/instance-of? :EG01/B br))
+        g (exg/get-exec-graph "0001")
+        _ (is (exg/graph? g))
+        nodes (exg/nodes g)
+        g2 (second nodes)]
+    (is (cn/instance-of? :EG01/F (exg/root-event g)))
+    (is (= 2 (count nodes)))
+    (is (exg/graph? g2))
+    (is (cn/instance-of? :EG01/E (exg/root-event g2)))
+    (is (= 1 (count (exg/nodes g2))))
+    (is (cn/same-instance? br (first (exg/result (last (exg/nodes g2))))))))

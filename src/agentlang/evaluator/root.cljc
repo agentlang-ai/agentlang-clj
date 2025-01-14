@@ -19,6 +19,7 @@
             [agentlang.evaluator.async :as a]
             [agentlang.evaluator.match :as m]
             [agentlang.evaluator.internal :as i]
+            [agentlang.evaluator.exec-graph :as exg]
             [agentlang.evaluator.intercept.core :as interceptors]
             [agentlang.global-state :as gs]
             [agentlang.compiler :as cl]
@@ -1132,7 +1133,9 @@
             (when df
               (when (or (not resolver) composed?)
                 (let [[_ dc] (cn/dataflow-opcode df (or with-types cn/with-default-types))
+                      _ (exg/init-node inst)
                       evt-result (eval-opcode self env dc)
+                      _ (exg/finalize-node!)
                       local-result (extract-local-result evt-result)]
                   (when-not local-result
                     (log/error (str record-name " - event failed - " (first evt-result))))

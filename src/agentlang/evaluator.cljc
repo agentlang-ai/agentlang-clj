@@ -27,7 +27,7 @@
             [agentlang.evaluator.internal :as i]
             [agentlang.evaluator.root :as r]
             [agentlang.evaluator.suspend :as sp]
-            [agentlang.evaluator.exec-graph :as exec-graph]
+            [agentlang.evaluator.exec-graph :as exg]
             [agentlang.evaluator.intercept.core :as interceptors]))
 
 (declare eval-all-dataflows evaluator-with-env safe-eval-pattern)
@@ -72,15 +72,17 @@
   (((opc/op opcode) i/dispatch-table) evaluator env (opc/arg opcode)))
 
 (defn dispatch [evaluator env {opcode :opcode pat :pattern}]
-  (exec-graph/add-step! pat)
-  (if (map? opcode)
-    (dispatch-an-opcode evaluator env opcode)
-    (loop [opcs opcode, env env, result nil]
-      (if-let [opc (first opcs)]
-        (let [r (dispatch-an-opcode evaluator env opc)
-              env (or (:env r) env)]
-          (recur (rest opcs) env r))
-        result))))
+  (let [result
+        (if (map? opcode)
+          (dispatch-an-opcode evaluator env opcode)
+          (loop [opcs opcode, env env, result nil]
+            (if-let [opc (first opcs)]
+              (let [r (dispatch-an-opcode evaluator env opc)
+                    env (or (:env r) env)]
+                (recur (rest opcs) env r))
+              result)))]
+    (exg/add-step! pat result)
+    result))
 
 (def ok? i/ok?)
 (def dummy-result i/dummy-result)
@@ -189,7 +191,7 @@
   (fire-post-events-for tag [inst]))
 
 (defn- init-exec-state [event-instance]
-  (and (exec-graph/init event-instance)
+  (and (exg/init event-instance)
        (sp/init-suspension-id)))
 
 (def eval-after-create (partial fire-post-event-for :create))
@@ -236,7 +238,7 @@
                                    env0 (fire-post-events (:env result) is-internal)]
                                (assoc result :env env0)))]
           (interceptors/eval-intercept env0 event-instance continuation))
-        (finally (do (exec-graph/finalize!)
+        (finally (do (exg/finalize!)
                      (when @txn-set (gs/set-active-txn! nil))))))))
 
 (defn- maybe-init-event [event-obj]
