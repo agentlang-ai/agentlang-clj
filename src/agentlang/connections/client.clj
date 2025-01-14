@@ -1,11 +1,15 @@
 (ns agentlang.connections.client
   (:require [agentlang.util :as u]
+            [agentlang.util.seq :as su]
             [agentlang.util.logger :as log]
             [agentlang.util.http :as http]
+            [agentlang.lang.internal :as li]
             [agentlang.global-state :as gs]
             [agentlang.datafmt.json :as json]))
 
 ;; A client library for the integration-manager-service.
+
+(def full-connection-name li/make-path)
 
 (def ^:private integration-manager-config
   (memoize (fn [] (:integration-manager (gs/get-app-config)))))
@@ -39,6 +43,11 @@
                 (reset! auth-token token)
                 token))))))))
 
+(defn get-auth-token []
+  (if-let [token @auth-token]
+    token
+    (reset-auth-token)))
+
 (defn- with-auth-token []
   (if-let [token @auth-token]
     {:auth-token token}
@@ -70,7 +79,10 @@
 
 (defn configure-new-connection [integ-name conn-name conn-attrs]
   (create-instance
-   (str (connections-api-host) "/api/IntegrationManager.Core/Integration/" integ-name "/ConnectionConfigGroup/ConnectionConfig")
+   (str (connections-api-host)
+        "/api/IntegrationManager.Core/Integration/"
+        integ-name
+        "/ConnectionConfigGroup/ConnectionConfig")
    conn-name {:IntegrationManager.Core/ConnectionConfig (merge {:Name conn-name} conn-attrs)}))
 
 (def cached-connections (atom nil))
@@ -89,6 +101,47 @@
            (log/error (str "failed to create connection for - " conn-name))
            (do (swap! cached-connections assoc conn-name conn)
                (assoc conn :CacheKey conn-name)))))))
+
+(defn- lookup-connection-configs [integ-name]
+  (try
+    (let [api-url (str
+                   (connections-api-host)
+                   "/api/IntegrationManager.Core/Integration/"
+                   integ-name
+                   "/ConnectionConfigGroup/ConnectionConfig")
+          response (http/do-get api-url (with-auth-token) :json post-handler)]
+      (case (:status response)
+        200 (let [r (first (:body response))]
+              (when (= "ok" (:status r))
+                (:result r)))
+        401 (do (log/error "authentication required")
+                (reset! auth-token nil))
+        (log/error (str "failed to lookup connection-configs for " integ-name " with status " (:status response)))))
+    (catch Exception ex
+      (log/error ex))))
+
+(defn- get-mapped-integ-name [integ-name]
+  (when-let [integs (su/vec-as-map (get-in (gs/get-app-config) [:integration-manager :integrations]))]
+    (when-let [n (get integs integ-name)]
+      (u/keyword-as-string n))))
+
+(defn find-connection-config-name [integ-name full-conn-name]
+  (if-let [mapped-integ-name (get-mapped-integ-name integ-name)]
+    (let [n (u/keyword-as-string full-conn-name)]
+      (:Name
+       (first (filter #(= n (get-in % [:UserData :ConnectionTypeName]))
+                      (lookup-connection-configs mapped-integ-name)))))
+    (do (log/warn (str "No mapping for integration " integ-name))
+        nil)))
+
+(defn open-connection
+  ([integration-name connection-name]
+   (let [conn-name (full-connection-name integration-name connection-name)]
+     (or (get-connection conn-name)
+         (if-let [conn-config-name (find-connection-config-name integration-name conn-name)]
+           (create-connection conn-config-name conn-name)
+           (u/throw-ex (str "Unable to find connection-configurations for " conn-name))))))
+  ([conn-name] (apply open-connection (li/split-path conn-name))))
 
 (def connection-parameter :Parameter)
 

@@ -288,6 +288,7 @@
          llm (or (:LLM attrs) {:Type "openai"})
          docs (:Documents attrs)
          channels (:Channels attrs)
+         integs (when-let [xs (:Integrations attrs)] (mapv u/keyword-as-string xs))
          tools (vec (concat tools (flatten (us/nonils (mapv fetch-channel-tools channels)))))
          new-attrs
          (-> attrs
@@ -299,22 +300,15 @@
                  docs (assoc :Documents (preproc-agent-docs docs))
                  tp (assoc :Type (u/keyword-as-string tp))
                  features (assoc :Features features)
+                 integs (assoc :Integrations integs)
                  channels (assoc :Channels (mapv name channels))
                  llm (assoc :LLM (u/keyword-as-string llm))))]
      (when (seq channels)
        (maybe-register-subscription-handlers! channels (keyword input)))
      (assoc pat :Agentlang.Core/Agent
             (cond
-              (planner-agent? new-attrs)
-              #?(:clj
-                 (planner/with-instructions new-attrs)
-                 :cljs
-                 (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
-              (agent-gen-agent? new-attrs)
-              #?(:clj
-                 (agent-gen/with-instructions new-attrs)
-                 :cljs
-                 (log/error (str "Shouldn't be executed for cljs runtime with attrs: " new-attrs)))
+              (planner-agent? new-attrs) (planner/with-instructions new-attrs)
+              (agent-gen-agent? new-attrs) (agent-gen/with-instructions new-attrs)
               :else new-attrs)))))
 
 (defn maybe-define-inference-event [event-name]

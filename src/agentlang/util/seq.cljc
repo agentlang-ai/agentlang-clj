@@ -213,3 +213,9 @@
   (if (map? obj)
     (vec (apply concat obj))
     obj))
+
+(defn vec-as-map [xs]
+  (cond
+    (map? xs)  xs
+    (vector? (first xs)) (into {} xs)
+    :else (into {} (mapv vec (partition 2 xs)))))
