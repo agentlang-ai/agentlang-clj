@@ -112,14 +112,6 @@
 (defn get-exec-graph [k]
   (get @execution-cache k))
 
-(ln/event
- :Agentlang.Kernel.Eval/GetExecGraph
- {:Key :String})
-
-(ln/dataflow
- :Agentlang.Kernel.Eval/GetExecGraph
- [:eval '(agentlang.evaluator.exec-graph/get-exec-graph :Agentlang.Kernel.Eval/GetExecGraph.Key)])
-
 (defn graph? [x] (and (map? x) (:nodes x)))
 (defn root-event [g] (ffirst (:nodes g)))
 (defn nodes [g] (vec (rest (:nodes g))))
@@ -140,6 +132,39 @@
 
 (defn restart-suspension
   ([g restart-value]
-   (when-let [susp (get-suspension g)]
-     (sp/restart-suspension susp restart-value)))
+   (let [g (if (map? g) g (get-exec-graph g))]
+     (when-let [susp (get-suspension g)]
+       (sp/restart-suspension susp restart-value))))
   ([g] (restart-suspension g nil)))
+
+(ln/record
+ :Agentlang.Kernel.Eval/ExecGraph
+ {:Name :Any
+  :Graph :Any
+  :IsSuspended :Boolean})
+
+(defn fetch-exec-graph [k]
+  (when-let [g (get-exec-graph k)]
+    (cn/make-instance
+     :Agentlang.Kernel.Eval/ExecGraph
+     {:Name k
+      :Graph g
+      :IsSuspended (suspended? g)})))
+
+(ln/event
+ :Agentlang.Kernel.Eval/GetExecGraph
+ {:Key :String})
+
+(ln/dataflow
+ :Agentlang.Kernel.Eval/GetExecGraph
+ [:eval '(agentlang.evaluator.exec-graph/fetch-exec-graph :Agentlang.Kernel.Eval/GetExecGraph.Key)])
+
+(ln/event
+ :Agentlang.Kernel.Eval/RestartSuspensionInGraph
+ {:Graph :Any :Value :Any})
+
+(ln/dataflow
+ :Agentlang.Kernel.Eval/RestartSuspensionInGraph
+ [:eval '(agentlang.evaluator.exec-graph/restart-suspension
+          :Agentlang.Kernel.Eval/RestartSuspensionInGraph.Graph
+          :Agentlang.Kernel.Eval/RestartSuspensionInGraph.Value)])
