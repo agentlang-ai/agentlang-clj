@@ -275,41 +275,41 @@
 
     :else attrs))
 
-(ln/install-standalone-pattern-preprocessor!
- :Agentlang.Core/Agent
- (fn [pat]
-   (let [attrs (maybe-cast-to-planner (li/record-attributes pat))
-         nm (:Name attrs)
-         input (preproc-agent-input-spec nm (:Input attrs))
-         tools (preproc-agent-tools-spec (:Tools attrs))
-         delegates (preproc-agent-delegates (:Delegates attrs))
-         features (when-let [ftrs (:Features attrs)] (mapv u/keyword-as-string ftrs))
-         tp (:Type attrs)
-         llm (or (:LLM attrs) {:Type "openai"})
-         docs (:Documents attrs)
-         channels (:Channels attrs)
-         integs (when-let [xs (:Integrations attrs)] (mapv u/keyword-as-string xs))
-         tools (vec (concat tools (flatten (us/nonils (mapv fetch-channel-tools channels)))))
-         new-attrs
-         (-> attrs
-             (cond->
-                 nm (assoc :Name (u/keyword-as-string nm))
-                 input (assoc :Input input)
-                 tools (assoc :Tools tools)
-                 delegates (assoc :Delegates delegates)
-                 docs (assoc :Documents (preproc-agent-docs docs))
-                 tp (assoc :Type (u/keyword-as-string tp))
-                 features (assoc :Features features)
-                 integs (assoc :Integrations integs)
-                 channels (assoc :Channels (mapv name channels))
-                 llm (assoc :LLM (u/keyword-as-string llm))))]
-     (when (seq channels)
-       (maybe-register-subscription-handlers! channels (keyword input)))
-     (assoc pat :Agentlang.Core/Agent
-            (cond
-              (planner-agent? new-attrs) (planner/with-instructions new-attrs)
-              (agent-gen-agent? new-attrs) (agent-gen/with-instructions new-attrs)
-              :else new-attrs)))))
+(defn agent-pattern-preprocess [pat]
+  (let [attrs (maybe-cast-to-planner (li/record-attributes pat))
+        nm (:Name attrs)
+        input (preproc-agent-input-spec nm (:Input attrs))
+        tools (preproc-agent-tools-spec (:Tools attrs))
+        delegates (preproc-agent-delegates (:Delegates attrs))
+        features (when-let [ftrs (:Features attrs)] (mapv u/keyword-as-string ftrs))
+        tp (:Type attrs)
+        llm (or (:LLM attrs) {:Type "openai"})
+        docs (:Documents attrs)
+        channels (:Channels attrs)
+        integs (when-let [xs (:Integrations attrs)] (mapv u/keyword-as-string xs))
+        tools (vec (concat tools (flatten (us/nonils (mapv fetch-channel-tools channels)))))
+        new-attrs
+        (-> attrs
+            (cond->
+                nm (assoc :Name (u/keyword-as-string nm))
+                input (assoc :Input input)
+                tools (assoc :Tools tools)
+                delegates (assoc :Delegates delegates)
+                docs (assoc :Documents (preproc-agent-docs docs))
+                tp (assoc :Type (u/keyword-as-string tp))
+                features (assoc :Features features)
+                integs (assoc :Integrations integs)
+                channels (assoc :Channels (mapv name channels))
+                llm (assoc :LLM (u/keyword-as-string llm))))]
+    (when (seq channels)
+      (maybe-register-subscription-handlers! channels (keyword input)))
+    (assoc pat :Agentlang.Core/Agent
+           (cond
+             (planner-agent? new-attrs) (planner/with-instructions new-attrs)
+             (agent-gen-agent? new-attrs) (agent-gen/with-instructions new-attrs)
+             :else new-attrs))))
+
+(ln/install-standalone-pattern-preprocessor! :Agentlang.Core/Agent agent-pattern-preprocess)
 
 (defn maybe-define-inference-event [event-name]
   (if (cn/find-schema event-name)

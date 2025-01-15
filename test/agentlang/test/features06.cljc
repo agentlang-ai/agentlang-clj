@@ -7,9 +7,11 @@
             [agentlang.evaluator.exec-graph :as exg]
             [agentlang.lang
              :refer [component entity event relationship dataflow
-                     attribute pattern resolver]]
+                     attribute pattern resolver inference]]
             [agentlang.lang.raw :as lr]
             [agentlang.lang.syntax :as ls]
+            [agentlang.inference]
+            [agentlang.inference.service.model :as agent-model]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
 
@@ -159,50 +161,82 @@
     {:create #(e/as-suspended (assoc % :Flag (odd? (:X %))))}
     :paths [:DfSusp/A]})
   (u/run-init-fns)
-  (let [chkb (fn [id inst]
-               (is (cn/instance-of? :DfSusp/B inst))
-               (is (= (:Id inst) id))
-               (is (= (:Y inst) (* 100 id))))
-        susp? (partial cn/instance-of? :Agentlang.Kernel.Eval/Suspension)
-        parse-susp-result (fn [r]
-                            (is (= :ok (:status r)))
-                            (is (cn/instance-of? :DfSusp/A (first (:result r))))
-                            (is (seq (:suspension-id r)))
-                            [(first (:result r)) (:suspension-id r)])
-        [a1 s1] (parse-susp-result (first (tu/eval-all-dataflows {:DfSusp/MakeB {:X 1 :EventContext {:ExecId "1"}}})))
-        g1 (exg/get-exec-graph "1")
-        _ (is (exg/suspended? g1))
-        [a2 s2] (parse-susp-result (first (tu/eval-all-dataflows {:DfSusp/MakeB {:X 2}})))]
-    (is susp? (tu/first-result {:Agentlang.Kernel.Eval/LoadSuspension {:Id s1}}))
-    (is susp? (tu/first-result {:Agentlang.Kernel.Eval/LoadSuspension {:Id s2}}))
-    (chkb 1 (first (exg/restart-suspension g1 (assoc a1 :Flag true))))
-    (chkb 2 (tu/first-result {:Agentlang.Kernel.Eval/RestartSuspension
-                              {:Id s2 :Value (assoc a2 :Flag false)}}))
-    (is (nil? (tu/result {:Agentlang.Kernel.Eval/RestartSuspension
-                          {:Id s1 :Value (assoc a1 :Flag false)}})))))
+  (exg/call-with-exec-graph
+   (fn []
+     (let [chkb (fn [id inst]
+                  (is (cn/instance-of? :DfSusp/B inst))
+                  (is (= (:Id inst) id))
+                  (is (= (:Y inst) (* 100 id))))
+           susp? (partial cn/instance-of? :Agentlang.Kernel.Eval/Suspension)
+           parse-susp-result (fn [r]
+                               (is (= :ok (:status r)))
+                               (is (cn/instance-of? :DfSusp/A (first (:result r))))
+                               (is (seq (:suspension-id r)))
+                               [(first (:result r)) (:suspension-id r)])
+           [a1 s1] (parse-susp-result (first (tu/eval-all-dataflows {:DfSusp/MakeB {:X 1 :EventContext {:ExecId "1"}}})))
+           g1 (exg/get-exec-graph "1")
+           _ (is (exg/suspended? g1))
+           [a2 s2] (parse-susp-result (first (tu/eval-all-dataflows {:DfSusp/MakeB {:X 2}})))]
+       (is susp? (tu/first-result {:Agentlang.Kernel.Eval/LoadSuspension {:Id s1}}))
+       (is susp? (tu/first-result {:Agentlang.Kernel.Eval/LoadSuspension {:Id s2}}))
+       (chkb 1 (first (exg/restart-suspension g1 (assoc a1 :Flag true))))
+       (chkb 2 (tu/first-result {:Agentlang.Kernel.Eval/RestartSuspension
+                                 {:Id s2 :Value (assoc a2 :Flag false)}}))
+       (is (nil? (tu/result {:Agentlang.Kernel.Eval/RestartSuspension
+                             {:Id s1 :Value (assoc a1 :Flag false)}})))))))
 
-(deftest exec-graph-01
-  (defcomponent :EG01
-    (entity :EG01/A {:Id :Identity :X :Int})
-    (entity :EG01/B {:Id :Identity :Y :Int})
-    (event :EG01/E {:Y :Int})
+(deftest exec-graph-101
+  (defcomponent :EG101
+    (entity :EG101/A {:Id :Identity :X :Int})
+    (entity :EG101/B {:Id :Identity :Y :Int})
+    (event :EG101/E {:Y :Int})
     (dataflow
-     :EG01/F
-     {:EG01/A {:X :EG01/F.X} :as :A}
-     {:EG01/E {:Y :A.X}})
-    (dataflow :EG01/E {:EG01/B {:Y :EG01/E.Y}}))
-  (let [br (tu/first-result {:EG01/F {:X 100 :EventContext {:ExecId "0001"}}})
-        _   (is (cn/instance-of? :EG01/B br))
-        g (exg/get-exec-graph "0001")
-        _ (is (exg/graph? g))
-        nodes (exg/nodes g)
-        g2 (second nodes)
-        restart-result01 (first (:result (exg/eval-nodes (exg/drop-nodes g 0))))
-        restart-result02 (first (:result (exg/eval-nodes (exg/drop-nodes g 1))))]
-    (is (cn/instance-of? :EG01/F (exg/root-event g)))
-    (is (= 2 (count nodes)))
-    (is (exg/graph? g2))
-    (is (cn/instance-of? :EG01/E (exg/root-event g2)))
-    (is (= 1 (count (exg/nodes g2))))
-    (is (cn/same-instance? br (first (exg/result (last (exg/nodes g2))))))
-    (is (apply = (mapv #(dissoc % :Id) [restart-result01 br restart-result02])))))
+     :EG101/F
+     {:EG101/A {:X :EG101/F.X} :as :A}
+     {:EG101/E {:Y :A.X}})
+    (dataflow :EG101/E {:EG101/B {:Y :EG101/E.Y}}))
+  (exg/call-with-exec-graph
+   (fn []
+     (let [br (tu/first-result {:EG101/F {:X 100 :EventContext {:ExecId "0001"}}})
+           _   (is (cn/instance-of? :EG101/B br))
+           g (exg/get-exec-graph "0001")
+           _ (is (exg/graph? g))
+           nodes (exg/nodes g)
+           g2 (second nodes)
+           restart-result01 (first (:result (exg/eval-nodes (exg/drop-nodes g 0))))
+           restart-result02 (first (:result (exg/eval-nodes (exg/drop-nodes g 1))))]
+       (is (cn/instance-of? :EG101/F (exg/root-event g)))
+       (is (= 2 (count nodes)))
+       (is (exg/graph? g2))
+       (is (cn/instance-of? :EG101/E (exg/root-event g2)))
+       (is (= 1 (count (exg/nodes g2))))
+       (is (cn/same-instance? br (first (exg/result (last (exg/nodes g2))))))
+       (is (apply = (mapv #(dissoc % :Id) [restart-result01 br restart-result02])))))))
+
+(deftest exec-graph-with-agents
+  #?(:clj
+     (when (System/getenv "OPENAI_API_KEY")
+       (defcomponent :EGA
+         (entity :EGA/Product {:Name :String :UnitPrice :Decimal})
+         (dataflow
+          :EGA/InitAgents
+          {:Agentlang.Core/LLM {:Name "abc"} :as :LLM}
+          (agent-model/agent-pattern-preprocess
+           {:Agentlang.Core/Agent
+            {:Name "agent-01"
+             :Type "planner"
+             :LLM "abc"
+             :Tools [:EGA/Product]
+             :UserInstruction "Create a new product from the given description."}}))
+         (dataflow
+          :EGA/FindLLM
+          {:Agentlang.Core/AgentLLM
+           {:Agent? :EGA/FindLLM.Agent}})
+         (inference :EGA/CreateProduct {:agent "agent-01"}))
+       (exg/call-with-exec-graph
+        (fn []
+          (let [agent? (partial cn/instance-of? :Agentlang.Core/Agent)
+                prod? (partial cn/instance-of? :EGA/Product)
+                a (tu/first-result {:EGA/InitAgents {}})]
+            (is (agent? a))
+            (is (prod? (tu/first-result {:EGA/CreateProduct {:UserInstruction "Product name is \"abc001\" and unit cost is 89.33"}})))))))))

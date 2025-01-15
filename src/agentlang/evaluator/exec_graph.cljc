@@ -73,14 +73,27 @@
           (update-active-exec-graph! nil)))
     (or parent g)))
 
+(def exec-graph-enabled-flag (atom false))
+
+(defn enable-exec-graph! [] (reset! exec-graph-enabled-flag true))
+(defn disable-exec-graph! [] (reset! exec-graph-enabled-flag false))
+
+(defn call-with-exec-graph [f]
+  (enable-exec-graph!)
+  (try
+    (f)
+    (finally
+      (disable-exec-graph!))))
+
 (defn init [event-instance]
-  (let [parent-graph (get-active-exec-graph)
-        g {:nodes [[event-instance (cn/inference? (cn/instance-type-kw event-instance))]]}]
-    (when parent-graph
-      (push-exec-graph parent-graph))
-    #?(:clj (.set active-exec-graph g)
-       :cljs (reset! active-exec-graph g))
-    (push-event event-instance)))
+  (when @exec-graph-enabled-flag
+    (let [parent-graph (get-active-exec-graph)
+          g {:nodes [[event-instance (cn/inference? (cn/instance-type-kw event-instance))]]}]
+      (when parent-graph
+        (push-exec-graph parent-graph))
+      #?(:clj (.set active-exec-graph g)
+         :cljs (reset! active-exec-graph g))
+      (push-event event-instance))))
 
 (defn- cleanup [result]
   (if (map? result)
