@@ -196,10 +196,13 @@
         g (exg/get-exec-graph "0001")
         _ (is (exg/graph? g))
         nodes (exg/nodes g)
-        g2 (second nodes)]
+        g2 (second nodes)
+        restart-result01 (first (:result (exg/eval-nodes (exg/drop-nodes g 0))))
+        restart-result02 (first (:result (exg/eval-nodes (exg/drop-nodes g 1))))]
     (is (cn/instance-of? :EG01/F (exg/root-event g)))
     (is (= 2 (count nodes)))
     (is (exg/graph? g2))
     (is (cn/instance-of? :EG01/E (exg/root-event g2)))
     (is (= 1 (count (exg/nodes g2))))
-    (is (cn/same-instance? br (first (exg/result (last (exg/nodes g2))))))))
+    (is (cn/same-instance? br (first (exg/result (last (exg/nodes g2))))))
+    (is (apply = (mapv #(dissoc % :Id) [restart-result01 br restart-result02])))))

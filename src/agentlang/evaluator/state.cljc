@@ -20,3 +20,8 @@
 
 (defn set-safe-eval-atomic! [f] (reset! safe-eval-atomic f))
 (defn get-safe-eval-atomic [] @safe-eval-atomic)
+
+(def ^:private evaluate-patterns (atom nil))
+
+(defn set-evaluate-patterns! [f] (reset! evaluate-patterns f))
+(defn get-evaluate-patterns [] @evaluate-patterns)

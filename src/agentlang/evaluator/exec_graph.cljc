@@ -2,7 +2,10 @@
   (:require [agentlang.util :as u]
             [agentlang.lang :as ln]
             [agentlang.component :as cn]
+            [agentlang.env :as env]
             [agentlang.lang.internal :as li]
+            [agentlang.compiler.context :as ctx]
+            [agentlang.evaluator.state :as es]
             [agentlang.evaluator.suspend :as sp]))
 
 (def ^:private active-exec-graph #?(:clj (ThreadLocal.) :cljs (atom)))
@@ -91,7 +94,7 @@
                        (not (cn/event? recname)))
                      true)]
       (when can-add?
-        (update-active-exec-graph! (assoc g :nodes (conj (:nodes g) [pat (cleanup result)]))))
+        (update-active-exec-graph! (assoc g :nodes (conj (:nodes g) [pat result]))))
       pat)))
 
 (defn finalize! []
@@ -136,6 +139,24 @@
      (when-let [susp (get-suspension g)]
        (sp/restart-suspension susp restart-value))))
   ([g] (restart-suspension g nil)))
+
+(defn- graph-to-event-pattern [g]
+  (let [event-inst (root-event g)]
+    [{(cn/instance-type-kw event-inst)
+      (cn/instance-attributes event-inst)}
+     (result (last (:nodes g)))]))
+
+(defn drop-nodes [g n]
+  (when-let [nodes (seq (rest (:nodes g)))]
+    (mapv #(if (map? %) (graph-to-event-pattern %) %) (drop n nodes))))
+
+(defn cleanup-nodes [nodes]
+  (mapv (fn [[p r]] [p (cleanup r)]) nodes))
+
+(defn eval-nodes [nodes]
+  (let [env (:env (second (first nodes)))]
+    (binding [ctx/dynamic-context (ctx/from-bindings (env/cleanup env))]
+      ((es/get-evaluate-patterns) env :Agentlang.Kernel.Eval (mapv first nodes)))))
 
 (ln/record
  :Agentlang.Kernel.Eval/ExecGraph

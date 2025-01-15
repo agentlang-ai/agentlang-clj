@@ -552,18 +552,25 @@
   ([env pattern]
    (u/safe-ok-result (evaluate-pattern env pattern))))
 
+(defn- eval-patterns-helper [component pats eval-fn]
+  (let [event-name (ln/event (li/make-path component (li/unq-name)) {})]
+    (when (apply ln/dataflow event-name pats)
+      (try
+        (eval-fn {event-name {}})
+        (finally
+          (cn/remove-event event-name))))))
+
 (defn safe-eval-patterns
   ([is-atomic component pats]
-   (let [event-name (ln/event (li/make-path component (li/unq-name)) {})]
-     (when (apply ln/dataflow event-name pats)
-       (try
-         (safe-eval is-atomic {event-name {}})
-         (finally
-           (cn/remove-event event-name))))))
+   (eval-patterns-helper component pats (partial safe-eval is-atomic)))
   ([component pats] (safe-eval-patterns true component pats)))
+
+(defn evaluate-patterns-in-env [env component patterns]
+  (eval-patterns-helper component patterns (partial evaluate-pattern env)))
 
 (es/set-safe-eval-patterns! safe-eval-patterns)
 (es/set-safe-eval-atomic! (partial safe-eval true))
+(es/set-evaluate-patterns! evaluate-patterns-in-env)
 
 (defn eval-patterns [component pats]
   (let [event-name (ln/event (li/make-path component (li/unq-name)) {})]
