@@ -127,7 +127,19 @@
 (defn result [n] (:result (second n)))
 (defn status [n] (:status (second n)))
 
-(defn suspended? [g]
+(defn- get-suspension [g]
   (when-let [g0 (last (:nodes g))]
     (when-let [n (last (and (graph? g0) (:nodes g0)))]
-      (cn/instance-of? :Agentlang.Kernel.Eval/Suspension (first (result n))))))
+      (let [obj (first (result n))]
+        (and (map? obj) (cn/instance-of? :Agentlang.Kernel.Eval/Suspension obj) obj)))))
+
+(defn suspended? [g]
+  (if (get-suspension g)
+    true
+    false))
+
+(defn restart-suspension
+  ([g restart-value]
+   (when-let [susp (get-suspension g)]
+     (sp/restart-suspension susp restart-value)))
+  ([g] (restart-suspension g nil)))
