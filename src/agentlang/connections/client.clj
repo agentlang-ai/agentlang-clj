@@ -4,6 +4,7 @@
             [agentlang.util.logger :as log]
             [agentlang.util.http :as http]
             [agentlang.lang.internal :as li]
+            [agentlang.lang.datetime :as dt]
             [agentlang.global-state :as gs]
             [agentlang.datafmt.json :as json]))
 
@@ -28,7 +29,7 @@
 (defn- reset-auth-token []
   (let [conn-config (integration-manager-config)]
     (if-let [token (:token conn-config)]
-      (do (reset! auth-token token)
+      (do (reset! auth-token [token nil])
           token)
       (let [username (:username conn-config)
             password (:password conn-config)]
@@ -39,20 +40,27 @@
                                {:Username username :Password password}}
                           :json post-handler)]
             (when (= 200 (:status response))
-              (let [token (get-in (:body response) [:result :authentication-result :id-token])]
-                (reset! auth-token token)
+              (let [result (get-in (:body response) [:result :authentication-result])
+                    token (:id-token result)
+                    expiry-secs (when-let [s (:expires-in result)]
+                                  (+ (dt/unix-timestamp) s))]
+                (reset! auth-token [token expiry-secs])
+                (log/debug (str "token refreshed. " (when expiry-secs (str "expires in " expiry-secs " seconds"))))
                 token))))))))
 
+(defn token-expired? [expiry-secs]
+  (<= (- expiry-secs (dt/unix-timestamp)) 0))
+
 (defn get-auth-token []
-  (if-let [token @auth-token]
-    token
+  (if-let [[token expiry-secs] @auth-token]
+    (if (token-expired? expiry-secs)
+      (reset-auth-token)
+      token)
     (reset-auth-token)))
 
 (defn- with-auth-token []
-  (if-let [token @auth-token]
-    {:auth-token token}
-    (when (reset-auth-token)
-      (with-auth-token))))
+  (when-let [token (get-auth-token)]
+    {:auth-token token}))
 
 (defn- create-instance
   ([api-url ident inst callback]
@@ -153,7 +161,7 @@
       (let [response (http/do-request
                       :delete
                       (str (connections-api-host) "/api/IntegrationManager.Core/Connection/" (:ConnectionId conn))
-                      (when-let [token @auth-token]
+                      (when-let [token (get-auth-token)]
                         {"Authorization" (str "Bearer " token)}))]
         (case (:status response)
           401 (do (log/error "authentication required")
