@@ -45,6 +45,11 @@
  {:Result {:Data "hello, world"}})
 
 (dataflow
+ :G
+ {:K {:Data {:I 10}}}
+ {:Test2 {}})
+
+(dataflow
  :Test3
  {:Result {:Data "bye, bye"}
   :as :A}

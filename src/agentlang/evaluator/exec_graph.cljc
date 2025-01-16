@@ -134,6 +134,7 @@
     k))
 
 (defn graph? [x] (and (map? x) (:nodes x)))
+(defn event-info [g] (first (:nodes g)))
 (defn root-event [g] (ffirst (:nodes g)))
 (defn nodes [g] (vec (rest (:nodes g))))
 (def pattern first)
@@ -142,7 +143,7 @@
 
 (defn- get-suspension [g]
   (when-let [g0 (last (:nodes g))]
-    (when-let [n (last (and (graph? g0) (:nodes g0)))]
+    (when-let [n (when (graph? g0) (last (:nodes g0)))]
       (let [obj (first (result n))]
         (and (map? obj) (cn/instance-of? :Agentlang.Kernel.Eval/Suspension obj) obj)))))
 
@@ -168,8 +169,15 @@
   (when-let [nodes (seq (rest (:nodes g)))]
     (mapv #(if (map? %) (graph-to-event-pattern %) %) (drop n nodes))))
 
-(defn cleanup-nodes [nodes]
-  (mapv (fn [[p r]] [p (cleanup r)]) nodes))
+(defn cleanup-graph [g]
+  (let [ei (event-info g)
+        ns0 (nodes g)
+        ns (mapv (fn [n] (if (graph? n)
+                           (cleanup-graph n)
+                           (let [[p r] n]
+                             [p (cleanup r)])))
+                 ns0)]
+    (assoc g :nodes (into [] (concat [ei] ns)))))
 
 (defn eval-nodes [nodes]
   (let [env (:env (second (first nodes)))]
@@ -187,7 +195,7 @@
     (cn/make-instance
      :Agentlang.Kernel.Eval/ExecGraph
      {:Name k
-      :Graph g
+      :Graph (cleanup-graph g)
       :IsSuspended (suspended? g)})))
 
 (ln/event

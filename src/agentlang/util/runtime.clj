@@ -18,6 +18,7 @@
    [agentlang.component :as cn]
    [agentlang.evaluator :as e]
    [agentlang.evaluator.intercept :as ei]
+   [agentlang.evaluator.exec-graph :as exg]
    [agentlang.global-state :as gs]
    [agentlang.lang :as ln]
    [agentlang.lang.rbac :as lr]
@@ -173,10 +174,13 @@
 
 (defn run-appinit-tasks! [evaluator init-data]
   (e/save-model-config-instances)
-  (run-configuration-patterns! evaluator (gs/get-app-config))
-  (run-standalone-patterns! evaluator)
-  (trigger-appinit-event! evaluator init-data)
-  (run-pending-timers!))
+  (let [config (gs/get-app-config)]
+    (run-configuration-patterns! evaluator config)
+    (run-standalone-patterns! evaluator)
+    (trigger-appinit-event! evaluator init-data)
+    (run-pending-timers!)
+    (when (:exec-graph-enabled? config)
+      (exg/enable-exec-graph!))))
 
 (defn merge-resolver-configs [app-config resolver-configs]
   (let [app-resolvers (:resolvers app-config)]

@@ -72,17 +72,22 @@
   (((opc/op opcode) i/dispatch-table) evaluator env (opc/arg opcode)))
 
 (defn dispatch [evaluator env {opcode :opcode pat :pattern}]
-  (let [result
-        (if (map? opcode)
-          (dispatch-an-opcode evaluator env opcode)
-          (loop [opcs opcode, env env, result nil]
-            (if-let [opc (first opcs)]
-              (let [r (dispatch-an-opcode evaluator env opc)
-                    env (or (:env r) env)]
-                (recur (rest opcs) env r))
-              result)))]
-    (exg/add-step! pat result)
-    result))
+  (#?(:clj try :cljs do)
+   (let [result
+         (if (map? opcode)
+           (dispatch-an-opcode evaluator env opcode)
+           (loop [opcs opcode, env env, result nil]
+             (if-let [opc (first opcs)]
+               (let [r (dispatch-an-opcode evaluator env opc)
+                     env (or (:env r) env)]
+                 (recur (rest opcs) env r))
+                result)))]
+     (exg/add-step! pat result)
+     result)
+   #?(:clj
+      (catch Exception ex
+        (exg/add-step! pat {:status :error :result (.getMessage ex)})
+        (throw ex)))))
 
 (def ok? i/ok?)
 (def dummy-result i/dummy-result)

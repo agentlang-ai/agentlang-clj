@@ -329,3 +329,8 @@
 
 (defn windows? []
   (= :windows (u/host-os)))
+
+(defn agents-enabled? []
+  (if (System/getenv "OPENAI_API_KEY")
+    true
+    false))

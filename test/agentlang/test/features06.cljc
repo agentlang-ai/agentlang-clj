@@ -217,7 +217,7 @@
 
 (deftest exec-graph-with-agents
   #?(:clj
-     (when (System/getenv "OPENAI_API_KEY")
+     (when (tu/agents-enabled?)
        (defcomponent :EGA
          (entity :EGA/Product {:Name :String :UnitPrice :Decimal})
          (event :EGA/SendPriceNotification {:Product :EGA/Product :NotificationType {:oneof ["low" "high"]}})
@@ -238,24 +238,30 @@
              :Type "planner"
              :LLM "abc"
              :Tools [:EGA/Product :EGA/SendPriceNotification]
+             :Input :EGA/CreateProduct
              :UserInstruction (str "Create a new product from the given description. "
                                    "If the price is less than 100, send a low price notification. "
                                    "Otherwise send a high price notification.")}}))
          (dataflow
           :EGA/FindLLM
           {:Agentlang.Core/AgentLLM
-           {:Agent? :EGA/FindLLM.Agent}})
-         (inference :EGA/CreateProduct {:agent "agent-01"}))
-       (exg/call-with-exec-graph
-        (fn []
-          (let [agent? (partial cn/instance-of? :Agentlang.Core/Agent)
-                prod? (partial cn/instance-of? :EGA/Product)
-                a (tu/first-result {:EGA/InitAgents {}})]
-            (is (agent? a))
-            (is (prod?
-                 (tu/first-result
-                  {:EGA/CreateProduct
-                   {:UserInstruction "Product name is \"abc001\" and unit cost is 89.33"
-                    :EventContext {:ExecId "0001"}}})))
-            (is (= "low" @price-notification)))))
-       (is (exg/graph? (exg/get-exec-graph "0001"))))))
+           {:Agent? :EGA/FindLLM.Agent}}))
+       (let [crpr? (partial cn/instance-of? :EGA/CreateProduct)
+             exg? (partial cn/instance-of? :Agentlang.Kernel.Eval/ExecGraph)]
+         (exg/call-with-exec-graph
+          (fn []
+            (let [agent? (partial cn/instance-of? :Agentlang.Core/Agent)
+                  prod? (partial cn/instance-of? :EGA/Product)
+                  a (tu/first-result {:EGA/InitAgents {}})]
+              (is (agent? a))
+              (is (prod?
+                   (tu/first-result
+                    {:EGA/CreateProduct
+                     {:UserInstruction "Product name is \"abc001\" and unit cost is 89.33"
+                      :EventContext {:ExecId "0001"}}})))
+              (is (= "low" @price-notification)))))
+         (is (exg/graph? (exg/get-exec-graph "0001")))
+         (is (crpr? (exg/root-event (exg/cleanup-graph (exg/get-exec-graph "0001")))))
+         (let [r (tu/result {:Agentlang.Kernel.Eval/GetExecGraph {:Key "0001"}})]
+           (is (exg? r))
+           (is (crpr? (exg/root-event (:Graph r)))))))))
