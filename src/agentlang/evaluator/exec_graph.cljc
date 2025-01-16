@@ -128,6 +128,11 @@
 (defn get-exec-graph [k]
   (get @execution-cache k))
 
+(defn delete-exec-graph [k]
+  (when (get-exec-graph k)
+    (u/safe-set execution-cache (dissoc @execution-cache k))
+    k))
+
 (defn graph? [x] (and (map? x) (:nodes x)))
 (defn root-event [g] (ffirst (:nodes g)))
 (defn nodes [g] (vec (rest (:nodes g))))

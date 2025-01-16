@@ -211,13 +211,24 @@
        (is (cn/instance-of? :EG101/E (exg/root-event g2)))
        (is (= 1 (count (exg/nodes g2))))
        (is (cn/same-instance? br (first (exg/result (last (exg/nodes g2))))))
-       (is (apply = (mapv #(dissoc % :Id) [restart-result01 br restart-result02])))))))
+       (is (apply = (mapv #(dissoc % :Id) [restart-result01 br restart-result02])))
+       (is (= "0001" (exg/delete-exec-graph "0001")))
+       (is (not (exg/get-exec-graph "0001")))))))
 
 (deftest exec-graph-with-agents
   #?(:clj
      (when (System/getenv "OPENAI_API_KEY")
        (defcomponent :EGA
          (entity :EGA/Product {:Name :String :UnitPrice :Decimal})
+         (event :EGA/SendPriceNotification {:Product :EGA/Product :NotificationType {:oneof ["low" "high"]}})
+         (def price-notification (atom nil))
+         (defn set-price-notification [s]
+           (reset! price-notification s)
+           s)
+         (dataflow
+          :EGA/SendPriceNotification
+          [:eval '(agentlang.test.features06/set-price-notification :EGA/SendPriceNotification.NotificationType)]
+          :EGA/SendPriceNotification.Product)
          (dataflow
           :EGA/InitAgents
           {:Agentlang.Core/LLM {:Name "abc"} :as :LLM}
@@ -226,8 +237,10 @@
             {:Name "agent-01"
              :Type "planner"
              :LLM "abc"
-             :Tools [:EGA/Product]
-             :UserInstruction "Create a new product from the given description."}}))
+             :Tools [:EGA/Product :EGA/SendPriceNotification]
+             :UserInstruction (str "Create a new product from the given description. "
+                                   "If the price is less than 100, send a low price notification. "
+                                   "Otherwise send a high price notification.")}}))
          (dataflow
           :EGA/FindLLM
           {:Agentlang.Core/AgentLLM
@@ -239,4 +252,10 @@
                 prod? (partial cn/instance-of? :EGA/Product)
                 a (tu/first-result {:EGA/InitAgents {}})]
             (is (agent? a))
-            (is (prod? (tu/first-result {:EGA/CreateProduct {:UserInstruction "Product name is \"abc001\" and unit cost is 89.33"}})))))))))
+            (is (prod?
+                 (tu/first-result
+                  {:EGA/CreateProduct
+                   {:UserInstruction "Product name is \"abc001\" and unit cost is 89.33"
+                    :EventContext {:ExecId "0001"}}})))
+            (is (= "low" @price-notification)))))
+       (is (exg/graph? (exg/get-exec-graph "0001"))))))
