@@ -196,6 +196,7 @@
      {:EG101/A {:X :EG101/F.X} :as :A}
      {:EG101/E {:Y :A.X}})
     (dataflow :EG101/E {:EG101/B {:Y :EG101/E.Y}}))
+  (exg/delete-all-execution-graphs)
   (exg/call-with-exec-graph
    (fn []
      (let [br (tu/first-result {:EG101/F {:X 100 :EventContext {:ExecId "0001"}}})
@@ -211,7 +212,7 @@
        (is (exg/graph? g2))
        (is (cn/instance-of? :EG101/E (exg/root-event g2)))
        (is (= 1 (count (exg/nodes g2))))
-       (is (cn/same-instance? br (first (exg/result (last (exg/nodes g2))))))
+       (is (cn/same-instance? br (first (exg/node-result (last (exg/nodes g2))))))
        (is (apply = (mapv #(dissoc % :Id) [restart-result01 br restart-result02])))
        (is (exg/delete-exec-graph "0001"))
        (is (not (exg/get-exec-graph "0001")))))))
@@ -249,6 +250,7 @@
            {:Agent? :EGA/FindLLM.Agent}}))
        (let [crpr? (partial cn/instance-of? :EGA/CreateProduct)
              exg? (partial cn/instance-of? :Agentlang.Kernel.Eval/ExecGraph)]
+         (exg/delete-all-execution-graphs)
          (exg/call-with-exec-graph
           (fn []
             (let [agent? (partial cn/instance-of? :Agentlang.Core/Agent)
@@ -266,6 +268,12 @@
          (let [evts (exg/root-events)]
            (is (= :EGA/InitAgents (li/record-name (get evts "EGA/InitAgents"))))
            (is (= :EGA/CreateProduct (li/record-name (get evts "0001")))))
+         (let [rs (tu/result {:Agentlang.Kernel.Eval/LookupAllExecutionGraphs {}})]
+           (is (= 2 (count rs)))
+           (is (every? exg/graph? rs)))
+         (let [rs (tu/result {:Agentlang.Kernel.Eval/LookupRecentExecutionGraphs {:N 1}})]
+           (is (= 1 (count rs)))
+           (is (every? exg/graph? rs)))
          (let [r (tu/result {:Agentlang.Kernel.Eval/GetExecGraph {:Key "0001"}})]
            (is (exg? r))
            (is (crpr? (exg/root-event (:Graph r)))))))))
