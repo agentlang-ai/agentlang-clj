@@ -223,18 +223,20 @@
    :headers {"Content-Type" "text/html"
              "Content-Length" (count body)}})
 
-(defn- maybe-remove-read-only-attributes [obj]
+(defn- maybe-remove-write-only-attributes [obj]
   (if (cn/an-instance? obj)
-    (if (cn/instance-of? obj :Agentlang.Kernel.Eval/ExecutionGraph)
-      obj
-      (cn/dissoc-write-only obj))
+    (try
+      (cn/dissoc-write-only obj)
+      (catch Exception ex
+        (log/warn (str "skipping removal of write-only attributes. " (.getMessage ex)))
+        obj))
     obj))
 
-(defn- remove-all-read-only-attributes [obj]
-  (w/prewalk maybe-remove-read-only-attributes obj))
+(defn- remove-all-write-only-attributes [obj]
+  (w/prewalk maybe-remove-write-only-attributes obj))
 
 (defn- evaluate [evaluator event-instance]
-  (let [result (remove-all-read-only-attributes
+  (let [result (remove-all-write-only-attributes
                 (evaluator event-instance))]
     result))
 
