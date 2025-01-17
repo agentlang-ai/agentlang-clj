@@ -2587,3 +2587,11 @@
     (or (map? obj) (string? obj)) obj
     (seqable? obj) (mapv cleanup-inst obj)
     :else obj))
+
+(defn instance-as-pattern
+  ([inst cleanup?]
+   (when (an-instance? inst)
+     (let [n (instance-type-kw inst)
+           attrs ((if cleanup? cleanup-inst instance-attributes) inst)]
+       {n attrs})))
+  ([inst] (instance-as-pattern inst false)))

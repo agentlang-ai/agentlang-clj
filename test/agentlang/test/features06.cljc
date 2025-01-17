@@ -8,6 +8,7 @@
             [agentlang.lang
              :refer [component entity event relationship dataflow
                      attribute pattern resolver inference]]
+            [agentlang.lang.internal :as li]
             [agentlang.lang.raw :as lr]
             [agentlang.lang.syntax :as ls]
             [agentlang.inference]
@@ -262,6 +263,9 @@
               (is (= "low" @price-notification)))))
          (is (exg/graph? (exg/get-exec-graph "0001")))
          (is (crpr? (exg/root-event (exg/cleanup-graph (exg/get-exec-graph "0001")))))
+         (let [evts (exg/root-events)]
+           (is (= :EGA/InitAgents (li/record-name (get evts "EGA/InitAgents"))))
+           (is (= :EGA/CreateProduct (li/record-name (get evts "0001")))))
          (let [r (tu/result {:Agentlang.Kernel.Eval/GetExecGraph {:Key "0001"}})]
            (is (exg? r))
            (is (crpr? (exg/root-event (:Graph r)))))))))

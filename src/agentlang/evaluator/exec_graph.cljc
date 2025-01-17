@@ -141,6 +141,13 @@
 (defn result [n] (:result (second n)))
 (defn status [n] (:status (second n)))
 
+(defn root-events []
+  (into
+   {}
+   (mapv (fn [[k v]]
+           [k (cn/instance-as-pattern (root-event v))])
+         @execution-cache)))
+
 (defn- get-suspension [g]
   (when-let [g0 (last (:nodes g))]
     (when-let [n (when (graph? g0) (last (:nodes g0)))]
