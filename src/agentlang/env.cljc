@@ -366,3 +366,13 @@
                          df-vals)]
      (into {} norm-vals)))
   ([env] (cleanup env true)))
+
+(defn prepare-for-lookups [env]
+  (let [env0 (mapv (fn [[k v]]
+                     [(let [[c n :as p] (li/split-path k)]
+                       (if (and c n)
+                         p
+                         k))
+                      v])
+                   env)]
+    (into {} env0)))

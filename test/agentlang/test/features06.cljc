@@ -213,7 +213,7 @@
        (is (= 1 (count (exg/nodes g2))))
        (is (cn/same-instance? br (first (exg/result (last (exg/nodes g2))))))
        (is (apply = (mapv #(dissoc % :Id) [restart-result01 br restart-result02])))
-       (is (= "0001" (exg/delete-exec-graph "0001")))
+       (is (exg/delete-exec-graph "0001"))
        (is (not (exg/get-exec-graph "0001")))))))
 
 (deftest exec-graph-with-agents

@@ -37,3 +37,10 @@
 
 (defn dummy-result [env]
   {opc/result-status-tag opc/ok-tag :env env})
+
+(def internal-event-key :-*-internal-event-*-)
+
+(defn mark-internal [event-instance]
+  (assoc event-instance internal-event-key true))
+
+(def internal-event? internal-event-key)

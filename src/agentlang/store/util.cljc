@@ -128,10 +128,14 @@
   (str obj-prefix (str obj)))
 
 (defn decode-clj-object [s]
-  (#?(:clj read-string :cljs clj->js)
-   (let [s (s/replace s "\\\\\"" "\\\"")
-         s (subs s obj-prefix-len)]
-     #?(:clj (if (seq s) s "nil") :cljs s))))
+  (try
+    (#?(:clj read-string :cljs clj->js)
+     (let [s (s/replace s "\\\\\"" "\\\"")
+           s (subs s obj-prefix-len)]
+       #?(:clj (if (seq s) s "nil") :cljs s)))
+    (catch Exception ex
+      (println s)
+      (System/exit 1))))
 
 (defn encoded-clj-object? [x]
   (and (string? x) (s/starts-with? x obj-prefix)))

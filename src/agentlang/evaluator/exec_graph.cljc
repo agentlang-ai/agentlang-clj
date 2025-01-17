@@ -1,5 +1,6 @@
 (ns agentlang.evaluator.exec-graph
   (:require [agentlang.util :as u]
+            [agentlang.util.logger :as log]
             [agentlang.lang :as ln]
             [agentlang.component :as cn]
             [agentlang.env :as env]
@@ -12,7 +13,49 @@
 (def ^:private exec-graph-stack #?(:clj (ThreadLocal.) :cljs (atom)))
 (def ^:private event-stack #?(:clj (ThreadLocal.) :cljs (atom)))
 
-(def ^:private execution-cache (u/make-cell {}))
+(ln/entity
+ :Agentlang.Kernel.Eval/ExecutionGraph
+ {:Key {:type :String :guid true}
+  :Graph :Any})
+
+(defn- delete-execution-graph [k]
+  (let [event (cn/make-instance {:Agentlang.Kernel.Eval/Delete_ExecutionGraph
+                                 {:Key k}})
+        r (first ((es/get-active-evaluator) event))
+        s (:status r)]
+    (log/debug (str "delete exec-graph " k ", " r))
+    (or (= :ok s) (= :not-found s))))
+
+(defn- save-execution-graph [k g]
+  (let [event (cn/make-instance {:Agentlang.Kernel.Eval/Create_ExecutionGraph
+                                 {:Instance
+                                  {:Agentlang.Kernel.Eval/ExecutionGraph
+                                   {:Key k :Graph g}}}})
+        r (first ((es/get-active-evaluator) event))
+        s (:status r)]
+    (log/debug (str "create exec-graph " k ", " r))
+    (= :ok s)))
+
+(defn- lookup-execution-graph [k]
+  (let [event (cn/make-instance {:Agentlang.Kernel.Eval/Lookup_ExecutionGraph
+                                 {:Key k}})
+        r (first ((es/get-active-evaluator) event))
+        s (:status r)]
+    (log/debug (str "lookup exec-graph " k ", " r))
+    (when (= :ok s)
+      (first (:result r)))))
+
+(defn- lookup-all-execution-graphs []
+  (let [event (cn/make-instance {:Agentlang.Kernel.Eval/LookupAll_ExecutionGraph {}})
+        r (first ((es/get-active-evaluator) event))
+        s (:status r)]
+    (log/debug (str "lookup-all exec-graph, " r))
+    (when (= :ok s)
+      (:result r))))
+
+(defn- cache-execution-graph [k g]
+  (when (delete-execution-graph k)
+    (save-execution-graph k g)))
 
 (defn get-active-exec-graph []
   #?(:clj (.get active-exec-graph)
@@ -64,12 +107,14 @@
 (def ^:private pop-exec-graph  (partial stack-pop get-exec-graph-stack update-exec-graph-stack!))
 (def ^:private has-more-exec-graphs (partial stack-has-more get-exec-graph-stack))
 
+(declare cleanup-graph)
+
 (defn- reset-exec-graph! [k]
   (let [g (get-active-exec-graph)
         parent (pop-exec-graph)]
     (if parent
       (update-active-exec-graph! (assoc parent :nodes (conj (:nodes parent) g)))
-      (do (u/safe-set execution-cache (assoc @execution-cache k g))
+      (do (cache-execution-graph k (cleanup-graph g))
           (update-active-exec-graph! nil)))
     (or parent g)))
 
@@ -97,7 +142,8 @@
 
 (defn- cleanup [result]
   (if (map? result)
-    (dissoc result :env :message)
+    (let [env (env/cleanup (:env result) false)]
+      (dissoc (assoc result :env env) :message))
     result))
 
 (defn add-step! [pat result]
@@ -126,12 +172,10 @@
     (finalize!)))
 
 (defn get-exec-graph [k]
-  (get @execution-cache k))
+  (when-let [r (lookup-execution-graph k)]
+    (:Graph r)))
 
-(defn delete-exec-graph [k]
-  (when (get-exec-graph k)
-    (u/safe-set execution-cache (dissoc @execution-cache k))
-    k))
+(def delete-exec-graph delete-execution-graph)
 
 (defn graph? [x] (and (map? x) (:nodes x)))
 (defn event-info [g] (first (:nodes g)))
@@ -145,8 +189,8 @@
   (into
    {}
    (mapv (fn [[k v]]
-           [k (cn/instance-as-pattern (root-event v))])
-         @execution-cache)))
+           [k (cn/unmake-instance (root-event v))])
+         (mapv (fn [g] [(:Key g) (:Graph g)]) (lookup-all-execution-graphs)))))
 
 (defn- get-suspension [g]
   (when-let [g0 (last (:nodes g))]
@@ -187,8 +231,8 @@
     (assoc g :nodes (into [] (concat [ei] ns)))))
 
 (defn eval-nodes [nodes]
-  (let [env (:env (second (first nodes)))]
-    (binding [ctx/dynamic-context (ctx/from-bindings (env/cleanup env))]
+  (let [env (env/prepare-for-lookups (:env (second (first nodes))))]
+    (binding [ctx/dynamic-context (ctx/from-bindings env)]
       ((es/get-evaluate-patterns) env :Agentlang.Kernel.Eval (mapv first nodes)))))
 
 (ln/record

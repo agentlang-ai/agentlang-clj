@@ -992,12 +992,6 @@
 
     :else x))
 
-(defn unmake-instance [inst]
-  (if (an-instance? inst)
-    (let [n (instance-type-kw inst)]
-      {n (instance-attributes inst)})
-    inst))
-
 (defn- maps-to-insts
   "If any of the values in the attributes map itself is the
    map-encoded representation of a record or entity, convert
@@ -2588,10 +2582,10 @@
     (seqable? obj) (mapv cleanup-inst obj)
     :else obj))
 
-(defn instance-as-pattern
+(defn unmake-instance
   ([inst cleanup?]
    (when (an-instance? inst)
      (let [n (instance-type-kw inst)
            attrs ((if cleanup? cleanup-inst instance-attributes) inst)]
        {n attrs})))
-  ([inst] (instance-as-pattern inst false)))
+  ([inst] (unmake-instance inst false)))
