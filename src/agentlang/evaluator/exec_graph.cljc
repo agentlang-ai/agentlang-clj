@@ -24,43 +24,46 @@
  :Agentlang.Kernel.Eval/DeleteAllExecutionGraphs
  [:delete :Agentlang.Kernel.Eval/ExecutionGraph :*])
 
+(defn- evaluator []
+  (or (es/get-active-evaluator)
+      (partial (es/get-evaluate-patterns) nil :Agentlang.Kernel.Eval)))
+
 (defn delete-all-execution-graphs []
-  (let [event (cn/make-instance {:Agentlang.Kernel.Eval/DeleteAllExecutionGraphs {}})
-        r (first ((es/get-active-evaluator) event))
+  (let [event {:Agentlang.Kernel.Eval/DeleteAllExecutionGraphs {}}
+        r (first ((evaluator) event))
         s (:status r)]
     (log/debug (str "delete all exec-graphs, " r))
     (or (= :ok s) (= :not-found s))))
 
 (defn delete-execution-graph [k]
-  (let [event (cn/make-instance {:Agentlang.Kernel.Eval/Delete_ExecutionGraph
-                                 {:Key k}})
-        r (first ((es/get-active-evaluator) event))
+  (let [event {:Agentlang.Kernel.Eval/Delete_ExecutionGraph {:Key k}}
+        r (first ((evaluator) event))
         s (:status r)]
     (log/debug (str "delete exec-graph " k ", " r))
     (or (= :ok s) (= :not-found s))))
 
 (defn save-execution-graph [k g]
-  (let [event (cn/make-instance {:Agentlang.Kernel.Eval/Create_ExecutionGraph
-                                 {:Instance
-                                  {:Agentlang.Kernel.Eval/ExecutionGraph
-                                   {:Key k :Graph g}}}})
-        r (first ((es/get-active-evaluator) event))
+  (let [event {:Agentlang.Kernel.Eval/Create_ExecutionGraph
+               {:Instance
+                {:Agentlang.Kernel.Eval/ExecutionGraph
+                 {:Key k :Graph g}}}}
+        r (first ((evaluator) event))
         s (:status r)]
     (log/debug (str "create exec-graph " k ", " r))
     (= :ok s)))
 
 (defn lookup-execution-graph [k]
-  (let [event (cn/make-instance {:Agentlang.Kernel.Eval/Lookup_ExecutionGraph
-                                 {:Key k}})
-        r (first ((es/get-active-evaluator) event))
+  (let [event {:Agentlang.Kernel.Eval/Lookup_ExecutionGraph
+               {:Key k}}
+        r (first ((evaluator) event))
         s (:status r)]
     (log/debug (str "lookup exec-graph " k ", " r))
     (when (= :ok s)
       (first (:result r)))))
 
 (defn lookup-all-execution-graphs []
-  (let [event (cn/make-instance {:Agentlang.Kernel.Eval/LookupAll_ExecutionGraph {}})
-        r (first ((es/get-active-evaluator) event))
+  (let [event {:Agentlang.Kernel.Eval/LookupAll_ExecutionGraph {}}
+        r (first ((evaluator) event))
         s (:status r)]
     (log/debug (str "lookup-all exec-graph, " r))
     (when (= :ok s)
@@ -188,11 +191,9 @@
     (finalize!)))
 
 (defn get-exec-graph [k]
-  (when-let [r (lookup-execution-graph k)]
-    (:Graph r)))
+  (:Graph (lookup-execution-graph k)))
 
-(defn get-graphs [rs]
-  (mapv :Graph rs))
+(defn get-graphs [rs] (mapv :Graph rs))
 
 (def delete-exec-graph delete-execution-graph)
 
@@ -269,27 +270,13 @@
     (binding [ctx/dynamic-context (ctx/from-bindings env)]
       ((es/get-evaluate-patterns) env :Agentlang.Kernel.Eval (mapv first nodes)))))
 
-(ln/record
- :Agentlang.Kernel.Eval/ExecGraph
- {:Name :Any
-  :Graph :Any
-  :IsSuspended :Boolean})
-
-(defn fetch-exec-graph [k]
-  (when-let [g (get-exec-graph k)]
-    (cn/make-instance
-     :Agentlang.Kernel.Eval/ExecGraph
-     {:Name k
-      :Graph (cleanup-graph g)
-      :IsSuspended (suspended? g)})))
-
 (ln/event
  :Agentlang.Kernel.Eval/GetExecGraph
  {:Key :String})
 
 (ln/dataflow
  :Agentlang.Kernel.Eval/GetExecGraph
- [:eval '(agentlang.evaluator.exec-graph/fetch-exec-graph :Agentlang.Kernel.Eval/GetExecGraph.Key)])
+ [:eval '(agentlang.evaluator.exec-graph/lookup-execution-graph :Agentlang.Kernel.Eval/GetExecGraph.Key)])
 
 (ln/event
  :Agentlang.Kernel.Eval/RestartSuspensionInGraph
@@ -308,16 +295,13 @@
 (ln/dataflow
  :Agentlang.Kernel.Eval/LookupRecentExecutionGraphs
  [:eval '(agentlang.evaluator.exec-graph/lookup-top-n-execution-graphs
-          :Agentlang.Kernel.Eval/LookupRecentExecutionGraphs.N)
-  :as :Graphs]
- [:eval '(agentlang.evaluator.exec-graph/get-graphs :Graphs)])
+          :Agentlang.Kernel.Eval/LookupRecentExecutionGraphs.N)])
 
 (ln/event :Agentlang.Kernel.Eval/LookupAllExecutionGraphs {})
 
 (ln/dataflow
  :Agentlang.Kernel.Eval/LookupAllExecutionGraphs
- [:eval '(agentlang.evaluator.exec-graph/lookup-all-execution-graphs) :as :Graphs]
- [:eval '(agentlang.evaluator.exec-graph/get-graphs :Graphs)])
+ [:eval '(agentlang.evaluator.exec-graph/lookup-all-execution-graphs)])
 
 (ln/event :Agentlang.Kernel.Eval/LookupEventsWithGraphs {})
 

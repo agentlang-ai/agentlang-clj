@@ -249,7 +249,7 @@
           {:Agentlang.Core/AgentLLM
            {:Agent? :EGA/FindLLM.Agent}}))
        (let [crpr? (partial cn/instance-of? :EGA/CreateProduct)
-             exg? (partial cn/instance-of? :Agentlang.Kernel.Eval/ExecGraph)]
+             exg? (partial cn/instance-of? :Agentlang.Kernel.Eval/ExecutionGraph)]
          (exg/delete-all-execution-graphs)
          (exg/call-with-exec-graph
           (fn []
@@ -270,10 +270,10 @@
            (is (= :EGA/CreateProduct (li/record-name (get evts "0001")))))
          (let [rs (tu/result {:Agentlang.Kernel.Eval/LookupAllExecutionGraphs {}})]
            (is (= 2 (count rs)))
-           (is (every? exg/graph? rs)))
+           (is (every? exg/graph? (exg/get-graphs rs))))
          (let [rs (tu/result {:Agentlang.Kernel.Eval/LookupRecentExecutionGraphs {:N 1}})]
            (is (= 1 (count rs)))
-           (is (every? exg/graph? rs)))
+           (is (every? exg/graph? (exg/get-graphs rs))))
          (let [r (tu/result {:Agentlang.Kernel.Eval/GetExecGraph {:Key "0001"}})]
            (is (exg? r))
            (is (crpr? (exg/root-event (:Graph r)))))))))

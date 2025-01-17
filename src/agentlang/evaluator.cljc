@@ -561,7 +561,8 @@
   ([component pats] (safe-eval-patterns true component pats)))
 
 (defn evaluate-patterns-in-env [env component patterns]
-  (eval-patterns-helper component patterns (partial evaluate-pattern env)))
+  (let [patterns (if (map? patterns) [patterns] patterns)]
+    (eval-patterns-helper component patterns (partial evaluate-pattern env))))
 
 (es/set-safe-eval-patterns! safe-eval-patterns)
 (es/set-safe-eval-atomic! (partial safe-eval true))

@@ -225,7 +225,9 @@
 
 (defn- maybe-remove-read-only-attributes [obj]
   (if (cn/an-instance? obj)
-    (cn/dissoc-write-only obj)
+    (if (cn/instance-of? obj :Agentlang.Kernel.Eval/ExecutionGraph)
+      obj
+      (cn/dissoc-write-only obj))
     obj))
 
 (defn- remove-all-read-only-attributes [obj]
