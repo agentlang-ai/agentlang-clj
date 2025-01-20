@@ -1,6 +1,7 @@
 (ns agentlang.evaluator.exec-graph
   (:require [agentlang.util :as u]
-            [agentlang.util.logger :as log]
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])
             [agentlang.lang :as ln]
             [agentlang.lang.datetime :as dt]
             [agentlang.component :as cn]
