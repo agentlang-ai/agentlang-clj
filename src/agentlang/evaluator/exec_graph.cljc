@@ -62,7 +62,6 @@
                {:Instance
                 {:Agentlang.Kernel.Eval/ExecutionGraph
                  {:Key k :Graph g}}}}]
-    (u/pprint g)
     ((evaluator) event)))
 
 (defn lookup-execution-graph [k]
