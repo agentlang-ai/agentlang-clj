@@ -71,7 +71,7 @@
 (defn- dispatch-an-opcode [evaluator env opcode]
   (((opc/op opcode) i/dispatch-table) evaluator env (opc/arg opcode)))
 
-(defn dispatch [evaluator env {opcode :opcode pat :pattern}]
+(defn dispatch [evaluator env {opcode :opcode pat :pattern subpat? :subpat?}]
   (#?(:clj try :cljs do)
    (let [result
          (if (map? opcode)
@@ -82,11 +82,11 @@
                      env (or (:env r) env)]
                  (recur (rest opcs) env r))
                 result)))]
-     (exg/add-step! pat result)
+     (exg/add-step! pat result (not subpat?))
      result)
    #?(:clj
       (catch Exception ex
-        (exg/add-step! pat {:status :error :result (.getMessage ex)})
+        (exg/add-step! pat {:status :error :result (.getMessage ex)} (not subpat?))
         (throw ex)))))
 
 (def ok? i/ok?)

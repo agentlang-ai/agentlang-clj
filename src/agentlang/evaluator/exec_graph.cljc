@@ -62,6 +62,7 @@
                {:Instance
                 {:Agentlang.Kernel.Eval/ExecutionGraph
                  {:Key k :Graph g}}}}]
+    (u/pprint g)
     ((evaluator) event)))
 
 (defn lookup-execution-graph [k]
@@ -157,7 +158,7 @@
       (dissoc (assoc result :env env) :message))
     result))
 
-(defn add-step! [pat result]
+(defn add-step! [pat result userpat?]
   (when (exec-graph-enabled?)
     (when-let [g (get-active-exec-graph)]
       (let [can-add? (if (map? pat)
@@ -165,7 +166,7 @@
                          (not (cn/event? recname)))
                        true)]
         (when can-add?
-          (update-active-exec-graph! (assoc g :nodes (conj (:nodes g) [pat result]))))
+          (update-active-exec-graph! (assoc g :nodes (conj (:nodes g) [pat result userpat?]))))
         pat))))
 
 (defn finalize! []
@@ -198,6 +199,7 @@
 (def node-pattern first)
 (defn node-result [n] (:result (second n)))
 (defn node-status [n] (:status (second n)))
+(defn node-is-user-pattern? [n] (last n))
 
 (defn- get-suspension [g]
   (when-let [g0 (last (:nodes g))]
@@ -262,8 +264,8 @@
         ns0 (nodes g)
         ns (mapv (fn [n] (if (graph? n)
                            (cleanup-graph n)
-                           (let [[p r] n]
-                             [p (cleanup r)])))
+                           (let [[p r userpat?] n]
+                             [p (cleanup r) userpat?])))
                  ns0)]
     (assoc g :nodes (into [] (concat [ei] ns)))))
 

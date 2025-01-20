@@ -190,7 +190,7 @@
       r
       (first r))))
 
-(declare compile-pattern)
+(declare compile-pattern compile-sub-pattern)
 
 (defn- remove-meta-query [query]
   (cond
@@ -482,7 +482,7 @@
     (let [f (:from pat)
           inst-alias (:as pat)
           opcode (if (or (li/pathname? f) (map? f))
-                   (compile-pattern ctx f)
+                   (compile-sub-pattern ctx f)
                    (u/throw-ex (str "invalid :from specification " f)))]
       (when inst-alias
         (ctx/add-alias! ctx inst-alias))
@@ -492,13 +492,13 @@
           (when-let [p (seq (first (vals np)))]
             (ctx/with-build-partial-instance
               ctx
-              #(compile-pattern ctx np))))
+              #(compile-sub-pattern ctx np))))
         opcode inst-alias]))))
 
-(defn- package-opcode [code pat]
+(defn- package-opcode [code pat subpat?]
   (if (and (map? code) (:opcode code))
     code
-    {:opcode code :pattern pat}))
+    {:opcode code :pattern pat :subpat? subpat?}))
 
 (defn- some-query-attrs? [attrs]
   (when (some li/query-pattern? (keys attrs))
@@ -583,7 +583,7 @@
                           {:timeout-ms timeout-ms})
                         (when filter-pats
                           {:filter-by
-                           (mapv #(let [opc (compile-pattern ctx %)
+                           (mapv #(let [opc (compile-sub-pattern ctx %)
                                         qattrs (extract-query-attrs %)]
                                     {:opcodes opc :query-attrs qattrs})
                                  filter-pats)}))
@@ -634,7 +634,7 @@
 (defn- compile-for-each-body [ctx body-pats]
   (ctx/add-alias! ctx :% :%)
   (let [new-pats (preproc-patterns body-pats)]
-    (mapv #(compile-pattern ctx %) new-pats)))
+    (mapv #(compile-sub-pattern ctx %) new-pats)))
 
 (defn- parse-for-each-match-pattern [pat]
   (if (vector? pat)
@@ -647,7 +647,7 @@
   (let [[pat alias] (parse-for-each-match-pattern pat)]
     (when alias
       (ctx/add-alias! ctx alias))
-    [(compile-pattern ctx (normalize-and-preproc pat true)) alias]))
+    [(compile-sub-pattern ctx (normalize-and-preproc pat true)) alias]))
 
 (defn- compile-for-each [ctx pat]
   (let [[bind-pat-code elem-alias]
@@ -669,7 +669,7 @@
         [result nil alias]))))
 
 (defn- compile-maybe-pattern-list [ctx pat]
-  (mapv #(compile-pattern ctx %)
+  (mapv #(compile-sub-pattern ctx %)
         (if (vector? pat)
           (if (li/registered-macro? (first pat))
             [pat]
@@ -683,7 +683,7 @@
        (rest cases)
        (conj
         cases-code
-        [[(compile-pattern ctx case-pat)]
+        [[(compile-sub-pattern ctx case-pat)]
          [(compile-maybe-pattern-list ctx (normalize-and-preproc conseq))]]))
       cases-code)))
 
@@ -718,7 +718,7 @@
 
 (defn- compile-match [ctx pat]
   (if (case-match? pat)
-    (let [match-pat-code (compile-pattern ctx (first pat))
+    (let [match-pat-code (compile-sub-pattern ctx (first pat))
           [cases alternative alias] (extract-match-clauses (rest pat))
           cases-code (compile-match-cases ctx cases)
           alt-code (when alternative
@@ -745,7 +745,7 @@
 
 (defn- compile-construct-with-handlers
   ([ctx pat default-handlers]
-   (let [body (mapv #(compile-pattern ctx %) (preproc-patterns [(first pat)]))
+   (let [body (mapv #(compile-sub-pattern ctx %) (preproc-patterns [(first pat)]))
          hpats (us/flatten-map (rest pat))
          handler-pats (if (seq hpats)
                         (distribute-handler-keys
@@ -864,7 +864,7 @@
   (if (li/unquoted? exp)
     (if (> (count exp) 2)
       (u/throw-ex (str "cannot compile rest of unquoted expression - " exp))
-      (compile-pattern ctx (second exp)))
+      (compile-sub-pattern ctx (second exp)))
     exp))
 
 (defn- compile-quoted-list [ctx pat]
@@ -893,7 +893,7 @@
       ret-type result-alias])))
 
 (defn- compile-rethrow-after [ctx pat]
-  (op/rethrow-after [(compile-pattern ctx (first pat))]))
+  (op/rethrow-after [(compile-sub-pattern ctx (first pat))]))
 
 (defn- compile-map-entry-in-path
   ([p is-root]
@@ -988,7 +988,7 @@
     (loop [pat (rest path-pats), result [(compile-map-entry-in-path (first path-pats) true)]]
       (if-let [p (first pat)]
         (if-not (seq (rest pat))
-          (compile-pattern ctx (finalize-path-query p result alias))
+          (compile-sub-pattern ctx (finalize-path-query p result alias))
           (recur (rest pat) (conj result (dispatch-compile-path-entry p))))
         (u/throw-ex (str "invalid query, no path to child entity - " pat))))))
 
@@ -1018,7 +1018,7 @@
      [attr-name
       (if quoted?
         (compile-quoted-list ctx (second pat))
-        (mapv #(compile-pattern ctx %) pat))
+        (mapv #(compile-sub-pattern ctx %) pat))
       quoted?])))
 
 (defn- compile-vector [ctx pat]
@@ -1037,17 +1037,21 @@
     (dissoc pat :meta :meta?)
     pat))
 
-(defn compile-pattern [ctx pat]
-  (let [pat (maybe-dissoc-meta pat)]
-    (if-let [c (cond
-                 (li/pathname? pat) compile-pathname
-                 (map? pat) compile-map
-                 (vector? pat) compile-vector
-                 (i/const-value? pat) compile-literal
-                 (seqable? pat) compile-fncall-expression)]
-      (let [code (c ctx pat)]
-        (package-opcode code pat))
-      (u/throw-ex (str "cannot compile invalid pattern - " pat)))))
+(defn compile-pattern
+  ([ctx pat subpat?]
+   (let [pat (maybe-dissoc-meta pat)]
+     (if-let [c (cond
+                  (li/pathname? pat) compile-pathname
+                  (map? pat) compile-map
+                  (vector? pat) compile-vector
+                  (i/const-value? pat) compile-literal
+                  (seqable? pat) compile-fncall-expression)]
+       (let [code (c ctx pat)]
+         (package-opcode code pat subpat?))
+       (u/throw-ex (str "cannot compile invalid pattern - " pat)))))
+  ([ctx pat] (compile-pattern ctx pat false)))
+
+(defn compile-sub-pattern [ctx pat] (compile-pattern ctx pat true))
 
 (defn- maybe-mark-conditional-df [ctx evt-pattern]
   (when (li/name? evt-pattern)
