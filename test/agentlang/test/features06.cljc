@@ -255,7 +255,7 @@
           (fn []
             (let [agent? (partial cn/instance-of? :Agentlang.Core/Agent)
                   prod? (partial cn/instance-of? :EGA/Product)
-                  a (tu/first-result {:EGA/InitAgents {}})]
+                  a (tu/first-result {:EGA/InitAgents {:EventContext {:ExecId "EGA/InitAgents"}}})]
               (is (agent? a))
               (is (prod?
                    (tu/first-result

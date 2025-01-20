@@ -172,7 +172,7 @@
   (when (exec-graph-enabled?)
     (when-let [event-instance (pop-event)]
       (let [k (or (get-in event-instance [:EventContext :ExecId])
-                  (u/keyword-as-string (cn/instance-type-kw event-instance)))]
+                  (u/uuid-string))]
         (reset-exec-graph! k)
         k))))
 
