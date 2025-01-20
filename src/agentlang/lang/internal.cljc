@@ -3,6 +3,8 @@
             [clojure.set :as set]
             [agentlang.util :as u]
             [agentlang.global-state :as gs]
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])
             #?(:cljs
                [cljs.js :refer [eval empty-state js-eval]])))
 
@@ -344,7 +346,7 @@
 
 (defn validate [predic errmsg x]
   (when-not (predic x)
-    (u/throw-ex (str errmsg " - " x)))
+    (#?(:clj u/throw-ex :cljs log/error) (str errmsg " - " x)))
   x)
 
 (defn auto-generated-name? [n]
