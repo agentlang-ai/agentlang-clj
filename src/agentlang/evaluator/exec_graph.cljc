@@ -25,50 +25,53 @@
  :Agentlang.Kernel.Eval/DeleteAllExecutionGraphs
  [:delete :Agentlang.Kernel.Eval/ExecutionGraph :*])
 
+(def ^:private exec-graph-enabled-flag (atom false))
+
+(defn enable-exec-graph! [] (reset! exec-graph-enabled-flag true))
+(defn disable-exec-graph! [] (reset! exec-graph-enabled-flag false))
+
+(def ^:dynamic internal-event-mode false)
+
+(defn exec-graph-enabled? []
+  (and @exec-graph-enabled-flag
+       (not internal-event-mode)))
+
+(defn call-with-exec-graph [f]
+  (enable-exec-graph!)
+  (try
+    (f)
+    (finally
+      (disable-exec-graph!))))
+
 (defn- evaluator []
-  (or (es/get-active-evaluator)
-      (partial (es/get-evaluate-patterns) nil :Agentlang.Kernel.Eval)))
+  (fn [evt]
+    (let [ev (es/get-safe-eval-atomic)]
+      (binding [internal-event-mode true]
+        (ev evt)))))
 
 (defn delete-all-execution-graphs []
-  (let [event {:Agentlang.Kernel.Eval/DeleteAllExecutionGraphs {}}
-        r (first ((evaluator) event))
-        s (:status r)]
-    (log/debug (str "delete all exec-graphs, " r))
-    (or (= :ok s) (= :not-found s))))
+  (let [event {:Agentlang.Kernel.Eval/DeleteAllExecutionGraphs {}}]
+    (or ((evaluator) event) true)))
 
 (defn delete-execution-graph [k]
-  (let [event {:Agentlang.Kernel.Eval/Delete_ExecutionGraph {:Key k}}
-        r (first ((evaluator) event))
-        s (:status r)]
-    (log/debug (str "delete exec-graph " k ", " r))
-    (or (= :ok s) (= :not-found s))))
+  (let [event {:Agentlang.Kernel.Eval/Delete_ExecutionGraph {:Key k}}]
+    (or ((evaluator) event) true)))
 
 (defn save-execution-graph [k g]
   (let [event {:Agentlang.Kernel.Eval/Create_ExecutionGraph
                {:Instance
                 {:Agentlang.Kernel.Eval/ExecutionGraph
-                 {:Key k :Graph g}}}}
-        r (first ((evaluator) event))
-        s (:status r)]
-    (log/debug (str "create exec-graph " k ", " r))
-    (= :ok s)))
+                 {:Key k :Graph g}}}}]
+    ((evaluator) event)))
 
 (defn lookup-execution-graph [k]
   (let [event {:Agentlang.Kernel.Eval/Lookup_ExecutionGraph
-               {:Key k}}
-        r (first ((evaluator) event))
-        s (:status r)]
-    (log/debug (str "lookup exec-graph " k ", " r))
-    (when (= :ok s)
-      (first (:result r)))))
+               {:Key k}}]
+    (first ((evaluator) event))))
 
 (defn lookup-all-execution-graphs []
-  (let [event {:Agentlang.Kernel.Eval/LookupAll_ExecutionGraph {}}
-        r (first ((evaluator) event))
-        s (:status r)]
-    (log/debug (str "lookup-all exec-graph, " r))
-    (when (= :ok s)
-      (:result r))))
+  (let [event {:Agentlang.Kernel.Eval/LookupAll_ExecutionGraph {}}]
+    ((evaluator) event)))
 
 (defn lookup-top-n-execution-graphs [n]
   (take n (sort-by :Created (lookup-all-execution-graphs))))
@@ -138,20 +141,8 @@
           (update-active-exec-graph! nil)))
     (or parent g)))
 
-(def exec-graph-enabled-flag (atom false))
-
-(defn enable-exec-graph! [] (reset! exec-graph-enabled-flag true))
-(defn disable-exec-graph! [] (reset! exec-graph-enabled-flag false))
-
-(defn call-with-exec-graph [f]
-  (enable-exec-graph!)
-  (try
-    (f)
-    (finally
-      (disable-exec-graph!))))
-
 (defn init [event-instance]
-  (when @exec-graph-enabled-flag
+  (when (exec-graph-enabled?)
     (let [parent-graph (get-active-exec-graph)
           g {:nodes [[event-instance (cn/inference? (cn/instance-type-kw event-instance))]]}]
       (when parent-graph
@@ -167,21 +158,23 @@
     result))
 
 (defn add-step! [pat result]
-  (when-let [g (get-active-exec-graph)]
-    (let [can-add? (if (map? pat)
-                     (let [recname (li/record-name pat)]
-                       (not (cn/event? recname)))
-                     true)]
-      (when can-add?
-        (update-active-exec-graph! (assoc g :nodes (conj (:nodes g) [pat result]))))
-      pat)))
+  (when (exec-graph-enabled?)
+    (when-let [g (get-active-exec-graph)]
+      (let [can-add? (if (map? pat)
+                       (let [recname (li/record-name pat)]
+                         (not (cn/event? recname)))
+                       true)]
+        (when can-add?
+          (update-active-exec-graph! (assoc g :nodes (conj (:nodes g) [pat result]))))
+        pat))))
 
 (defn finalize! []
-  (when-let [event-instance (pop-event)]
-    (let [k (or (get-in event-instance [:EventContext :ExecId])
-                (u/keyword-as-string (cn/instance-type-kw event-instance)))]
-      (reset-exec-graph! k)
-      k)))
+  (when (exec-graph-enabled?)
+    (when-let [event-instance (pop-event)]
+      (let [k (or (get-in event-instance [:EventContext :ExecId])
+                  (u/keyword-as-string (cn/instance-type-kw event-instance)))]
+        (reset-exec-graph! k)
+        k))))
 
 (defn init-node [event-instance]
   (when (get-active-exec-graph)
@@ -206,13 +199,6 @@
 (defn node-result [n] (:result (second n)))
 (defn node-status [n] (:status (second n)))
 
-(defn root-events []
-  (into
-   {}
-   (mapv (fn [[k v]]
-           [k (cn/unmake-instance (root-event v))])
-         (mapv (fn [g] [(:Key g) (:Graph g)]) (lookup-all-execution-graphs)))))
-
 (defn- get-suspension [g]
   (when-let [g0 (last (:nodes g))]
     (when-let [n (when (graph? g0) (last (:nodes g0)))]
@@ -235,15 +221,30 @@
 (defn filter-errors [graphs]
   (filter terminated-by-error? graphs))
 
+(defn root-events []
+  (mapv (fn [g]
+          (let [k (:Key g), v (:Graph g)]
+            {:event-instance (cn/unmake-instance (root-event v))
+             :graph-key k
+             :suspended? (suspended? v)
+             :error? (terminated-by-error? v)}))
+        (lookup-all-execution-graphs)))
+
+(defn root-event-by-graph-key [root-evts k]
+  (:event-instance (first (filter #(= k (:graph-key %)) root-evts))))
+
+(defn suspended-root-events [root-evts]
+  (filter :suspended? root-evts))
+
+(defn root-events-with-error [root-evts]
+  (filter :error? root-evts))
+
 (defn restart-suspension
   ([g restart-value]
-   (disable-exec-graph!)
-   (try
+   (binding [internal-event-mode true]
      (let [g (if (map? g) g (get-exec-graph g))]
        (when-let [susp (get-suspension g)]
-         (sp/restart-suspension susp restart-value)))
-     (finally
-       (enable-exec-graph!))))
+         (sp/restart-suspension susp restart-value)))))
   ([g] (restart-suspension g nil)))
 
 (defn- graph-to-event-pattern [g]

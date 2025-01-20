@@ -265,9 +265,10 @@
               (is (= "low" @price-notification)))))
          (is (exg/graph? (exg/get-exec-graph "0001")))
          (is (crpr? (exg/root-event (exg/cleanup-graph (exg/get-exec-graph "0001")))))
-         (let [evts (exg/root-events)]
-           (is (= :EGA/InitAgents (li/record-name (get evts "EGA/InitAgents"))))
-           (is (= :EGA/CreateProduct (li/record-name (get evts "0001")))))
+         (let [evts (exg/root-events)
+               f (partial exg/root-event-by-graph-key evts)]
+           (is (= :EGA/InitAgents (li/record-name (f "EGA/InitAgents"))))
+           (is (= :EGA/CreateProduct (li/record-name (f "0001")))))
          (let [rs (tu/result {:Agentlang.Kernel.Eval/LookupAllExecutionGraphs {}})]
            (is (= 2 (count rs)))
            (is (every? exg/graph? (exg/get-graphs rs))))
