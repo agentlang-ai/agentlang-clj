@@ -1,5 +1,6 @@
 (ns agentlang.evaluator.exec-graph
-  (:require [agentlang.util :as u]
+  (:require [clojure.string :as s]
+            [agentlang.util :as u]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
             [agentlang.lang :as ln]
@@ -57,12 +58,21 @@
   (let [event {:Agentlang.Kernel.Eval/Delete_ExecutionGraph {:Key k}}]
     (or ((evaluator) event) true)))
 
+(declare root-event)
+
+(defn- is-user-event? [g]
+  (let [evt-name (cn/instance-type-kw (root-event g))
+        [c _] (li/split-path evt-name)
+        parts (map keyword (s/split (name c) #"\."))]
+    (not= :Agentlang (first parts))))
+
 (defn save-execution-graph [k g]
-  (let [event {:Agentlang.Kernel.Eval/Create_ExecutionGraph
-               {:Instance
-                {:Agentlang.Kernel.Eval/ExecutionGraph
-                 {:Key k :Graph g}}}}]
-    ((evaluator) event)))
+  (when (is-user-event? g)
+    (let [event {:Agentlang.Kernel.Eval/Create_ExecutionGraph
+                 {:Instance
+                  {:Agentlang.Kernel.Eval/ExecutionGraph
+                   {:Key k :Graph g}}}}]
+      ((evaluator) event))))
 
 (defn lookup-execution-graph [k]
   (let [event {:Agentlang.Kernel.Eval/Lookup_ExecutionGraph
