@@ -58,7 +58,14 @@
   (let [event {:Agentlang.Kernel.Eval/Delete_ExecutionGraph {:Key k}}]
     (or ((evaluator) event) true)))
 
-(declare root-event)
+(defn graph? [x] (and (map? x) (:nodes x)))
+(defn event-info [g] (first (:nodes g)))
+(defn root-event [g] (ffirst (:nodes g)))
+(defn nodes [g] (vec (rest (:nodes g))))
+(def node-pattern first)
+(defn node-result [n] (:result (second n)))
+(defn node-status [n] (:status (second n)))
+(defn node-is-user-pattern? [n] (last n))
 
 (defn- is-user-event? [g]
   (let [evt-name (cn/instance-type-kw (root-event g))
@@ -74,10 +81,27 @@
                    {:Key k :Graph g}}}}]
       ((evaluator) event))))
 
-(defn lookup-execution-graph [k]
-  (let [event {:Agentlang.Kernel.Eval/Lookup_ExecutionGraph
-               {:Key k}}]
-    (first ((evaluator) event))))
+(defn- trim-graph [g]
+  (let [ns (nodes g)
+        new-nodes
+        (mapv #(if (graph? %)
+                 (trim-graph %)
+                 (let [[pat result userpat?] %]
+                   [pat (dissoc result :env) userpat?]))
+              ns)]
+    (assoc g :nodes new-nodes)))
+
+(defn- trim-execution-graph [exg]
+  (let [g (:Graph exg)]
+    (assoc exg :Graph (trim-graph g))))
+
+(defn lookup-execution-graph
+  ([k trim?]
+   (let [event {:Agentlang.Kernel.Eval/Lookup_ExecutionGraph
+                {:Key k}}
+         result (first ((evaluator) event))]
+     (if trim? (trim-execution-graph result) result)))
+  ([k] (lookup-execution-graph k false)))
 
 (defn lookup-all-execution-graphs []
   (let [event {:Agentlang.Kernel.Eval/LookupAll_ExecutionGraph {}}]
@@ -201,16 +225,7 @@
 
 (def delete-exec-graph delete-execution-graph)
 
-(defn graph? [x] (and (map? x) (:nodes x)))
-(defn event-info [g] (first (:nodes g)))
-(defn root-event [g] (ffirst (:nodes g)))
-(defn nodes [g] (vec (rest (:nodes g))))
-(def node-pattern first)
-(defn node-result [n] (:result (second n)))
-(defn node-status [n] (:status (second n)))
-(defn node-is-user-pattern? [n] (last n))
-
-(defn- get-suspension [g]
+         (defn- get-suspension [g]
   (when-let [g0 (last (:nodes g))]
     (when-let [n (when (graph? g0) (last (:nodes g0)))]
       (let [obj (first (node-result n))]
@@ -285,11 +300,14 @@
 
 (ln/event
  :Agentlang.Kernel.Eval/GetExecGraph
- {:Key :String})
+ {:Key :String
+  :Trim {:type :Boolean :default true}})
 
 (ln/dataflow
  :Agentlang.Kernel.Eval/GetExecGraph
- [:eval '(agentlang.evaluator.exec-graph/lookup-execution-graph :Agentlang.Kernel.Eval/GetExecGraph.Key)])
+ [:eval '(agentlang.evaluator.exec-graph/lookup-execution-graph
+          :Agentlang.Kernel.Eval/GetExecGraph.Key
+          :Agentlang.Kernel.Eval/GetExecGraph.Trim)])
 
 (ln/event
  :Agentlang.Kernel.Eval/RestartSuspensionInGraph
