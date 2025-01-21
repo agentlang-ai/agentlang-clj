@@ -3,6 +3,7 @@
             [agentlang.util :as u]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
+            [agentlang.util.seq :as us]
             [agentlang.lang :as ln]
             [agentlang.lang.datetime :as dt]
             [agentlang.component :as cn]
@@ -58,6 +59,9 @@
   (let [event {:Agentlang.Kernel.Eval/Delete_ExecutionGraph {:Key k}}]
     (or ((evaluator) event) true)))
 
+(defn assoc-graph-nodes [g evt-info nodes]
+  (assoc g :nodes (vec (concat [evt-info] nodes))))
+
 (defn graph? [x] (and (map? x) (:nodes x)))
 (defn event-info [g] (first (:nodes g)))
 (defn root-event [g] (ffirst (:nodes g)))
@@ -82,14 +86,16 @@
       ((evaluator) event))))
 
 (defn- trim-graph [g]
-  (let [ns (nodes g)
+  (let [evt-info (event-info g)
+        ns (nodes g)
         new-nodes
         (mapv #(if (graph? %)
                  (trim-graph %)
                  (let [[pat result userpat?] %]
-                   [pat (dissoc result :env) userpat?]))
+                   (when userpat?
+                     [pat (dissoc result :env) userpat?])))
               ns)]
-    (assoc g :nodes new-nodes)))
+    (assoc-graph-nodes g evt-info (us/nonils new-nodes))))
 
 (defn- trim-execution-graph [exg]
   (let [g (:Graph exg)]
