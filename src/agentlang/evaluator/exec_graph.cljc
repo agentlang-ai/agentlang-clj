@@ -34,6 +34,10 @@
 
 (def ^:dynamic internal-event-mode false)
 
+(defn call-as-internal [f]
+  (binding [internal-event-mode true]
+    (f)))
+
 (defn exec-graph-enabled? []
   (and @exec-graph-enabled-flag
        (not internal-event-mode)))
@@ -63,16 +67,23 @@
   (assoc g :nodes (vec (concat [evt-info] nodes))))
 
 (defn graph? [x] (and (map? x) (:nodes x)))
-(defn event-info [g] (first (:nodes g)))
-(defn root-event [g] (ffirst (:nodes g)))
-(defn nodes [g] (vec (rest (:nodes g))))
+(defn graph-event-info [g] (first (:nodes g)))
+(defn graph-root-event [g] (ffirst (:nodes g)))
+(defn graph-nodes [g] (vec (rest (:nodes g))))
 (def node-pattern first)
 (defn node-result [n] (:result (second n)))
 (defn node-status [n] (:status (second n)))
 (defn node-is-user-pattern? [n] (last n))
 
+(defn count-nodes [g]
+  (let [n (mapv #(if (graph? %)
+                   (count-nodes %)
+                   1)
+                (graph-nodes g))]
+    (apply + n)))
+
 (defn- is-user-event? [g]
-  (let [evt-name (cn/instance-type-kw (root-event g))
+  (let [evt-name (cn/instance-type-kw (graph-root-event g))
         [c _] (li/split-path evt-name)
         parts (map keyword (s/split (name c) #"\."))]
     (not= :Agentlang (first parts))))
@@ -85,9 +96,27 @@
                    {:Key k :Graph g}}}}]
       ((evaluator) event))))
 
+(defn- generated-event? [event-instance]
+  (let [[c n] (cn/instance-type event-instance)]
+    (s/starts-with? (name n) "G__")))
+
+(defn- maybe-flatten-nodes [nodes]
+  (loop [nodes nodes, result []]
+    (if-let [n (first nodes)]
+      (if (graph? n)
+        (let [evtinst (graph-root-event n)
+              r (if (generated-event? evtinst)
+                  (concat result (maybe-flatten-nodes (graph-nodes n)))
+                  (conj result (assoc-graph-nodes
+                                n (graph-event-info n)
+                                (maybe-flatten-nodes (graph-nodes n)))))]
+          (recur (rest nodes) r))
+        (recur (rest nodes) (conj result n)))
+      result)))
+
 (defn- trim-graph [g]
-  (let [evt-info (event-info g)
-        ns (nodes g)
+  (let [evt-info (graph-event-info g)
+        ns (maybe-flatten-nodes (graph-nodes g))
         new-nodes
         (mapv #(if (graph? %)
                  (trim-graph %)
@@ -256,7 +285,7 @@
 (defn root-events []
   (mapv (fn [g]
           (let [k (:Key g), v (:Graph g)]
-            {:event-instance (cn/unmake-instance (root-event v))
+            {:event-instance (cn/unmake-instance (graph-root-event v))
              :graph-key k
              :suspended? (suspended? v)
              :error? (terminated-by-error? v)}))
@@ -280,7 +309,7 @@
   ([g] (restart-suspension g nil)))
 
 (defn- graph-to-event-pattern [g]
-  (let [event-inst (root-event g)]
+  (let [event-inst (graph-root-event g)]
     [{(cn/instance-type-kw event-inst)
       (cn/instance-attributes event-inst)}
      (node-result (last (:nodes g)))]))
@@ -290,8 +319,8 @@
     (mapv #(if (map? %) (graph-to-event-pattern %) %) (drop n nodes))))
 
 (defn cleanup-graph [g]
-  (let [ei (event-info g)
-        ns0 (nodes g)
+  (let [ei (graph-event-info g)
+        ns0 (graph-nodes g)
         ns (mapv (fn [n] (if (graph? n)
                            (cleanup-graph n)
                            (let [[p r userpat?] n]

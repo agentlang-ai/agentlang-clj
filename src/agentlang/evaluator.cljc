@@ -532,14 +532,16 @@
 
 (defn safe-eval-internal
   ([is-atomic event-obj]
-   (u/safe-ok-result
-    ((if is-atomic eval-all-dataflows-atomic eval-all-dataflows)
-     (mark-internal
-      (cn/make-instance event-obj)))))
+   (exg/call-as-internal
+    #(u/safe-ok-result
+      ((if is-atomic eval-all-dataflows-atomic eval-all-dataflows)
+       (mark-internal
+        (cn/make-instance event-obj))))))
   ([event-obj] (safe-eval-internal true event-obj)))
 
 (defn eval-internal [event-obj]
-  (eval-all-dataflows (mark-internal (cn/make-instance event-obj))))
+  (exg/call-as-internal
+   #(eval-all-dataflows (mark-internal (cn/make-instance event-obj)))))
 
 (defn safe-eval-pattern
   ([pattern]

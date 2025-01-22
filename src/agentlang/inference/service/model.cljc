@@ -18,6 +18,7 @@
             [agentlang.util.seq :as us]
             [agentlang.util.http :as http]
             [agentlang.evaluator :as e]
+            [agentlang.evaluator.exec-graph :as exg]
             [agentlang.datafmt.json :as json]
             [agentlang.lang.internal :as li]
             [agentlang.global-state :as gs]
@@ -185,12 +186,13 @@
 
 (defn- eval-event
   ([event callback atomic?]
-   (when-let [result (first ((if atomic?
-                               e/eval-all-dataflows-atomic
-                               e/eval-all-dataflows)
-                             event))]
-     (when (= :ok (:status result))
-       (callback (:result result)))))
+   (exg/call-as-internal
+    #(when-let [result (first ((if atomic?
+                                 e/eval-all-dataflows-atomic
+                                 e/eval-all-dataflows)
+                               event))]
+       (when (= :ok (:status result))
+         (callback (:result result))))))
   ([event callback] (eval-event event callback true))
   ([event] (eval-event event identity)))
 
@@ -589,3 +591,11 @@
 
 (defn open-entities [] ; entities that's open to be read by all users
   (set/difference (set (cn/entity-names :Agentlang.Core false)) #{:Agentlang.Core/Document}))
+
+(event :Agentlang.Core/RunInferenceForAgent {:InferenceName :Any :Agent :Any})
+
+(dataflow
+ :Agentlang.Core/RunInferenceForAgent
+ [:eval '(agentlang.inference/run-inference-for-event
+          :Agentlang.Core/RunInferenceForAgent.InferenceName
+          :Agentlang.Core/RunInferenceForAgent.Agent)])
