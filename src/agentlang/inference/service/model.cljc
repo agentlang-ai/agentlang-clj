@@ -591,11 +591,3 @@
 
 (defn open-entities [] ; entities that's open to be read by all users
   (set/difference (set (cn/entity-names :Agentlang.Core false)) #{:Agentlang.Core/Document}))
-
-(event :Agentlang.Core/RunInferenceForAgent {:InferenceName :Any :Agent :Any})
-
-(dataflow
- :Agentlang.Core/RunInferenceForAgent
- [:eval '(agentlang.inference/run-inference-for-event
-          :Agentlang.Core/RunInferenceForAgent.InferenceName
-          :Agentlang.Core/RunInferenceForAgent.Agent)])

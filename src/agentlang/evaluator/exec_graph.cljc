@@ -63,17 +63,33 @@
   (let [event {:Agentlang.Kernel.Eval/Delete_ExecutionGraph {:Key k}}]
     (or ((evaluator) event) true)))
 
-(defn assoc-graph-nodes [g evt-info nodes]
-  (assoc g :nodes (vec (concat [evt-info] nodes))))
-
 (defn graph? [x] (and (map? x) (:nodes x)))
 (defn graph-event-info [g] (first (:nodes g)))
+(defn graph-is-of-agent? [g] (second (graph-event-info g)))
 (defn graph-root-event [g] (ffirst (:nodes g)))
 (defn graph-nodes [g] (vec (rest (:nodes g))))
 (def node-pattern first)
 (defn node-result [n] (:result (second n)))
 (defn node-status [n] (:status (second n)))
 (defn node-is-user-pattern? [n] (last n))
+(defn graph-result [g] (node-result (last (graph-nodes g))))
+(defn graph-status [g] (node-status (last (graph-nodes g))))
+
+(defn walk-graph!
+  ([on-sub-graph! on-node! depth g]
+   (loop [nodes (graph-nodes g)]
+     (when-let [node (first nodes)]
+       (if (graph? node)
+         (do (on-sub-graph! node depth)
+             (walk-graph! on-sub-graph! on-node! (inc depth) node))
+         (on-node! node depth))
+       (recur (rest nodes)))))
+  ([on-sub-graph! on-node! g] (walk-graph! on-sub-graph! on-node! 1 g)))
+
+(defn assoc-graph-nodes
+  ([g evt-info nodes]
+   (assoc g :nodes (vec (concat [evt-info] nodes))))
+  ([g nodes] (assoc-graph-nodes g (graph-event-info g) nodes)))
 
 (defn count-nodes [g]
   (let [n (mapv #(if (graph? %)
@@ -108,27 +124,29 @@
               r (if (generated-event? evtinst)
                   (concat result (maybe-flatten-nodes (graph-nodes n)))
                   (conj result (assoc-graph-nodes
-                                n (graph-event-info n)
-                                (maybe-flatten-nodes (graph-nodes n)))))]
+                                n (maybe-flatten-nodes (graph-nodes n)))))]
           (recur (rest nodes) r))
         (recur (rest nodes) (conj result n)))
       result)))
 
+(defn- trim-agent-internal-nodes [nodes] (nthrest nodes 2))
+
 (defn- trim-graph [g]
-  (let [evt-info (graph-event-info g)
-        ns (maybe-flatten-nodes (graph-nodes g))
-        new-nodes
+  (let [ns (maybe-flatten-nodes (graph-nodes g))
+        ns0 (us/nonils (if (graph-is-of-agent? g) (trim-agent-internal-nodes ns) ns))
+        ns1
         (mapv #(if (graph? %)
                  (trim-graph %)
                  (let [[pat result userpat?] %]
                    (when userpat?
                      [pat (dissoc result :env) userpat?])))
-              ns)]
-    (assoc-graph-nodes g evt-info (us/nonils new-nodes))))
+              ns0)
+        new-nodes (if (seq ns1) ns1 [[{} (second (last (graph-nodes g))) false]])]
+    (assoc-graph-nodes g new-nodes)))
 
 (defn- trim-execution-graph [exg]
-  (let [g (:Graph exg)]
-    (assoc exg :Graph (trim-graph g))))
+  (let [g (trim-graph (:Graph exg))]
+    (assoc exg :Graph g)))
 
 (defn lookup-execution-graph
   ([k trim?]
