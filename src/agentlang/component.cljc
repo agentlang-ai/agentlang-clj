@@ -71,7 +71,7 @@
   (vec (set/union additional-internal-component-names
                   (set (:components (fetch-model :Agentlang))))))
 
-(defn remove-internal-components
+(defn remove-internal-component-names
   [components]
   (vec (set/difference (set components) (set (internal-component-names)))))
 

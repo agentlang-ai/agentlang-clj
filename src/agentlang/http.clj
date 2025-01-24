@@ -1349,7 +1349,7 @@
 
 (defn run-server
   ([evaluator config nrepl-handler]
-   (let [core-component-name (first (cn/remove-internal-components (cn/component-names)))
+   (let [core-component-name (first (cn/remove-internal-component-names (cn/component-names)))
          schema (cn/schema-info core-component-name)
          contains-graph-map (gg/generate-contains-graph schema)
          [auth _ :as auth-info] (make-auth-handler config)

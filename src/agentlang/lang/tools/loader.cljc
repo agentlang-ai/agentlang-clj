@@ -149,18 +149,6 @@
                 (u/throw-ex (str "invalid import directive - " (first import-spec))))
               (rest import-spec))))))
 
-     (defn- maybe-instrument-dataflow [exp]
-       (if (and (seqable? exp) (= 'dataflow (first exp)) (gs/exec-graph-enabled?))
-         (let [body (nthrest exp 2)
-               instrumented-body
-               (apply
-                concat
-                (mapv (fn [pat] [{:Agentlang.Kernel.Eval/PushPattern {:Pattern (pr-str pat)}}
-                                 pat
-                                 {:Agentlang.Kernel.Eval/PopPattern {}}])))]
-           `(~@(take 2 exp) ~@instrumented-body))
-         exp))
-
      (defn evaluate-expression [exp]
        (when (and (seqable? exp) (= 'component (first exp)))
          (eval `(ns ~(component-name-as-ns (second exp))))
@@ -170,8 +158,7 @@
            (doseq [dep (:refer spec)]
              (let [dep-ns (component-name-as-ns dep)]
                (require [dep-ns])))))
-       (let [exp (maybe-instrument-dataflow exp)]
-         (eval exp)))
+       (eval exp))
 
      (defn read-expressions
   "Read expressions in sequence from a agentlang component file. Each expression read

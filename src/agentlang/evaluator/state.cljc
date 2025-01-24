@@ -20,15 +20,3 @@
 
 (defn set-safe-eval-atomic! [f] (reset! safe-eval-atomic f))
 (defn get-safe-eval-atomic [] @safe-eval-atomic)
-
-#?(:clj
-   (def ^:private last-eval-result (ThreadLocal.)))
-
-(defn set-last-eval-result [r]
-  #?(:clj
-     (.set last-eval-result r))
-  r)
-
-(defn get-last-eval-result []
-  #?(:clj
-     (.get last-eval-result)))

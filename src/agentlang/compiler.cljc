@@ -20,6 +20,7 @@
             [agentlang.store :as store]
             [agentlang.store.util :as stu]
             [agentlang.evaluator.state :as es]
+            [agentlang.global-state :as gs]
             [agentlang.compiler.rule :as rule]
             [agentlang.compiler.validation :as cv]
             [agentlang.compiler.internal :as i]))
@@ -1330,14 +1331,30 @@
          pat)))
    pat))
 
+(def counter (atom 0))
+
+(defn- maybe-inject-exec-graph-instrumentation [event-name patterns]
+  (if (s/starts-with? (name (second (li/split-path event-name))) "ExecGraphNode")
+    patterns
+    (if (gs/exec-graph-enabled?)
+      (mapv (fn [p]
+              (let [_ (swap! counter inc)
+                    evt-name (keyword (str "Agentlang.Kernel.Eval/ExecGraphNode" @counter))]; (s/replace (u/uuid-string) "-" "")))]
+                (cn/intern-event evt-name {:Pattern :Agentlang.Kernel.Lang/String})
+                (cn/register-dataflow evt-name [p])
+                {evt-name {:Pattern (pr-str p)}}))
+            patterns)
+      patterns)))
+
 (defn- compile-dataflow [ctx evt-pattern df-patterns]
-  (let [c (partial
+  (let [ename (if (li/name? evt-pattern)
+                evt-pattern
+                (first (keys evt-pattern)))
+        df-patterns (maybe-inject-exec-graph-instrumentation ename df-patterns)
+        c (partial
            compile-pattern
            (maybe-mark-conditional-df ctx evt-pattern))
         ec (c evt-pattern)
-        ename (if (li/name? evt-pattern)
-                evt-pattern
-                (first (keys evt-pattern)))
         df-patterns (preproc-patterns (mapv lift-throw df-patterns))
         safe-compile (partial compile-with-error-report df-patterns c)
         result [ec (mapv safe-compile df-patterns (range (count df-patterns)))]]

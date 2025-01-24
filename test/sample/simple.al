@@ -98,3 +98,24 @@
          {:X [:uq# :Sample.Simple/StartTimer.X]}}]}})
 
 (dataflow :OnTimer [:eval '(println :OnTimer.X)])
+
+;; (entity
+;;  :Department
+;;  {:No {:type :Int :guid true}})
+
+;; (entity
+;;  :Employee
+;;  {:Id :Identity
+;;   :Name {:type :String :id true}
+;;   :Salary :Int})
+
+;; (relationship
+;;  :DepartmentEmployee
+;;  {:meta {:contains [:Department :Employee]}})
+
+;; (dataflow
+;;  :CreateEmployee
+;;  {:Employee
+;;   {:Name :CreateEmployee.Name
+;;    :Salary :CreateEmployee.Salary}
+;;   :-> [[:DepartmentEmployee {:Department {:No? :CreateEmployee.DeptNo}}]]})
