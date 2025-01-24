@@ -1340,8 +1340,11 @@
       (mapv (fn [p]
               (let [_ (swap! counter inc)
                     evt-name (keyword (str "Agentlang.Kernel.Eval/ExecGraphNode" @counter))]; (s/replace (u/uuid-string) "-" "")))]
+                ;; TODO: There registrations may have to be pushed to post-init-runtime, because of nested
+                ;; ref-update issue with components.
                 (cn/intern-event evt-name {:Pattern :Agentlang.Kernel.Lang/String})
                 (cn/register-dataflow evt-name [p])
+                ;;
                 {evt-name {:Pattern (pr-str p)}}))
             patterns)
       patterns)))
