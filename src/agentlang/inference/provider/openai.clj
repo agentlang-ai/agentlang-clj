@@ -3,56 +3,22 @@
             [org.httpkit.client :as http]
             [agentlang.util :as u]
             [agentlang.util.logger :as log]
+            [agentlang.inference.provider.common :as common]
             [agentlang.inference.provider.protocol :as p]
             [agentlang.inference.provider.registry :as r]))
-
 
 (def ^:private default-embedding-endpoint "https://api.openai.com/v1/embeddings")
 (def ^:private default-embedding-model "text-embedding-3-small")
 
 (defn- get-openai-api-key [] (u/getenv "OPENAI_API_KEY"))
 
-(defn make-openai-embedding [{text-content :text-content
-                              model-name :model-name
-                              openai-api-key :openai-api-key
-                              embedding-endpoint :embedding-endpoint :as args}]
-  (let [openai-config (r/fetch-active-provider-config)
-        model-name (or model-name (:EmbeddingModel openai-config) default-embedding-model)
-        embedding-endpoint (or embedding-endpoint (:EmbeddingApiEndpoint openai-config) default-embedding-endpoint)
-        openai-api-key (or openai-api-key (:ApiKey openai-config) (get-openai-api-key))
-        options {:headers {"Authorization" (str "Bearer " openai-api-key)
-                           "Content-Type" "application/json"}
-                 :body (json/generate-string {"input" text-content
-                                              "model" model-name
-                                              "encoding_format" "float"})}
-        response @(http/post embedding-endpoint options)
-        status (:status response)]
-    (if (<= 200 status 299)
-      (or (when-let [r (-> (:body response)
-                           json/parse-string
-                           (get-in ["data" 0 "embedding"]))]
-            [r model-name])
-          (do
-            (log/error
-             (u/pretty-str
-              (format "Failed to extract OpenAI embedding (status %s):" status)
-              response))
-            nil))
-      (do
-        (log/error
-         (u/pretty-str
-          (format "Failed to generate OpenAI embedding (status %s):" status)
-          response))
-        nil))))
+(def make-openai-embedding (common/make-embedding-fn
+                            {:default-embedding-endpoint default-embedding-endpoint
+                             :default-embedding-model default-embedding-model
+                             :get-api-key get-openai-api-key}))
 
 (def ^:private default-temperature 0)
 (def ^:private default-max-tokens 500)
-
-(defn- assert-message! [message]
-  (when-not (and (map? message)
-                 (some #{(:role message)} #{:system :user :assistant})
-                 (string? (:content message)))
-    (u/throw-ex (str "invalid message: " message))))
 
 (defn- chat-completion-response
   ([model-name with-tools response]
@@ -72,55 +38,56 @@
 (def ^:private default-ocr-completion-model "gpt-4o")
 (def ^:private default-completion-model "gpt-3.5-turbo")
 
-(defn make-openai-completion [{messages :messages
-                               model-name :model-name
-                               openai-api-key :openai-api-key
-                               completion-endpoint :completion-endpoint
-                               temperature :temperature
-                               max-tokens :max-tokens
-                               tools :tools}]
-  (doseq [m messages] (assert-message! m))
-  (let [openai-config (r/fetch-active-provider-config)
-        model-name (or model-name (:CompletionModel openai-config) default-completion-model)
-        completion-endpoint (or completion-endpoint (:CompletionApiEndpoint openai-config) default-completion-endpoint)
-        temperature (or temperature default-temperature)
-        max-tokens (or max-tokens default-max-tokens)
-        openai-api-key (or openai-api-key (:ApiKey openai-config) (get-openai-api-key))
-        options {:headers {"Content-type"  "application/json"
-                           "Authorization" (str "Bearer " openai-api-key)}
-                 :body (json/generate-string
-                        (merge
-                         {:model model-name
-                          :messages messages
-                          :temperature temperature
-                          :max_tokens max-tokens}
-                         (when tools
-                           {:tools tools
-                            :tool_choice "auto"})))}
-        response @(http/post completion-endpoint options)]
-    (chat-completion-response model-name (and tools true) response)))
+(def make-openai-completion
+  (common/make-completion-fn
+   {:default-completion-endpoint default-completion-endpoint
+    :make-request
+    (fn [config {messages :messages
+                 tools :tools
+                 temperature :temperature
+                 max-tokens :max-tokens
+                 api-key :api-key
+                 model-name :model-name}]
+      (let [openai-api-key (or api-key (:ApiKey config) (get-openai-api-key))
+            model-name (or model-name (:CompletionModel config) default-completion-model)]
+        [{:headers {"Content-type"  "application/json"
+                    "Authorization" (str "Bearer " openai-api-key)}
+          :body (json/generate-string
+                 (merge
+                  {:model model-name
+                   :messages messages
+                   :temperature (or temperature default-temperature)
+                   :max_tokens (or max-tokens default-max-tokens)}
+                  (when tools
+                    {:tools tools
+                     :tool_choice "auto"})))}
+         (partial chat-completion-response model-name)]))}))
 
-(defn make-openai-ocr-completion [{user-instruction :user-instruction
-                                   image-url :image-url}]
-  (let [openai-config (r/fetch-active-provider-config)
-        model-name default-ocr-completion-model
-        completion-endpoint (or (:CompletionApiEndpoint openai-config) default-completion-endpoint)
-        max-tokens 300
-        openai-api-key (or (:ApiKey openai-config) (get-openai-api-key))
-        messages
-        [{"role" "user"
-          "content"
-          [{"type" "text"
-            "text" user-instruction}
-           {"type" "image_url"
-            "image_url" {"url" image-url}}]}]
-        options {:headers {"Content-type"  "application/json"
-                           "Authorization" (str "Bearer " openai-api-key)}
-                 :body (json/generate-string {:model model-name
-                                              :messages messages
-                                              :max_tokens max-tokens})}
-        response @(http/post completion-endpoint options)]
-    (chat-completion-response model-name response)))
+(def make-openai-ocr-completion
+  (common/make-ocr-completion-fn
+   {:default-completion-endpoint default-completion-endpoint
+    :make-request
+    (fn [config {user-instruction :user-instruction
+                 image-url :image-url
+                 api-key :api-key
+                 model-name :model-name
+                 max-tokens :max-tokens}]
+      (let [messages
+            [{"role" "user"
+              "content"
+              [{"type" "text"
+                "text" user-instruction}
+               {"type" "image_url"
+                "image_url" {"url" image-url}}]}]
+            openai-api-key (or api-key (:ApiKey config) (get-openai-api-key))
+            model-name (or model-name (:CompletionModel config) default-ocr-completion-model)
+            max-tokens (or max-tokens default-max-tokens)]
+        [{:headers {"Content-type"  "application/json"
+                    "Authorization" (str "Bearer " openai-api-key)}
+          :body (json/generate-string {:model model-name
+                                       :messages messages
+                                       :max_tokens max-tokens})}
+         (partial chat-completion-response model-name)]))}))
 
 (r/register-provider
  :openai
