@@ -27,6 +27,7 @@
             [agentlang.evaluator.internal :as i]
             [agentlang.evaluator.root :as r]
             [agentlang.evaluator.suspend :as sp]
+            [agentlang.evaluator.exec-graph :as exg]
             [agentlang.evaluator.intercept.core :as interceptors]))
 
 (declare eval-all-dataflows evaluator-with-env safe-eval-pattern)
@@ -71,14 +72,15 @@
   (((opc/op opcode) i/dispatch-table) evaluator env (opc/arg opcode)))
 
 (defn dispatch [evaluator env {opcode :opcode}]
-  (if (map? opcode)
-    (dispatch-an-opcode evaluator env opcode)
-    (loop [opcs opcode, env env, result nil]
-      (if-let [opc (first opcs)]
-        (let [r (dispatch-an-opcode evaluator env opc)
-              env (or (:env r) env)]
-          (recur (rest opcs) env r))
-        result))))
+  (es/set-last-eval-result
+   (if (map? opcode)
+     (dispatch-an-opcode evaluator env opcode)
+     (loop [opcs opcode, env env, result nil]
+       (if-let [opc (first opcs)]
+         (let [r (dispatch-an-opcode evaluator env opc)
+               env (or (:env r) env)]
+           (recur (rest opcs) env r))
+         result)))))
 
 (def ok? i/ok?)
 (def dummy-result i/dummy-result)

@@ -8,6 +8,7 @@
             [agentlang.util.seq :as su]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
+            [agentlang.global-state :as gs]
             [agentlang.lang :as ln]
             [agentlang.lang.raw :as raw]
             [agentlang.lang.name-util :as nu]
@@ -148,6 +149,18 @@
                 (u/throw-ex (str "invalid import directive - " (first import-spec))))
               (rest import-spec))))))
 
+     (defn- maybe-instrument-dataflow [exp]
+       (if (and (seqable? exp) (= 'dataflow (first exp)) (gs/exec-graph-enabled?))
+         (let [body (nthrest exp 2)
+               instrumented-body
+               (apply
+                concat
+                (mapv (fn [pat] [{:Agentlang.Kernel.Eval/PushPattern {:Pattern (pr-str pat)}}
+                                 pat
+                                 {:Agentlang.Kernel.Eval/PopPattern {}}])))]
+           `(~@(take 2 exp) ~@instrumented-body))
+         exp))
+
      (defn evaluate-expression [exp]
        (when (and (seqable? exp) (= 'component (first exp)))
          (eval `(ns ~(component-name-as-ns (second exp))))
@@ -157,7 +170,8 @@
            (doseq [dep (:refer spec)]
              (let [dep-ns (component-name-as-ns dep)]
                (require [dep-ns])))))
-       (eval exp))
+       (let [exp (maybe-instrument-dataflow exp)]
+         (eval exp)))
 
      (defn read-expressions
   "Read expressions in sequence from a agentlang component file. Each expression read

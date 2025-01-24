@@ -82,3 +82,5 @@
 (defn uninstall-standalone-patterns! [] (reset! standalone-patterns nil))
 
 (def fire-post-events (atom nil))
+
+(defn exec-graph-enabled? [] (:exec-graph-enabled? @app-config))
