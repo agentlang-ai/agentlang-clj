@@ -144,21 +144,7 @@
                         {:Agentlang.Core/LLM
                          (merge {:Name llm-name} llm-attrs)})}})))]
       (when (not= :ok (:status r))
-        (log/error (str "failed to initialize LLM - " llm-name)))))
-  (when-let [im-config (:integration-manager config)]
-    (doseq [[_ integ-name] (su/vec-as-map (:integrations im-config))]
-      (cc/create-new-integration integ-name))
-    (doseq [[integ-name cfgs] (:configurations im-config)]
-      (doseq [[conn-name conn-attrs] cfgs]
-        (cc/configure-new-connection integ-name conn-name conn-attrs)))
-    (doseq [conn (:connections im-config)]
-      (let [[conn-name conn-config-name]
-            (cond
-              (vector? conn) conn
-              (keyword? conn) [conn conn]
-              (string? conn) (let [conn (keyword? conn)] [conn conn])
-              :else (u/throw-ex (str "Invalid connection config: " conn)))]
-        (cc/cache-connection! conn-config-name conn-name)))))
+        (log/error (str "failed to initialize LLM - " llm-name))))))
 
 (defn- run-pending-timers! []
   (when (:timer-manager (gs/get-app-config))
