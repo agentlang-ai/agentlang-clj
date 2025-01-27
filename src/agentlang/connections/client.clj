@@ -65,7 +65,7 @@
 (defn- create-instance
   ([api-url ident inst callback]
    (try
-     (let [response (http/do-post api-url (with-auth-token) inst :json post-handler)]
+     (let [response (http/do-post (http/url-encode api-url) (with-auth-token) inst :json post-handler)]
        (case (:status response)
          200 (let [r (first (:body response))]
                (if (= "ok" (:status r))
@@ -117,7 +117,7 @@
                    "/api/IntegrationManager.Core/Integration/"
                    integ-name
                    "/ConnectionConfigGroup/ConnectionConfig")
-          response (http/do-get api-url (with-auth-token) :json post-handler)]
+          response (http/do-get (http/url-encode api-url) (with-auth-token) :json post-handler)]
       (case (:status response)
         200 (let [r (first (:body response))]
               (when (= "ok" (:status r))
