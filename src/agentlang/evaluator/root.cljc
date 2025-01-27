@@ -1122,33 +1122,38 @@
                     inst (cn/event-context active-event))
                    inst)
             env (env/assoc-active-event env inst)
-            df (first
-                (cl/compile-dataflows-for-event
-                 (partial store/compile-query (env/get-store env))
-                 (if with-types
-                   (assoc inst li/with-types-tag with-types)
-                   inst)))
-            [local-result evt-env]
-            (when df
-              (when (or (not resolver) composed?)
-                (let [[_ dc] (cn/dataflow-opcode df (or with-types cn/with-default-types))
-                      evt-result (eval-opcode self env dc)
-                      local-result (extract-local-result evt-result)]
-                  (when-not local-result
-                    (log/error (str record-name " - event failed - " (first evt-result))))
-                  [local-result (:env evt-result)])))
-            resolver-results (when resolver (call-resolver-eval resolver composed? env inst))
-            r (cond
-                (and local-result resolver-results)
-                (let [ls (if (map? local-result) [local-result] local-result)
-                      res0 (extract-resolver-result resolver-results)
-                      res (if (map? res0) [res0] res0)]
-                  (vec (concat ls res)))
-                local-result local-result
-                resolver-results (extract-resolver-result resolver-results))
-            env0 (if alias-name (env/bind-instance-to-alias env alias-name r) env)
-            env (if evt-env (env/merge-post-event-trigger-sources evt-env env0) env0)]
-        (i/ok r (env/assoc-active-event env active-event))))
+            (if (li/exec-graph-node-event? record-name)
+              (let [p (u/parse-string (:Pattern inst))
+                    result ((es/get-eval-pattern) env p)]
+                ;; TODO: insert p and result to exec-graph
+                result)
+              (let [df (first
+                        (cl/compile-dataflows-for-event
+                         (partial store/compile-query (env/get-store env))
+                         (if with-types
+                           (assoc inst li/with-types-tag with-types)
+                           inst)))
+                    [local-result evt-env]
+                    (when df
+                      (when (or (not resolver) composed?)
+                        (let [[_ dc] (cn/dataflow-opcode df (or with-types cn/with-default-types))
+                              evt-result (eval-opcode self env dc)
+                              local-result (extract-local-result evt-result)]
+                          (when-not local-result
+                            (log/error (str record-name " - event failed - " (first evt-result))))
+                          [local-result (:env evt-result)])))
+                    resolver-results (when resolver (call-resolver-eval resolver composed? env inst))
+                    r (cond
+                        (and local-result resolver-results)
+                        (let [ls (if (map? local-result) [local-result] local-result)
+                              res0 (extract-resolver-result resolver-results)
+                              res (if (map? res0) [res0] res0)]
+                          (vec (concat ls res)))
+                        local-result local-result
+                        resolver-results (extract-resolver-result resolver-results))
+                    env0 (if alias-name (env/bind-instance-to-alias env alias-name r) env)
+                    env (if evt-env (env/merge-post-event-trigger-sources evt-env env0) env0)]
+                (i/ok r (env/assoc-active-event env active-event)))))))
 
     (do-delete-instance [self env [record-name queries]]
       (if-let [store (env/get-store env)]

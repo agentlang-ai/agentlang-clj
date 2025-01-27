@@ -1331,22 +1331,11 @@
          pat)))
    pat))
 
-(def counter (atom 0))
-
 (defn- maybe-inject-exec-graph-instrumentation [event-name patterns]
-  (if (s/starts-with? (name (second (li/split-path event-name))) "ExecGraphNode")
+  (if (li/exec-graph-node-event? event-name)
     patterns
     (if (gs/exec-graph-enabled?)
-      (mapv (fn [p]
-              (let [_ (swap! counter inc)
-                    evt-name (keyword (str "Agentlang.Kernel.Eval/ExecGraphNode" @counter))]; (s/replace (u/uuid-string) "-" "")))]
-                ;; TODO: There registrations may have to be pushed to post-init-runtime, because of nested
-                ;; ref-update issue with components.
-                (cn/intern-event evt-name {:Pattern :Agentlang.Kernel.Lang/String})
-                (cn/register-dataflow evt-name [p])
-                ;;
-                {evt-name {:Pattern (pr-str p)}}))
-            patterns)
+      (mapv (fn [p] {li/exec-graph-node-event {:Pattern (pr-str p)}}) patterns)
       patterns)))
 
 (defn- compile-dataflow [ctx evt-pattern df-patterns]

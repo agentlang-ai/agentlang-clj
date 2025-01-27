@@ -26,6 +26,7 @@
             [agentlang.evaluator.state :as es]
             [agentlang.evaluator.internal :as i]
             [agentlang.evaluator.root :as r]
+            [agentlang.evaluator.model]
             [agentlang.evaluator.suspend :as sp]
             [agentlang.evaluator.intercept.core :as interceptors]))
 
@@ -399,6 +400,8 @@
    (evaluate-pattern nil store-or-store-config resolver-or-resolver-config pattern))
   ([env pattern] (evaluate-pattern env nil nil pattern))
   ([pattern] (evaluate-pattern nil nil pattern)))
+
+(es/set-eval-pattern! evaluate-pattern)
 
 (def ^:private debug-sessions (atom {}))
 

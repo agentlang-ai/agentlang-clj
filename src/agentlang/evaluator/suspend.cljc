@@ -6,9 +6,8 @@
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
             [agentlang.component :as cn]
+            [agentlang.evaluator.model]
             [agentlang.evaluator.state :as gs]))
-
-(ln/component :Agentlang.Kernel.Eval)
 
 (def ^:private active-suspension-id #?(:clj (ThreadLocal.)
                                        :cljs (atom nil)))
