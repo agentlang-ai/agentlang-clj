@@ -24,4 +24,4 @@
 (def ^:private eval-pattern (atom nil))
 
 (defn set-eval-pattern! [f] (reset! eval-pattern f))
-(def get-eval-pattern [] @eval-pattern)
+(defn get-eval-pattern [] @eval-pattern)
