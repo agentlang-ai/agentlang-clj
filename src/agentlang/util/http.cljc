@@ -14,7 +14,7 @@
             #?(:clj [ring.util.codec :as codec])
             #?(:cljs [cljs.core.async :refer [<!]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [go]]))
-  #?(:clj (:import [java.net URLEncoder])))
+  #?(:clj (:import [java.net URLEncoder URI URL IDN])))
 
 #?(:clj
    (alter-var-root #'org.httpkit.client/*default-client* (fn [_] sni-client/default-client)))
@@ -61,6 +61,19 @@
 (def get-magiclink-prefix "/get-magiclink")
 (def preview-magiclink-prefix "/preview-magiclink")
 (def post-inference-service-question "/post-inference-service-question")
+
+(defn url-encode [s]
+  #?(:clj
+     (let [^URL url (URL. s)
+           ^URI uri (URI. (.getProtocol url)
+                          (.getUserInfo url)
+                          (IDN/toASCII (.getHost url))
+                          (.getPort url)
+                          (.getPath url)
+                          (.getQuery url)
+                          (.getRef url))]
+       (.toASCIIString uri))
+     :cljs s))
 
 (defn- remote-resolver-error [response]
   (u/throw-ex (str "remote service error - " (or (:error response) response))))
@@ -230,10 +243,6 @@
                       "/" (name entity))
            :vars (map name path)}
           (recur (conj path (-> parent-entity first last))))))))
-
-(defn url-encode [s]
-  #?(:clj
-     (URLEncoder/encode s)))
 
 (defn form-decode [s]
   (w/keywordize-keys (codec/form-decode s)))
