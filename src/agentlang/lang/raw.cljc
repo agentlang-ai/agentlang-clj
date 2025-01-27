@@ -132,8 +132,8 @@
 
 (defn create-function
   ([component-name function-name params-vector body]
-   (create-function component-name function-name params-vector body nil))
-  ([component-name function-name params-vector body docstring]
+   (create-function component-name function-name nil params-vector body))
+  ([component-name function-name docstring params-vector body]
    (upsert-function
     component-name function-name docstring params-vector body
     #(append-to-component
@@ -144,8 +144,8 @@
 
 (defn update-function
   ([component-name function-name params-vector body]
-   (update-function component-name function-name params-vector body nil))
-  ([component-name function-name params-vector body docstring]
+   (update-function component-name function-name nil params-vector body))
+  ([component-name function-name docstring params-vector body]
    (upsert-function
     component-name function-name docstring params-vector body
     #(update-in-component

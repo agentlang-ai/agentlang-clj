@@ -361,7 +361,12 @@
        (when (seqable? exp)
          (let [tag (first exp)]
            (case tag
-             defn [:defn (second exp) [(nth exp 2) (nth exp 3)]]
+             defn (let [fn-name (second exp)
+                        has-docstring? (string? (nth exp 2))
+                        docstring (when has-docstring? (nth exp 2))
+                        params (if has-docstring? (nth exp 3) (nth exp 2))
+                        body (if has-docstring? (nth exp 4) (nth exp 3))]
+                    [:defn fn-name docstring [params body]])
              def [:def (second exp) (nth exp 2)]
              nil))))
 
@@ -377,7 +382,9 @@
          (doseq [exp component-spec]
            (if-let [[tag n v] (maybe-def-expr exp)]
              (if (= tag :defn)
-               (raw/create-function cname n (first v) (second v))
+               (let [[params body] (last v)
+                     docstring (nth v 1)]
+                 (raw/create-function cname n docstring params body))
                (raw/create-definition cname n v))
              (let [is-standalone-pattern (li/maybe-upsert-instance-pattern? exp)]
                (when-let [intern (if is-standalone-pattern
