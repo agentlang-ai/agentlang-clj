@@ -26,6 +26,7 @@
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
+(component :Agent.Planner.Core {:model :Agentlang})
 (component :Agentlang.Core {:model :Agentlang})
 
 (def subscription-events (atom {}))

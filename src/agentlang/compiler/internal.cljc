@@ -5,6 +5,7 @@
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
             [agentlang.component :as cn]
+            [agentlang.global-state :as gs]
             [agentlang.lang.internal :as li]
             [agentlang.lang.kernel :as lk]
             [agentlang.compiler.context :as ctx]
@@ -64,7 +65,7 @@
                (if (= (cn/schema-type-tag scm) :event)
                  (u/throw-ex (str "Error in: Event " p " no such attribute - " (first refs)))
                  (u/throw-ex (str "Invalid reference - " [p refs])))))))
-       ((if (ctx/fetch-variable ctx conditional-dataflow-tag)
+       ((if (or (ctx/fetch-variable ctx conditional-dataflow-tag) (gs/exec-graph-enabled?))
           log-warn
           u/throw-ex)
         (str "Reference cannot be found for "
@@ -101,7 +102,7 @@
       (if (or (cn/has-attribute? schema path)
               (aliased-name-in-context ctx schema n))
         true
-        (u/throw-ex (str "reference not in schema - " n)))
+        ((if (gs/exec-graph-enabled?) log-warn u/throw-ex) (str "reference not in schema - " n)))
       (cond
         (and rec refs) (name-in-context ctx component rec refs)
         path (name-in-context ctx path)

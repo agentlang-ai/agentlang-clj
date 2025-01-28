@@ -37,3 +37,16 @@
 
 (defn dummy-result [env]
   {opc/result-status-tag opc/ok-tag :env env})
+
+(def internal-event-flag
+  #?(:clj (Object.)
+     :cljs {:internal-event true}))
+
+(def internal-event-key :-*-internal-event-*-)
+
+(defn mark-internal [event-instance]
+  (assoc event-instance internal-event-key internal-event-flag))
+
+(defn internal-event? [event-instance]
+  (when (identical? internal-event-flag (internal-event-key event-instance))
+    true))

@@ -25,8 +25,8 @@
             [agentlang.global-state :as gs]
             [agentlang.evaluator.state :as es]
             [agentlang.evaluator.internal :as i]
-            [agentlang.evaluator.root :as r]
             [agentlang.evaluator.model]
+            [agentlang.evaluator.root :as r]
             [agentlang.evaluator.suspend :as sp]
             [agentlang.evaluator.intercept.core :as interceptors]))
 
@@ -104,19 +104,6 @@
       (cn/deref-future-object %)
       %)
    result))
-
-(def ^:private internal-event-flag
-  #?(:clj (Object.)
-     :cljs {:internal-event true}))
-
-(def ^:private internal-event-key :-*-internal-event-*-)
-
-(defn mark-internal [event-instance]
-  (assoc event-instance internal-event-key internal-event-flag))
-
-(defn internal-event? [event-instance]
-  (when (identical? internal-event-flag (internal-event-key event-instance))
-    true))
 
 (defn trigger-rules [tag insts]
   (loop [insts insts, env nil, result nil]
@@ -202,9 +189,9 @@
         (let [_ (sp/init-suspension-id)
               {susp-env :env susp-opcc :opcc} sp/suspension-info
               env (if susp-env (merge env susp-env) env)
-              is-internal (or (internal-event? event-instance) internal-post-events)
+              is-internal (or (i/internal-event? event-instance) internal-post-events)
               event-instance0 (if is-internal
-                                (dissoc event-instance internal-event-key)
+                                (dissoc event-instance i/internal-event-key)
                                 event-instance)
               event-instance (if-not (li/event-context event-instance0)
                                (assoc event-instance0 li/event-context gs/active-event-context)
@@ -528,6 +515,8 @@
     ((if is-atomic eval-all-dataflows-atomic eval-all-dataflows)
      (cn/make-instance event-obj))))
   ([event-obj] (safe-eval false event-obj)))
+
+(def mark-internal i/mark-internal)
 
 (defn safe-eval-internal
   ([is-atomic event-obj]

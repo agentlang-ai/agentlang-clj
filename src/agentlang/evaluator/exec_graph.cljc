@@ -2,9 +2,10 @@
   (:require [agentlang.util :as u]
             [agentlang.lang :as ln]
             [agentlang.lang.internal :as li]
-            [agentlang.component :as cn]))
-
-(def ^:private exec-graphs (u/make-cell {}))
+            [agentlang.component :as cn]
+            [agentlang.env :as env]
+            [agentlang.evaluator.internal :as ei]
+            [agentlang.evaluator.state :as es]))
 
 (def ^:private active-exec-graph
   #?(:clj (ThreadLocal.)
@@ -69,18 +70,55 @@
 (def graph-node-pattern first)
 (def graph-node-result second)
 
-(defn graph-walk [g on-sub-graph on-node]
+(defn graph-walk! [g on-sub-graph! on-node!]
   (doseq [n (graph-nodes g)]
     (if (graph? n)
-      (on-sub-graph n)
-      (on-node n))))
+      (on-sub-graph! n)
+      (on-node! n))))
+
+(defn- dissoc-env [result]
+  (cond
+    (map? result)
+    (dissoc result :env)
+
+    (vector? result)
+    (mapv dissoc-env result)
+
+    :else result))
+
+(defn trim-graph [g]
+  (let [[evt r] (:event g)
+        nodes (mapv (fn [n]
+                      (if (graph? n)
+                        (trim-graph n)
+                        (let [[p r] n]
+                          [p (dissoc-env r)])))
+                    (graph-nodes g))]
+    (assoc g :nodes nodes :event [evt (dissoc-env r)])))
 
 (defn- finalize-graph! []
   (when-let [g (get-graph)]
-    (u/safe-set exec-graphs (assoc @exec-graphs (u/uuid-string) g))))
+    ((es/get-active-evaluator)
+     (ei/mark-internal
+      (cn/make-instance
+       {:Agentlang.Kernel.Eval/Create_ExecGraph
+        {:Instance
+         {:Agentlang.Kernel.Eval/ExecGraph
+          {:Graph g}}}})))))
+
+(defn- cleanup-result [result]
+  (cond
+    (map? result)
+    (assoc result :env (env/cleanup (:env result)))
+
+    (vector? result)
+    (mapv cleanup-result result)
+
+    :else result))
 
 (defn add-node [{pattern :Pattern df-start? :DfStart df-end? :DfEnd} result]
-  (let [new-g
+  (let [result (cleanup-result result)
+        new-g
         (if df-start?
           (let [_ (push-graph)
                 new-g (init-graph pattern result)]
@@ -95,22 +133,3 @@
         (set-graph! (append-node g new-g))
         (finalize-graph!)))
     new-g))
-
-(defn events-with-exec-graphs []
-  (mapv (fn [[k v]]
-          {:Key k :Event (graph-event v)})
-        @exec-graphs))
-
-(defn get-exec-graph [k] (get @exec-graphs k))
-
-(ln/event :Agentlang.Kernel.Eval/LookupEventsWithGraphs {})
-
-(ln/dataflow
- :Agentlang.Kernel.Eval/LookupEventsWithGraphs
- [:eval '(agentlang.evaluator.exec-graph/events-with-exec-graphs)])
-
-(ln/event :Agentlang.Kernel.Eval/GetExecGraph {:Key :String})
-
-(ln/dataflow
- :Agentlang.Kernel.Eval/GetExecGraph
- [:eval '(agentlang.evaluator.exec-graph/get-exec-graph :Agentlang.Kernel.Eval/GetExecGraph.Key)])
