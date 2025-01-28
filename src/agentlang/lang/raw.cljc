@@ -157,7 +157,7 @@
 (defn delete-function [component-name function-name]
   (remove-from-component component-name (partial clj-defn? function-name)))
 
-(defn- find-defn [component-name function-name]
+(defn find-defn [component-name function-name]
   (first (find-in-component component-name (partial clj-defn? function-name))))
 
 (defn get-function-params [component-name function-name]
