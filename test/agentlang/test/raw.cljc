@@ -1,11 +1,12 @@
 (ns agentlang.test.raw
   (:require [clojure.test :refer :all]
-            [agentlang.lang.raw :refer :all]))
+            [agentlang.lang.raw :refer :all]
+            #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
+               :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
 
 (def test-component 'test-comp)
 
 (defn reset-state []
-  (raw-store-reset!)
   (intern-component test-component ['(component test-comp)]))
 
 (deftest create-function-test

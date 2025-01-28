@@ -363,7 +363,9 @@
            (case tag
              defn (let [fn-name (second exp)
                         has-docstring? (string? (nth exp 2))
-                        docstring (when has-docstring? (nth exp 2))
+                        docstring (if has-docstring?
+                                    (nth exp 2)
+                                    nil)
                         params (if has-docstring? (nth exp 3) (nth exp 2))
                         body (if has-docstring? (nth exp 4) (nth exp 3))]
                     [:defn fn-name docstring [params body]])
@@ -384,7 +386,9 @@
              (if (= tag :defn)
                (let [[params body] (last v)
                      docstring (nth v 1)]
-                 (raw/create-function cname n docstring params body))
+                 (if docstring
+                  (raw/create-function cname n docstring params body)
+                  (raw/create-function cname n params body)))
                (raw/create-definition cname n v))
              (let [is-standalone-pattern (li/maybe-upsert-instance-pattern? exp)]
                (when-let [intern (if is-standalone-pattern
