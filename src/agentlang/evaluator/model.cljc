@@ -6,4 +6,7 @@
 
 (ln/event
  li/exec-graph-node-event
- {:Pattern :Agentlang.Kernel.Lang/String})
+ {:Pattern :Agentlang.Kernel.Lang/String
+  :DfStart {:type :Agentlang.Kernel.Lang/Boolean :default false} ; dataflow-start?
+  :DfEnd {:type :Agentlang.Kernel.Lang/Boolean :default false} ; dataflow-end?
+  })

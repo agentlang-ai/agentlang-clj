@@ -21,6 +21,7 @@
             [agentlang.evaluator.match :as m]
             [agentlang.evaluator.internal :as i]
             [agentlang.evaluator.intercept.core :as interceptors]
+            [agentlang.evaluator.exec-graph :as exg]
             [agentlang.global-state :as gs]
             [agentlang.compiler :as cl]
             [agentlang.compiler.context :as ctx]
@@ -1126,8 +1127,8 @@
         (if (li/exec-graph-node-event? record-name)
           (let [p (u/parse-string (:Pattern inst))
                 result ((es/get-eval-pattern) env p)]
-            ;; TODO: insert p and result to exec-graph
-            result)
+            (and (exg/add-node inst result)
+                 result))
           (let [df (first
                     (cl/compile-dataflows-for-event
                      (partial store/compile-query (env/get-store env))

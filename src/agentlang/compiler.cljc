@@ -1332,11 +1332,24 @@
    pat))
 
 (defn- maybe-inject-exec-graph-instrumentation [event-name patterns]
-  (if (li/exec-graph-node-event? event-name)
+  (cond
+    (li/exec-graph-node-event? event-name)
     patterns
-    (if (gs/exec-graph-enabled?)
-      (mapv (fn [p] {li/exec-graph-node-event {:Pattern (pr-str p)}}) patterns)
-      patterns)))
+
+    (gs/exec-graph-enabled?)
+    (loop [pats patterns, result []]
+      (if-let [p (first pats)]
+        (recur
+         (rest pats)
+         (conj
+          result
+          {li/exec-graph-node-event
+           {:Pattern (pr-str p)
+            :DfStart (if-not (seq result) true false)
+            :DfEnd (if-not (seq (rest pats)) true false)}}))
+        result))
+
+    :else patterns))
 
 (defn- compile-dataflow [ctx evt-pattern df-patterns]
   (let [ename (if (li/name? evt-pattern)
