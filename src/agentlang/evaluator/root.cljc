@@ -964,7 +964,6 @@
 
 (defn- intern-instance [self env eval-opcode eval-event-dataflows
                         record-name inst-alias queries validation-required upsert-required]
-  
   (let [rec-version (get-in queries [:query :raw-query :version])
         [insts single? env] (pop-instance env record-name rec-version (partial eval-opcode self) validation-required)
         scm (cn/ensure-schema record-name rec-version)
