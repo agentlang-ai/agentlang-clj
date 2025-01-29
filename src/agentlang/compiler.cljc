@@ -643,8 +643,8 @@
       [pat nil])
     [pat nil]))
 
-(defn- compile-for-each-match-pattern [ctx pat]
-  (let [[pat alias] (parse-for-each-match-pattern pat)]
+(defn- compile-for-each-match-pattern [ctx orig-pat]
+  (let [[pat alias] (parse-for-each-match-pattern orig-pat)]
     (when alias
       (ctx/add-alias! ctx alias))
     [(compile-pattern ctx (normalize-and-preproc pat true)) alias]))

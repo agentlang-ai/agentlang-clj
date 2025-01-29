@@ -598,3 +598,8 @@
               (or (keyword? n) (symbol? n))
               ;; is there an attributes map?
               (map? (get pat n))))))
+
+(defn extract-alias-from-pattern [pat]
+  (if (map? pat)
+    (:as pat)
+    (when (seqable? pat) (second (drop-while #(not= % :as) pat)))))

@@ -47,11 +47,6 @@
   #?(:clj (.get suspension-flag)
      :cljs @suspension-flag))
 
-(defn- extract-alias-from-pattern [pat]
-  (if (map? pat)
-    (:as pat)
-    (when (seqable? pat) (second (drop-while #(not= % :as) pat)))))
-
 (defn- suspend-dataflow [result env opcode opcode-count]
   (reset-suspension-flag!)
   (let [result
@@ -62,7 +57,7 @@
                           eval-all-dataflows event opcode-count
                           (env/cleanup env false)
                           (when-let [pat (:pattern opcode)]
-                            (extract-alias-from-pattern pat)))]
+                            (li/extract-alias-from-pattern pat)))]
               (i/suspension result sid)
               (u/throw-ex (str "failed to suspend dataflow for " (cn/instance-type-kw event))))))]
     result))

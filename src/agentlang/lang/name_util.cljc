@@ -2,6 +2,7 @@
   "Namespace for fully-qualified name utilities"
   (:require [clojure.string :as string]
             [clojure.walk :as w]
+            [agentlang.util :as u]
             [agentlang.util.seq :as su]
             [agentlang.lang.internal :as li]))
 
@@ -189,7 +190,15 @@
    'resolver fq-preproc-record-def
    'pattern fq-preproc-pattern-def})
 
+(defn- assert-valid-alias! [rec-names pat]
+  (when (or (map? pat) (vector? pat))
+    (when-let [alias (li/extract-alias-from-pattern pat)]
+      (when (some #{alias} rec-names)
+        (u/throw-ex (str "Alias " alias " overwrites a record-name. Please rename the alias in " pat)))))
+  pat)
+
 (defn fully-qualified-names [declared-names exp]
+  (w/prewalk (partial assert-valid-alias! (:records declared-names)) exp)
   (binding [fq-name (make-fq-name declared-names)]
     (if (seqable? exp)
       ((get fq-preproc-defs (first exp) identity) exp)

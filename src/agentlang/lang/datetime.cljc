@@ -15,9 +15,7 @@
 (defn- valid-format? [parser formatter s]
   (try
     (parser s formatter)
-    (catch
-     #?(:clj Exception :cljs :default) ex
-      (log/error ex)
+    (catch #?(:clj Exception :cljs :default) _
       false)))
 
 (defn try-parse-date-time [formatter s]
