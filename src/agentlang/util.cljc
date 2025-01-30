@@ -72,8 +72,7 @@
      :cljs
      (let [e (js/Error. msg)]
        (println msg)
-       (.log js/console (.-stack e))
-       (throw e))))
+       (.log js/console (.-stack e)))))
 
 (defn ok-result
   ([result safe]
