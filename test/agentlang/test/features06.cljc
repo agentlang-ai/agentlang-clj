@@ -4,6 +4,7 @@
             [agentlang.component :as cn]
             [agentlang.util :as u]
             [agentlang.evaluator :as e]
+            [agentlang.lang.datetime :as dt]
             [agentlang.lang
              :refer [component entity event relationship dataflow
                      attribute pattern resolver]]
@@ -178,3 +179,28 @@
                               {:Id s2 :Value (assoc a2 :Flag false)}}))
     (is (nil? (tu/result {:Agentlang.Kernel.Eval/RestartSuspension
                           {:Id s1 :Value (assoc a1 :Flag false)}})))))
+
+(deftest custom-date-check
+  (defcomponent :Cdc
+    (entity
+     :Cdc/E
+     {:Id :Identity
+      :Created :Now
+      :T0 :Time
+      :D0 :Date
+      :D1 {:type :Date
+           :check (dt/date-parser "MM-dd-yyyy")}
+      :D2 {:type :Date
+           :check (dt/date-parser "MMM-dd-yyyy")}}))
+  (let [inst (tu/first-result
+              {:Cdc/Create_E
+               {:Instance
+                {:Cdc/E {:T0 "10:20:00.000"
+                         :D0 "2025-02-20"
+                         :D1 "02-20-2025"
+                         :D2 "Feb-20-2025"}}}})]
+    (is (cn/instance-of? :Cdc/E inst))
+    (is (dt/parse-default-date-time (:Created inst)))
+    (is (= "2025-02-20" (:D0 inst)))
+    (is (= "02-20-2025" (:D1 inst)))
+    (is (= "Feb-20-2025" (:D2 inst)))))

@@ -33,14 +33,14 @@
    (let [evt (cn/make-instance :I195/K {})
          r (first (tu/fresult (e/eval-all-dataflows evt)))]
      (is (cn/instance-of? :I195/E1 r))
-     (is (dt/parse-date-time (:Y r)))
+     (is (dt/parse-default-date-time (:Y r)))
      (is (= 10 (:B r)))
      (is (= 15 (:A r)))
      (is (= 25 (:C r))))
    (let [evt (cn/make-instance :I195/KK {})
          r (first (tu/fresult (e/eval-all-dataflows evt)))]
      (is (cn/instance-of? :I195/E2 r))
-     (is (dt/parse-date-time (:Y r))))))
+     (is (dt/parse-default-date-time (:Y r))))))
 
 (defn- assert-transition [attr-names to-attr-vals r]
   (is (= to-attr-vals (mapv #(% r) attr-names))))

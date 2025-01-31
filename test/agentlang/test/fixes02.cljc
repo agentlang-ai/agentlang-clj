@@ -59,22 +59,24 @@
 (deftest issue-352-date-time-formats
   (#?(:clj do
       :cljs cljs.core.async/go)
-   (let [dates ["January 8, 2021" "2021-Jan-08"
-                "Jan-08-2021" "08-Jan-2021" "20210108"]
-         times ["04:05:06.789" "04:05" "040506"
-                "04:05 pm"
-                "04:05 AM"
-                "04:05:06 PST"
-                "04:05:06 America/New_York"]
-         date-times ["2021-01-08T04:05:06"
-                     "2021-01-08 04:05:06"
-                     "2021-01-08 04:05:06.789"
-                     "20210108040506"
-                     "2021-01-08 04:05:06 PST"
-                     "2021-01-08 04:05:06 America/New_York"]]
-     (is (every? dt/parse-date dates))
-     (is (every? dt/parse-time times))
-     (is (every? dt/parse-date-time date-times)))))
+   (let [dates [["MMMM d, yyyy" "January 8, 2021"]
+                ["yyyy-MMM-dd" "2021-Jan-08"]
+                ["MMM-dd-yyyy" "Jan-08-2021"]
+                ["dd-MMM-yyyy" "08-Jan-2021"]
+                ["yyyyMMdd" "20210108"]]
+         times [["HH:mm:ss.SSS" "04:05:06.789"]
+                ["HH:mm:ss" "04:05:06"]
+                ["HH:mm" "04:05"]
+                ["HHmmss" "040506"]
+                ["HH:mm:ss z" "04:05:06 America/New_York"]]
+         date-times [["yyyy-MM-dd HH:mm:ss" "2021-01-08 04:05:06"]
+                     ["yyyy-MM-dd HH:mm" "2021-01-08 04:05"]
+                     ["yyyy-MM-dd HH:mm:ss.SSS" "2021-01-08 04:05:06.789"]
+                     ["yyyyMMddHHmmss" "20210108040506"]
+                     ["yyyy-MM-dd HH:mm:ss z" "2021-01-08 04:05:06 America/New_York"]]]
+     (is (every? (fn [[f s]] ((dt/date-parser f) s)) dates))
+     (is (every? (fn [[f s]] ((dt/time-parser f) s)) times))
+     (is (every? (fn [[f s]] ((dt/date-time-parser f) s)) date-times)))))
 
 (deftest issue-352-date-time-upserts
   (#?(:clj do

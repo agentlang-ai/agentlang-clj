@@ -24,9 +24,9 @@
      :cljs
      (float? x)))
 
-(def date-time? dt/parse-date-time)
-(def date? dt/parse-date)
-(def time? dt/parse-time)
+(def date-time? dt/parse-default-date-time)
+(def date? dt/parse-default-date)
+(def time? dt/parse-default-time)
 
 (defn UUID? [s]
   (or (u/uuid-from-string s) (uuid? s)))
