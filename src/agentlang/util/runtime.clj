@@ -224,10 +224,10 @@
         (if has-rbac
           (lr/finalize-events ev)
           (lr/reset-events!))
+        (u/run-init-fns)
         (register-resolvers! config ev)
         (when (seq (:resolvers resolved-config))
           (register-resolvers! resolved-config ev))
-        (u/run-init-fns)
         (isc/init)
         (run-appinit-tasks! ev (or (:init-data model)
                                    (:init-data config)))
