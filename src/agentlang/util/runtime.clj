@@ -16,6 +16,7 @@
    [agentlang.resolver.registry :as rr]
    [agentlang.compiler :as c]
    [agentlang.component :as cn]
+   [agentlang.interpreter :as intrp]
    [agentlang.evaluator :as e]
    [agentlang.evaluator.intercept :as ei]
    [agentlang.global-state :as gs]
@@ -211,10 +212,7 @@
 
 (defn init-runtime [model config]
   (let [store (store-from-config config)
-        ev ((if (repl-mode? config)
-              e/internal-evaluator
-              e/public-evaluator)
-            store)
+        ev (partial intrp/evaluate-dataflow store)
         ins (:interceptors config)
         embeddings-config (:embeddings config)]
     (when embeddings-config (ec/init embeddings-config))

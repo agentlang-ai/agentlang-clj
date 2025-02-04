@@ -103,6 +103,8 @@
 (defn- maybe-remove-where [qpat]
   (if (:where qpat) qpat (dissoc qpat :where)))
 
+(def raw-format-sql hsql/format)
+
 (defn format-sql [table-name is-view query]
   (let [qmap (map? query)]
     (if (and qmap (or (:join query) (:left-join query)))

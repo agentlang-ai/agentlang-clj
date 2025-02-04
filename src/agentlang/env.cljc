@@ -52,7 +52,8 @@
 (defn bind-instance
   ([env rec-name instance]
    (if (and rec-name instance)
-     (let [insts (or (get-instances env rec-name) (list))]
+     (let [rec-name (li/split-path rec-name)
+           insts (or (get-instances env rec-name) (list))]
        (assoc env rec-name (conj insts instance)))
      (u/throw-ex (str "may not be a valid instance - " instance ", record-name is - " rec-name))))
   ([env instance]

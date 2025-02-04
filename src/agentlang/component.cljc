@@ -1201,8 +1201,7 @@
                      [event
                       {:head head
                        :event-pattern event
-                       :patterns patterns
-                       :opcode (u/make-cell {})}])]]
+                       :patterns patterns}])]]
        (when (and (user-defined-event? event) (seq (get-in ms path)))
          (log/warn (str "overwriting dataflow for " event)))
        (assoc-in ms path newpats)))
@@ -1276,16 +1275,6 @@
 
 (def with-default-types :default)
 
-(defn dataflow-opcode [df target]
-  (let [opc @(:opcode (dataflow-spec df))]
-    (get opc target)))
-
-(defn set-dataflow-opcode! [df opc target]
-  (let [old-opc (:opcode (dataflow-spec df))]
-    (u/safe-set
-     old-opc
-     (assoc @old-opc target opc))))
-
 (defn dataflow-on-entity [df]
   (get-in (dataflow-spec df) [:head :on-entity-event]))
 
@@ -1320,6 +1309,9 @@
 
 (defn find-dataflows [event-name]
   (seq (component-find :events event-name)))
+
+(defn fetch-dataflow-patterns [event-instance]
+  (:patterns (second (first (find-dataflows (instance-type event-instance))))))
 
 (defn dataflows-for-event
   "Return all dataflows attached to the event."

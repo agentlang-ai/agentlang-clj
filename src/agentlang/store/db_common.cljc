@@ -45,6 +45,9 @@
        (let [where-clause (:where query-pattern)]
          (when (not= :* where-clause) where-clause))))))
 
+(defn query-attributes-to-sql [recname attrs]
+  (let []))
+
 (defn- norm-constraint-name [s]
   (s/replace s "_" ""))
 
@@ -313,12 +316,26 @@
   ([datasource entity-name query-sql ids]
    (query-by-id query-by-id-statement datasource entity-name query-sql ids)))
 
+(defn- query-by-attributes [datasource [entity-name attrs]]
+  (let [sql-params
+        (sql/raw-format-sql
+         {:select [:*] :from [(keyword (stu/entity-table-name entity-name nil))]
+          :where (vec (concat [:and [:= stu/deleted-flag-col-kw false]]
+                              (vals attrs)))})]
+    (execute-fn!
+     datasource
+     (fn [conn]
+       (let [pstmt (prepare conn [(first sql-params)])]
+         (stu/results-as-instances entity-name (execute-stmt-once! conn pstmt (rest sql-params))))))))
+
 (defn do-query [datasource query-sql query-params]
-  (execute-fn!
-   datasource
-   (fn [conn]
-     (let [[pstmt params] (do-query-statement conn query-sql query-params)]
-       (execute-stmt-once! conn pstmt params)))))
+  (if-not query-sql
+    (query-by-attributes datasource query-params)
+    (execute-fn!
+     datasource
+     (fn [conn]
+       (let [[pstmt params] (do-query-statement conn query-sql query-params)]
+         (execute-stmt-once! conn pstmt params))))))
 
 (defn- query-relational-entity-by-unique-keys [datasource entity-name unique-keys attribute-values]
   (let [sql (sql/compile-to-direct-query (stu/entity-table-name entity-name) (mapv name unique-keys) :and)]

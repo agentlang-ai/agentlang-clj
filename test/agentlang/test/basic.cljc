@@ -13,148 +13,40 @@
             [agentlang.lang.internal :as li]
             [agentlang.api :as api]
             [agentlang.evaluator :as e]
+            [agentlang.interpreter :as intrp]
             [agentlang.lang.opcode :as opc]
             [agentlang.compiler.context :as ctx]
             [agentlang.lang.datetime :as dt]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
 
-#? (:clj
-    (def store (store/open-default-store nil))
-    :cljs
-    (def store (store/open-default-store {:type :reagent})))
-
-(defn- install-test-component []
-  (cn/remove-component :CompileTest)
-  (component :CompileTest)
-  (entity {:CompileTest/E1
-           {:X :Int
-            :Y :Int}}))
-
-(defn- init-test-context []
-  (install-test-component)
-  (let [ctx (c/make-context)
-        f (partial store/compile-query store)]
-    (ctx/bind-compile-query-fn! ctx f)
-    ctx))
-
-(defn- compile-pattern [ctx pat]
-  (:opcode (c/compile-pattern ctx pat)))
-
-(defn- pattern-compiler []
-  (let [ctx (init-test-context)]
-    [ctx (partial compile-pattern ctx)]))
-
-(defn- valid-opcode? [opc-predic opcode v]
-  (is (opc-predic opcode))
-  (if (fn? v)
-    (is (v (opc/arg opcode)))
-    (is (= v (opc/arg opcode)))))
-
-(defn- valid-opcode-with-query? [opcode farg]
-  (is (opc/query-instances? opcode))
-  (let [arg (opc/arg opcode)]
-    (is (= farg (first arg)))))
-
-(def ^:private load-instance? (partial valid-opcode? opc/load-instance?))
-(def ^:private match-inst? (partial valid-opcode? opc/match-instance?))
-
-(deftest compile-path
-  (let [[_ c] (pattern-compiler)
-        p1 :CompileTest/E1
-        p1e :CompileTest/E111
-        p2 :CompileTest/Create_E1
-        p2e :CompileTest/Update_E111]
-    (load-instance? (c p1) [[:CompileTest :E1] nil])
-    (tu/is-error #(c p1e))
-    (load-instance? (c p2) [[:CompileTest :Create_E1] nil])
-    (tu/is-error #(c p2e))))
-
-(deftest compile-pattern-01
-  (let [[_ c] (pattern-compiler)
-        p1 {:CompileTest/E1
-            {:X 100
-             :Y 200}}
-        opcs (c p1)]
-    (is (valid-opcode? opc/new-instance?
-                       (first opcs) [:CompileTest :E1]))
-    (is (valid-opcode? opc/set-literal-attribute?
-                       (second opcs) [:X 100]))
-    (is (valid-opcode? opc/set-literal-attribute?
-                       (nth opcs 2) [:Y 200]))
-    (is (valid-opcode? opc/intern-instance?
-                       (nth opcs 3)
-                       (fn [[r a _ v u]]
-                         (and (= r [:CompileTest :E1])
-                              (= a nil) (= v true) 
-                              (= u true)))))))
-
-(deftest compile-pattern-02
-  (let [[ctx c] (pattern-compiler)
-        p1 {:CompileTest/E1
-            {tu/q-id-attr 'id
-             :X 100
-             :Y '(+ :X 10)}}
-        uuid (u/uuid-string)]
-    ;; Variable `id` not in context.
-    (tu/is-error #(c p1))
-    ;; Any value will do, variable validation
-    ;; will happen only during runtime.
-    ;; In this case, the variable is resolved at
-    ;; compile-time itself.
-    (ctx/bind-variable! ctx 'id uuid)
-    (let [opcs (c p1)]
-      (is (valid-opcode-with-query? (first opcs) [:CompileTest :E1]))
-      (is (valid-opcode? opc/set-literal-attribute?
-                         (second opcs) [:X 100]))
-      (is (valid-opcode? opc/set-compound-attribute?
-                         (nth opcs 2) (fn [[n f]]
-                                        (and (= :Y n) (fn? f)))))
-      (is (valid-opcode? opc/intern-instance?
-                         (nth opcs 3)
-                         (fn [[r a _ v u]]
-                           (and (= r [:CompileTest :E1])
-                                (= a nil) (= v true)
-                                (= u true))))))))
-
-(deftest circular-dependency
-  (let [[ctx c] (pattern-compiler)
-        p1 {:CompileTest/E1
-            {tu/q-id-attr 'id
-             :X '(+ :Y 20)
-             :Y '(+ :X 10)}}
-        uuid (u/uuid-string)]
-    (ctx/bind-variable! ctx 'id uuid)
-    ;; Compilation fail on cyclic-dependency
-    (tu/is-error #(c p1))))
-
-(deftest compile-ref
-  (defcomponent :Df01
-    (entity {:Df01/E
-             {:X :Int
-              :Y :Int}}))
-  (let [e (cn/make-instance :Df01/E {:X 10 :Y 20})
-        evt {:Df01/Create_E {:Instance e}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
-    (is (cn/same-instance? e result))))
-
-(deftest compile-create
-  (defcomponent :Df02
-    (entity {:Df02/E
-             {:X :Int
-              :Y :Int}})
-    (record {:Df02/R {:A :Int}})
-    (event {:Df02/PostE {:R :Df02/R}}))
-  (dataflow :Df02/PostE
-            {:Df02/E {:X :Df02/PostE.R.A
-                      :Y '(* :X 10)}})
-  (let [r (cn/make-instance :Df02/R {:A 100})
-        evt (cn/make-instance :Df02/PostE {:R r})
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
-    (is (cn/instance-of? :Df02/E result))
-    (is (u/uuid-from-string (cn/id-attr result)))
+(deftest basic-eval
+  (defcomponent :BasicEval
+    (entity
+     :BasicEval/E
+     {:Id :Identity
+      :X :Int
+      :Y :Int
+      :Z {:type :Int :expr '(* :X :Y)}})
+    (dataflow
+     :BasicEval/MakeE
+     {:BasicEval/E {:X :BasicEval/MakeE.X :Y (quote (+ :X :BasicEval/MakeE.X 1))} :as :E}
+     :E)
+    (dataflow
+     :BasicEval/LookupE
+     {:BasicEval/E {:Id? :BasicEval/LookupE.Id} :as [:E]}
+     :E))
+  (let [ev (partial intrp/evaluate-dataflow (store/get-default-store))
+        result
+        (:result
+         (ev
+          (cn/make-instance
+           {:BasicEval/MakeE {:X 100}})))]
+    (is (cn/instance-of? :BasicEval/E result))
     (is (= 100 (:X result)))
-    (is (= 1000 (:Y result)))))
+    (is (= 201 (:Y result)))
+    (is (= (* 100 201) (:Z result)))
+    (is (cn/same-instance? result (:result (ev (cn/make-instance {:BasicEval/LookupE {:Id (:Id result)}})))))))
 
 (deftest dependency
   (defcomponent :Df03

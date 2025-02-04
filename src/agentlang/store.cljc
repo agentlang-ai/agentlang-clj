@@ -175,6 +175,9 @@
      %)
    insts))
 
+(defn create-instance [store inst]
+  (upsert-instance p/create-instance store (cn/instance-type-kw inst) inst))
+
 (defn upsert-instances [store record-name insts]
   (mapv
    #(upsert-instance store record-name %)
