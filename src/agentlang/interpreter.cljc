@@ -1,9 +1,11 @@
 (ns agentlang.interpreter
-  (:require [agentlang.util :as u]
+  (:require [clojure.walk :as w]
+            [agentlang.util :as u]
             [agentlang.component :as cn]
             [agentlang.env :as env]
             [agentlang.store :as store]
             [agentlang.store.util :as su]
+            [agentlang.global-state :as gs]
             [agentlang.lang.internal :as li]
             [agentlang.resolver.registry :as rr]
             [agentlang.resolver.core :as r]))
@@ -55,8 +57,11 @@
       (= c 2) [(first v) k v]
       :else (u/throw-ex (str "Invalid query syntax: " v)))))
 
+(defn- as-column-name [k]
+  (keyword (su/attribute-column-name (li/normalize-name k))))
+
 (defn- parse-query-value [env k v]
-  (let [k (keyword (su/attribute-column-name (li/normalize-name k)))]
+  (let [k (as-column-name k)]
     (cond
       (keyword? v) [:= k (resolve-reference env v)]
       (vector? v) (normalize-query-comparison k (vec (concat [(first v)] (mapv parse-query-value (rest v)))))
@@ -64,10 +69,23 @@
 
 (defn- process-query-attribute-value [env [k v]]
   [k (parse-query-value env k v)])
-    
+
+(defn- preprocess-select-clause [env entity-name clause]
+  (let [attr-names (cn/entity-attribute-names entity-name)]
+    (w/postwalk #(if (keyword? %)
+                   (if (su/sql-keyword? %)
+                     %
+                     (if (some #{%} attr-names)
+                       (as-column-name %)
+                       (resolve-reference env %)))
+                   %)
+                clause)))
+
 (defn- handle-query-pattern [env recname attrs alias]
-  ;; TODO: handle {:EntityName? {}} and {:EntityName? {:where ...}} formats
-  (let [attrs0 (into {} (mapv (partial process-query-attribute-value env) attrs))
+  (let [attrs0 (when (seq attrs)
+                 (if-let [select-clause (:? attrs)]
+                   {:? (preprocess-select-clause env recname select-clause)}
+                   (into {} (mapv (partial process-query-attribute-value env) attrs))))
         resolver (rr/resolver-for-path recname)
         result (if resolver
                  (r/call-resolver-query resolver env [recname attrs0])
@@ -106,7 +124,7 @@
         recattrs (li/record-attributes pat)
         alias (:as pat)
         result
-        (if (cn/entity-schema recname)
+        (if (cn/entity-schema (li/normalize-name recname))
           (if (li/query-instance-pattern? pat)
             (handle-query-pattern env recname recattrs alias)
             (handle-entity-crud-pattern env recname recattrs alias))
@@ -137,14 +155,22 @@
          env (if is-internal
                (env/block-interceptors env0)
                (env/assoc-active-event env0 event-instance))]
-     ;; TODO: call eval-loop in store transaction
-     (loop [df-patterns (cn/fetch-dataflow-patterns event-instance), env env, result nil]
-       (if-let [pat (first df-patterns)]
-         (if-let [handler (pattern-handler pat)]
-           (let [{env1 :env r :result} (handler env pat)]
-             (recur (rest df-patterns) env1 r))
-           (u/throw-ex (str "Cannot handle invalid pattern " pat)))
-         (make-result env result)))))
+     (store/call-in-transaction
+      store
+      (fn [txn]
+        (let [txn-set? (when (and txn (not (gs/get-active-txn)))
+                         (gs/set-active-txn! txn)
+                         true)]
+          (try
+            (loop [df-patterns (cn/fetch-dataflow-patterns event-instance), env env, result nil]
+              (if-let [pat (first df-patterns)]
+                (if-let [handler (pattern-handler pat)]
+                  (let [{env1 :env r :result} (handler env pat)]
+                    (recur (rest df-patterns) env1 r))
+                  (u/throw-ex (str "Cannot handle invalid pattern " pat)))
+                (make-result env result)))
+            (finally
+              (when txn-set? (gs/set-active-txn! nil)))))))))
   ([store event-instance] (evaluate-dataflow store nil event-instance false)))
 
 (defn evaluate-dataflow-in-environment [env event-instance]

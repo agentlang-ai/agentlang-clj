@@ -8,8 +8,14 @@
 (def deleted-flag-col "AGENTLANG__IS_DELETED")
 (def deleted-flag-col-kw (keyword (str "_" deleted-flag-col)))
 
-(defn- sys-col? [n]
-  (= (s/upper-case n) deleted-flag-col))
+(def sql-keywords #{:select :where := :<> :> :>= :< :<=
+                    :and :or :between :in :count :group-by
+                    :join :left-join :right-join :having
+                    :order-by :limit :offset})
+
+(defn sql-keyword? [k] (some #{k} sql-keywords))
+
+(defn- sys-col? [n] (= (s/upper-case n) deleted-flag-col))
 
 (defn db-ident [k]
   (if (keyword? k)
