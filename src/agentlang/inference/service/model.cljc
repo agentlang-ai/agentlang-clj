@@ -23,7 +23,7 @@
             [agentlang.global-state :as gs]
             [agentlang.inference.service.planner :as planner]
             [agentlang.inference.service.agent-gen :as agent-gen]
-            [agentlang.connections.client :as connections]
+            #?(:clj [agentlang.connections.client :as connections])
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
