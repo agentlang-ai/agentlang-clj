@@ -2,6 +2,7 @@
   (:require [agentlang.evaluator :as e]
             [agentlang.evaluator.internal :as ei]
             [agentlang.evaluator.intercept :as ec]
+            [agentlang.interpreter :as intrp]
             [agentlang.component :as cn]
             [agentlang.lang.internal :as li]
             #?(:clj  [clojure.test :refer [is]]
@@ -17,6 +18,12 @@
             [cljc.java-time.local-time :as local-time]
             [cljc.java-time.zone-offset :refer [utc]]
             [cljc.java-time.month :as month]))
+
+(defn interpret-dataflow [event-instance]
+  (intrp/evaluate-dataflow (store/get-default-store) event-instance))
+
+(defn fetch-result [event]
+  (:result (interpret-dataflow (cn/make-instance event))))
 
 (defn- report-expected-ex [ex]
   (println (str "Expected exception in test: "

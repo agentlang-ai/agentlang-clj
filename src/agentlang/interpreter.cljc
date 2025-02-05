@@ -1,5 +1,6 @@
 (ns agentlang.interpreter
-  (:require [clojure.walk :as w]
+  (:require [clojure.set :as set]
+            [clojure.walk :as w]
             [agentlang.util :as u]
             [agentlang.component :as cn]
             [agentlang.env :as env]
@@ -30,25 +31,67 @@
       (recur (rest fns) (assoc raw-obj a (f env raw-obj)))
       raw-obj)))
 
-(defn- resolve-attribute-values [env recname attrs]
-  (let [has-exp? (first (filter (fn [[_ v]] (list? v)) attrs))
-        attrs1 (into
-                {}
-                (mapv (fn [[k v]]
-                        [k (if (keyword? v)
-                             (resolve-reference env v)
-                             v)])
-                      attrs))
-        new-attrs
-        (if has-exp?
-          (into
-           {}
-           (mapv (fn [[k v]]
-                   [k (if (list? v) (evaluate-attr-expr env attrs1 v) v)])
-                 attrs1))
-          attrs1)
-        [efns _] (cn/all-computed-attribute-fns recname nil)]
-    (assoc-fn-attributes env new-attrs efns)))
+(defn- find-deps [k all-deps]
+  (second (first (filter #(= k (first %)) all-deps))))
+
+(defn- build-ordered-deps
+  ([k deps all-deps result]
+   (if (nil? deps)
+     (if (some #{k} result) result (conj result k))
+     (let [r (vec (apply concat (mapv (fn [d]
+                                        (if (some #{k} result)
+                                          result
+                                          (build-ordered-deps d (find-deps d all-deps) all-deps result)))
+                                      deps)))]
+       (if (some #{k} r) result (vec (concat r [k]))))))
+  ([attrs-deps]
+   (loop [ads attrs-deps, result []]
+     (if-let [[k deps] (first ads)]
+       (if (some #{k} result)
+         (recur (rest ads) result)
+         (recur (rest ads) (build-ordered-deps k deps attrs-deps result)))
+       result))))
+
+(def ^:private order-by-dependencies
+  (memoize
+   (fn [attrs]
+     (let [exp-attrs (into {} (filter (fn [[_ v]] (list? v)) attrs))
+           ks (set (keys exp-attrs))
+           attrs-deps (mapv (fn [[k v]]
+                              (if-let [deps (seq (set/intersection (set v) (set/difference ks #{k})))]
+                                [k deps]
+                                [k nil]))
+                            exp-attrs)
+           ordered-deps (build-ordered-deps attrs-deps)]
+       (mapv (fn [k] [k (get exp-attrs k)]) ordered-deps)))))
+
+(defn- resolve-attribute-values
+  ([env recname attrs compute-compound-attributes?]
+   (let [has-exp? (first (filter (fn [[_ v]] (list? v)) attrs))
+         attrs1 (into
+                 {}
+                 (mapv (fn [[k v]]
+                         [k (if (keyword? v)
+                              (resolve-reference env v)
+                              v)])
+                       attrs))
+         new-attrs
+         (if has-exp?
+           (loop [exp-attrs (order-by-dependencies attrs1), attrs attrs1]
+             (if-let [[k v] (first exp-attrs)]
+               (let [newv (evaluate-attr-expr env attrs v)]
+                 (recur (rest exp-attrs) (assoc attrs k newv)))
+               attrs))
+           attrs1)]
+     (if compute-compound-attributes?
+       (let [[efns _] (cn/all-computed-attribute-fns recname nil)]
+         (assoc-fn-attributes env new-attrs efns))
+       new-attrs)))
+  ([env recname attrs] (resolve-attribute-values env recname attrs true)))
+
+(defn- resolve-instance-values [env recname inst]
+  (let [attrs (resolve-attribute-values env recname (cn/instance-attributes inst))]
+    (cn/make-instance recname attrs false)))
 
 (defn- normalize-query-comparison [k v]
   (let [c (count v)]
@@ -81,15 +124,35 @@
                    %)
                 clause)))
 
+(defn- query-attribute? [[k _]] (li/query-pattern? k))
+
+(defn- lift-attributes-for-update [attrs]
+  (if-let [upattrs (seq (filter (complement query-attribute?) attrs))]
+    [(into {} upattrs) (into {} (filter query-attribute? attrs))]
+    [nil attrs]))
+
+(defn- handle-upsert [env resolver recname update-attrs instances]
+  (when (seq instances)
+    (let [updated-instances (mapv #(resolve-instance-values env recname (merge % update-attrs)) instances)
+          rs
+          (if resolver
+            (every? identity (mapv #(r/call-resolver-update resolver env %) updated-instances))
+            (store/update-instances (env/get-store env) recname updated-instances))]
+      (when rs updated-instances))))
+
 (defn- handle-query-pattern [env recname attrs alias]
-  (let [attrs0 (when (seq attrs)
-                 (if-let [select-clause (:? attrs)]
+  (let [select-clause (:? attrs)
+        [update-attrs query-attrs] (when-not select-clause (lift-attributes-for-update attrs))
+        attrs (if query-attrs query-attrs attrs)
+        attrs0 (when (seq attrs)
+                 (if select-clause
                    {:? (preprocess-select-clause env recname select-clause)}
                    (into {} (mapv (partial process-query-attribute-value env) attrs))))
         resolver (rr/resolver-for-path recname)
-        result (if resolver
-                 (r/call-resolver-query resolver env [recname attrs0])
-                 (store/do-query (env/get-store env) nil [recname attrs0]))
+        result0 (if resolver
+                  (r/call-resolver-query resolver env [recname attrs0])
+                  (store/do-query (env/get-store env) nil [recname attrs0]))
+        result (if update-attrs (handle-upsert env resolver recname update-attrs result0) result0)
         env0 (if (seq result) (env/bind-instances env recname result) env)
         env1 (if alias (env/bind-instance-to-alias env0 alias result) env0)]
     (make-result env1 result)))
@@ -136,8 +199,43 @@
       (u/throw-ex (str "Schema not found for " recname ". Cannot evaluate " pat)))
     result))
 
+(defn- delete-instance [env entity-name params]
+  (if-let [resolver (rr/resolver-for-path entity-name)]
+    (r/call-resolver-delete [entity-name params])
+    (let [store (env/get-store env)]
+      (cond
+        (= :* params)
+        (store/delete-all store entity-name false)
+
+        (= :purge params)
+        (store/delete-all store entity-name true)
+
+        :else
+        (let [attrs (resolve-attribute-values env entity-name params false)
+              n (first (keys attrs))]
+          (store/delete-by-id store entity-name n (get attrs n)))))))
+
+(defn- parse-expr-pattern [pat]
+  (let [[h t] (split-with #(not= % :as) pat)]
+    (if (seq t)
+      (let [t (rest t)]
+        (when-not (seq t)
+          (u/throw-ex (str "Alias not specified after `:as` in " pat)))
+        (when (> (count t) 1)
+          (u/throw-ex (str "Alias must appear last in " pat)))
+        [(vec h) (first t)])
+      [(vec h) nil])))
+
 (defn- expr-handler [env pat]
-  )
+  (let [[pat alias] (parse-expr-pattern pat)
+        result
+        (apply
+         (case (first pat)
+           :delete delete-instance
+           (u/throw-ex (str "Invalid expression - " pat)))
+         env (rest pat))
+        env (if alias (env/bind-variable env alias result) env)]
+    (make-result env result)))
 
 (defn- ref-handler [env pat]
   (make-result env (resolve-reference env pat)))

@@ -13,7 +13,6 @@
             [agentlang.lang.internal :as li]
             [agentlang.api :as api]
             [agentlang.evaluator :as e]
-            [agentlang.interpreter :as intrp]
             [agentlang.lang.opcode :as opc]
             [agentlang.compiler.context :as ctx]
             [agentlang.lang.datetime :as dt]
@@ -41,15 +40,26 @@
      {:BasicEval/E? {}})
     (dataflow
      :BasicEval/LookupEByX1
-     {:BasicEval/E {:X? :BasicEval/LookupEByX1.X}})
+     {:BasicEval/E {:X? :BasicEval/LookupEByX1.X} :as [:E]}
+     :E)
     (dataflow
      :BasicEval/LookupEByX2
-     {:BasicEval/E {:? {:where [:= :X :BasicEval/LookupEByX2.X]}}}))
-  (let [ev (partial intrp/evaluate-dataflow (store/get-default-store))
-        cre #(:result
-              (ev
-               (cn/make-instance
-                {:BasicEval/MakeE {:X %}})))
+     {:BasicEval/E {:? {:where [:= :X :BasicEval/LookupEByX2.X]}}})
+    (dataflow
+     :BasicEval/UpdateE
+     {:BasicEval/E {:Id? :BasicEval/UpdateE.Id
+                    :Y (quote (+ :X :X 1))
+                    :X :BasicEval/UpdateE.X}})
+    (dataflow
+     :BasicEval/DeleteById
+     [:delete :BasicEval/E {:Id :BasicEval/DeleteById.Id} :as :R]
+     :R)
+    (dataflow
+     :BasicEval/DeleteAll
+     [:delete :BasicEval/E :* :as :R]
+     :R))
+  (let [ev tu/fetch-result
+        cre #(ev {:BasicEval/MakeE {:X %}})
         result (cre 100)
         e? (partial cn/instance-of? :BasicEval/E)
         verify-e (fn [e x]
@@ -57,17 +67,28 @@
                    (is (= x (:X e)))
                    (let [y (+ x x 1)]
                      (is (= y (:Y e)))
-                     (is (* x y) (:Z e))))]
+                     (is (* x y) (:Z e))))
+        lookup-all-e #(let [rs (ev {:BasicEval/LookupAllE {}})]
+                        (is (= 2 (count rs)))
+                        (is (every? e? rs)))]
     (verify-e result 100)
-    (is (cn/same-instance? result (:result (ev (cn/make-instance {:BasicEval/LookupE {:Id (:Id result)}})))))
-    (is (cn/same-instance? result (first (:result (ev (cn/make-instance {:BasicEval/LookupEByX1 {:X 100}}))))))
+    (is (cn/same-instance? result (ev {:BasicEval/LookupE {:Id (:Id result)}})))
+    (is (cn/same-instance? result (ev {:BasicEval/LookupEByX1 {:X 100}})))
     (let [e2 (cre 200)]
       (verify-e e2 200)
-      (is (cn/same-instance? e2 (first (:result (ev (cn/make-instance {:BasicEval/LookupEByX1 {:X 200}}))))))
-      (is (cn/same-instance? e2 (first (:result (ev (cn/make-instance {:BasicEval/LookupEByX2 {:X 200}}))))))
-      (let [rs (:result (ev (cn/make-instance {:BasicEval/LookupAllE {}})))]
-        (is (= 2 (count rs)))
-        (is (every? e? rs))))))
+      (is (cn/same-instance? e2 (ev {:BasicEval/LookupEByX1 {:X 200}})))
+      (is (cn/same-instance? e2 (first (ev {:BasicEval/LookupEByX2 {:X 200}}))))
+      (lookup-all-e)
+      (let [r0 (first (ev {:BasicEval/UpdateE {:Id (:Id result) :X 500}}))
+            r1 (ev {:BasicEval/LookupE {:Id (:Id result)}})]
+        (verify-e r0 500)
+        (is (= (:Id result) (:Id r0)))
+        (is (cn/same-instance? r0 r1))
+        (lookup-all-e)
+        (is (= (:Id r0) (ev {:BasicEval/DeleteById {:Id (:Id r0)}})))
+        (is (nil? (ev {:BasicEval/LookupE {:Id (:Id result)}})))
+        (is (ev {:BasicEval/DeleteAll {}}))
+        (is (nil? (ev {:BasicEval/LookupE {:Id (:Id e2)}})))))))
 
 (deftest dependency
   (defcomponent :Df03
@@ -82,7 +103,7 @@
                       :Y '(* :X 10)}})
   (let [r (cn/make-instance :Df03/R {:A 100})
         evt {:Df03/PostE {:R r}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/fetch-result evt)]
     (is (cn/instance-of? :Df03/E result))
     (is (u/uuid-from-string (cn/id-attr result)))
     (is (= 100 (:X result)))
