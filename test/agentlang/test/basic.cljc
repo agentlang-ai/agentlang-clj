@@ -179,12 +179,12 @@
 ;;                        :X 500}})
 ;;   (let [e (cn/make-instance :Df04/E1 {:A 100})
 ;;         evt (cn/make-instance :Df04/Create_E1 {:Instance e})
-;;         e1 (first (tu/fresult (e/eval-all-dataflows evt)))
+;;         e1 (tu/fetch-result evt)
 ;;         id (cn/id-attr e1)
 ;;         e2 (cn/make-instance :Df04/E2 {:AId (cn/id-attr e1)
 ;;                                        :X 20})
 ;;         evt (cn/make-instance :Df04/PostE2 {:E1 e1})
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
+;;         result (tu/fetch-result evt)]
 ;;     (is (cn/instance-of? :Df04/E2 result))
 ;;     (is (u/uuid-from-string (cn/id-attr result)))
 ;;     (is (= (:AId result) id))

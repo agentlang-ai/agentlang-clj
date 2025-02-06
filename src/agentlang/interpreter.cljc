@@ -28,10 +28,10 @@
                         exp)]
     (li/evaluate (seq final-exp))))
 
-(defn- assoc-fn-attributes [env attrs fns]
-  (loop [fns fns, raw-obj attrs]
-    (if-let [[a f] (first fns)]
-      (recur (rest fns) (assoc raw-obj a (f env raw-obj)))
+(defn- assoc-fn-attributes [env attrs fn-exprs]
+  (loop [fns fn-exprs, raw-obj attrs]
+    (if-let [[a exp] (first fns)]
+      (recur (rest fns) (assoc raw-obj a (evaluate-attr-expr env attrs a exp)))
       raw-obj)))
 
 (defn- find-deps [k all-deps]
@@ -102,8 +102,9 @@
                attrs))
            attrs1)]
      (if compute-compound-attributes?
-       (let [[efns _] (cn/all-computed-attribute-fns recname nil)]
-         (assoc-fn-attributes env new-attrs efns))
+       (if-let [[efns _] (cn/all-computed-attribute-fns recname nil)]
+         (assoc-fn-attributes env new-attrs efns)
+         new-attrs)
        new-attrs)))
   ([env recname attrs] (resolve-attribute-values env recname attrs true)))
 

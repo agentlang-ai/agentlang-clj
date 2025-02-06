@@ -132,6 +132,9 @@
      ;; expressions not currently validated or used in the browser.
      :cljs true))
 
+(defn- fn-or-list? [x]
+  (or (list? x) (fn? x)))
+
 (defn- encryption? [x]
   ;; true/:default means use the default encryption algorithm.
   ;; In future, specific algorithms may be supported
@@ -187,7 +190,7 @@
                    (when-let [predic (:check scm)]
                      (li/validate predic "invalid value for :default" v)))
         :type (li/validate attribute-type? "invalid :type" v)
-        :expr (li/validate fn-or-name? ":expr has invalid value" v)
+        :expr (li/validate fn-or-list? ":expr has invalid value" v)
         :eval (li/validate eval-block? ":eval has invalid value" v)
         :format (li/validate string? ":format must be a textual pattern" v)
         :listof (li/validate listof-spec? ":listof has invalid type" v)
@@ -371,7 +374,7 @@
                (merge (if-let [t (:type v)]
                         {:type t}
                         (u/throw-ex (str ":type is required for attribute " k " with compound expression")))
-                      {:expr (c/compile-attribute-expression recname attrs k expr)}))))))
+                      {:expr expr}))))))
 
 (defn- normalize-attr [recname attrs fqn [k v]]
   (let [newv

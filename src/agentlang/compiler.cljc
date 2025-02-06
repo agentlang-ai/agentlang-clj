@@ -1111,7 +1111,7 @@
 
 (defn maybe-compile-dataflow
   ([compile-query-fn with-types df]
-   (when-not (cn/dataflow-opcode df with-types)
+   #_(when-not (cn/dataflow-opcode df with-types)
      (let [ctx (make-context with-types)]
        (ctx/bind-compile-query-fn! ctx compile-query-fn)
        (cn/set-dataflow-opcode!
