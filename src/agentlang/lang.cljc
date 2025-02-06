@@ -1041,12 +1041,8 @@
 
 (def serializable-entity (partial serializable-record :entity))
 
-(defn- preproc-path-identity [attrs]
-  (if-let [[k v] (first (filter #(let [v (second %)]
-                                   (and (map? v) (li/path-identity v)))
-                                attrs))]
-    (assoc attrs k (assoc v :indexed true) li/path-attr pi/path-attr-spec)
-    attrs))
+(defn- assoc-parent-spec [attrs]
+  (assoc attrs li/parent-attr li/parent-attr-spec))
 
 (def ^:private audit-entity-attrs
   (preproc-attrs {:InstanceId :String
@@ -1064,7 +1060,7 @@
 (defn entity
   "A record that can be persisted with a unique id."
   ([n attrs raw-attrs]
-   (let [attrs (if raw-attrs (preproc-path-identity attrs) attrs)]
+   (let [attrs (if raw-attrs (assoc-parent-spec attrs) attrs)]
      (when-let [r (serializable-entity n (preproc-attrs attrs))]
        (let [result (and (if raw-attrs (raw/entity r raw-attrs) true) r)]
          (and (audit-entity r raw-attrs) result)))))
@@ -1128,70 +1124,7 @@
                     (extract-rel-meta meta))]
       [elems (extract-rel-meta meta)])))
 
-(defn- evt-path-attr [evt]
-  (crud-event-attr-accessor evt li/path-attr))
-
-(defn- regen-contains-dataflows [relname [parent child]]
-  (let [ev (partial crud-evname child)
-        attr-names (cn/attribute-names (cn/fetch-schema child))
-        ctx-aname (k/event-context-attribute-name)]
-    (let [crevt (ev :Create)
-          cr-path (evt-path-attr crevt)
-          child-cn (first (li/split-path child))]
-      (event-internal
-       crevt
-       {:Instance child
-        li/path-attr {:type :Agentlang.Kernel.Lang/String
-                      :default pi/default-path}
-        li/event-context ctx-aname})
-      (cn/register-dataflow
-       crevt
-       [{child
-         (merge
-          (into
-           {} (mapv
-               (fn [a]
-                 [a (if (= a li/path-attr)
-                      ;; The path-identity will be appended by the evaluator.
-                      cr-path
-                      (crud-event-inst-accessor crevt child-cn a))])
-               attr-names))
-          {li/path-attr cr-path})}]))
-    (let [upevt (ev :Update)]
-      (event-internal
-       upevt
-       {:Data :Agentlang.Kernel.Lang/Map
-        li/path-attr :Agentlang.Kernel.Lang/String
-        li/event-context ctx-aname})
-      (cn/register-dataflow
-       upevt
-       [{child
-         {li/path-attr? (evt-path-attr upevt)}
-         :from (crud-event-attr-accessor upevt :Data)}]))
-    (let [lookupevt (ev :Lookup)
-          lookupallevt (ev :LookupAll)
-          evattrs {li/path-attr :Agentlang.Kernel.Lang/String
-                   li/event-context ctx-aname}
-          child-q (li/name-as-query-pattern child)]
-      (event-internal lookupevt evattrs)
-      (event-internal lookupallevt evattrs)
-      (cn/register-dataflow lookupevt [{child {li/path-attr? (evt-path-attr lookupevt)}}])
-      (cn/register-dataflow lookupallevt [{child {li/path-attr? [:like (evt-path-attr lookupallevt)]}}]))
-    (let [delevt (ev :Delete)]
-      (event-internal delevt {li/path-attr :Agentlang.Kernel.Lang/String
-                              li/event-context ctx-aname})
-      (cn/register-dataflow
-       delevt [[:delete child {li/path-attr (evt-path-attr delevt)}]]))
-    relname))
-
 (declare relationship)
-
-(defn- regen-between-relationships [contains-child]
-  (doseq [[rel _ _] (seq (cn/between-relationships contains-child))]
-    (let [old-def (raw/find-relationship rel)]
-      (cn/remove-record rel)
-      (relationship rel old-def)))
-  contains-child)
 
 (defn- validate-rbac-owner [rbac nodes]
   (when-let [own (li/owner rbac)]
@@ -1204,49 +1137,6 @@
       (u/throw-ex (str "User-defined identity attribute required for " entity-name)))
     ident))
 
-(defn- regen-contains-child-attributes [child parent meta]
-  (let [child-attrs (preproc-attrs (raw/record-attributes-include-inherits child))
-        raw-meta (raw/entity-meta child)
-        [c _] (li/split-path child)
-        pidtype (cn/parent-identity-attribute-type parent)
-        parent-attr-spec
-        (merge
-         {:type :Agentlang.Kernel.Lang/Any}
-         (if (map? pidtype)
-           pidtype
-           {:type (or pidtype :Agentlang.Kernel.Lang/Any)})
-         {:optional true
-          :expr `'(agentlang.paths/parent-id-from-path
-                   ~(name c) ~li/path-attr ~(k/numeric-type? (if (map? pidtype) (:type pidtype) pidtype)))})]
-    (if-not (cn/path-identity-attribute-name child)
-      (let [cident (user-defined-identity-attribute-name child)
-            cident-raw-spec (cident child-attrs)
-            cident-spec (if (map? cident-raw-spec)
-                          cident-raw-spec
-                          (cn/find-attribute-schema cident-raw-spec))]
-        (when-let [a (some li/reserved-attrs (map #(keyword (s/upper-case (name %))) (keys child-attrs)))]
-          (u/throw-ex (str child "." a " - attribute name is reserved")))
-        (assoc
-         child-attrs
-         :meta raw-meta
-         cident (merge
-                 (if (:globally-unique meta)
-                   cident-spec
-                   (dissoc cident-spec li/guid))
-                 {:type (or (:type cident-spec) :UUID)
-                  li/path-identity true
-                  :indexed true}
-                 (when-not cident-spec ;; __Id__
-                   {:default u/uuid-string}))
-         li/path-attr pi/path-attr-spec
-         li/parent-attr parent-attr-spec))
-      (let [parents (conj (mapv last (cn/containing-parents child)) parent)
-            id-types (mapv cn/parent-identity-attribute-type parents)]
-        (when-not (apply = id-types)
-          (u/throw-ex (str "conflicting parent id-types - " (mapv vector parents id-types))))
-        (when (some (fn [[_ v]] (and (map? v) (:id v))) child-attrs)
-          (assoc child-attrs :meta raw-meta li/path-attr pi/path-attr-spec li/parent-attr parent-attr-spec))))))
-
 (defn- cleanup-rel-attrs [attrs]
   (dissoc attrs :meta :rbac :ui))
 
@@ -1257,16 +1147,11 @@
         meta (:meta attrs)
         attrs (assoc attrs :meta
                      (assoc meta cn/relmeta-key
-                            relmeta :relationship :contains))
-        child-attrs (regen-contains-child-attributes child parent meta)]
+                            relmeta :relationship :contains))]
     (if-let [r (record relname raw-attrs)]
-      (if (or (not child-attrs) (entity child child-attrs false))
-        (if (cn/register-relationship elems relname)
-          (and (regen-contains-dataflows relname elems)
-               (regen-between-relationships (second elems))
-               (raw/relationship relname raw-attrs) r)
-          (u/throw-ex (str "failed to register relationship - " relname)))
-        (u/throw-ex (str "failed to regenerate schema for " child)))
+      (if (cn/register-relationship elems relname)
+        (and (raw/relationship relname raw-attrs) r)
+        (u/throw-ex (str "failed to register relationship - " relname)))
       (u/throw-ex (str "failed to define schema for " relname)))))
 
 (defn- between-node-types [node1 node2]

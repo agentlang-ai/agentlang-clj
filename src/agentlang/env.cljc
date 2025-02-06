@@ -12,6 +12,7 @@
 (def ^:private resolver-tag :-*-resolver-*-)
 (def ^:private dirty-tag :-*-dirty-*-)
 (def ^:private objstack-tag :-*-objstack-*-)
+(def ^:private eval-state-tag :-*-eval-state-*-)
 
 (def EMPTY {env-tag true})
 
@@ -367,3 +368,12 @@
                          df-vals)]
      (into {} norm-vals)))
   ([env] (cleanup env true)))
+
+(defn bind-eval-state [env pattern pattern-count]
+  (assoc env eval-state-tag {:pattern pattern :count pattern-count}))
+
+(defn eval-state-counter [env]
+  (get-in env [eval-state-tag :count]))
+
+(defn eval-state-pattern [env]
+  (get-in env [eval-state-tag :pattern]))

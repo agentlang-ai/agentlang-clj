@@ -510,7 +510,7 @@
      (li/normalize-instance-pattern
       (dissoc
        x type-tag-key
-       type-key dirty-key
+       type-key dirty-key li/parent-attr
        (when-not include-meta li/meta-attr)))))
   ([x] (instance-attributes x false)))
 
@@ -693,7 +693,8 @@
           (parsed-instance-type inst2))))
 
 (defn same-instance? [a b]
-  (and (instance-eq? a b) (attributes-eq? a b)))
+  (and (instance-eq? a b) (attributes-eq? a b)
+       (= (li/parent-attr a) (li/parent-attr b))))
 
 (defn exception->error [ex]
   #?(:clj

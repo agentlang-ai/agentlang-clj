@@ -16,6 +16,10 @@
 (def path-attr? :__path__?)
 
 (def parent-attr :__parent__)
+(def parent-attr-spec
+  {:type :Agentlang.Kernel.Lang/String
+   :optional true
+   :indexed true})
 
 (def guid :guid)
 (def path-identity :id)

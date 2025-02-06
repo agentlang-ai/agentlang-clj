@@ -1,6 +1,7 @@
 (ns agentlang.interpreter
   (:require [clojure.set :as set]
             [clojure.walk :as w]
+            #?(:clj [clojure.core.cache.wrapped :as cache])
             [agentlang.util :as u]
             [agentlang.component :as cn]
             [agentlang.env :as env]
@@ -18,9 +19,11 @@
 
 (declare evaluate-dataflow-in-environment)
 
-(defn- evaluate-attr-expr [env attrs exp]
+(defn- evaluate-attr-expr [env attrs attr-name exp]
   (let [final-exp (mapv #(if (keyword? %)
-                           (or (% attrs) (resolve-reference env %))
+                           (if (= % attr-name)
+                             (u/throw-ex (str "Unqualified self-reference " % " not allowed in " exp))
+                             (or (% attrs) (resolve-reference env %)))
                            %)
                         exp)]
     (li/evaluate (seq final-exp))))
@@ -52,18 +55,33 @@
          (recur (rest ads) (build-ordered-deps k deps attrs-deps result)))
        result))))
 
-(def ^:private order-by-dependencies
-  (memoize
-   (fn [attrs]
-     (let [exp-attrs (into {} (filter (fn [[_ v]] (list? v)) attrs))
-           ks (set (keys exp-attrs))
-           attrs-deps (mapv (fn [[k v]]
-                              (if-let [deps (seq (set/intersection (set v) (set/difference ks #{k})))]
-                                [k deps]
-                                [k nil]))
-                            exp-attrs)
-           ordered-deps (build-ordered-deps attrs-deps)]
-       (mapv (fn [k] [k (get exp-attrs k)]) ordered-deps)))))
+(def ^:private eval-cache
+  #?(:clj (cache/lru-cache-factory {} :threshold 1000)
+     :cljs (atom {})))
+
+(defn- eval-cache-lookup [k]
+  #?(:clj (cache/lookup eval-cache k)
+     :cljs (get @eval-cache k)))
+
+(defn- eval-cache-update [k v]
+  #?(:clj (cache/through-cache eval-cache k (constantly v))
+     :cljs (swap! eval-cache assoc k v))
+  v)
+
+(defn- order-by-dependencies [env attrs]
+  (let [k [(cn/instance-type-kw (env/active-event env)) (env/eval-state-counter env)]]
+    (or (eval-cache-lookup k)
+        (eval-cache-update
+         k
+         (let [exp-attrs (into {} (filter (fn [[_ v]] (list? v)) attrs))
+               ks (set (keys exp-attrs))
+               attrs-deps (mapv (fn [[k v]]
+                                  (if-let [deps (seq (set/intersection (set v) (set/difference ks #{k})))]
+                                    [k deps]
+                                    [k nil]))
+                                exp-attrs)
+               ordered-deps (build-ordered-deps attrs-deps)]
+           (mapv (fn [k] [k (get exp-attrs k)]) ordered-deps))))))
 
 (defn- resolve-attribute-values
   ([env recname attrs compute-compound-attributes?]
@@ -77,9 +95,9 @@
                        attrs))
          new-attrs
          (if has-exp?
-           (loop [exp-attrs (order-by-dependencies attrs1), attrs attrs1]
+           (loop [exp-attrs (order-by-dependencies env attrs1), attrs attrs1]
              (if-let [[k v] (first exp-attrs)]
-               (let [newv (evaluate-attr-expr env attrs v)]
+               (let [newv (evaluate-attr-expr env attrs k v)]
                  (recur (rest exp-attrs) (assoc attrs k newv)))
                attrs))
            attrs1)]
@@ -152,10 +170,11 @@
         result0 (if resolver
                   (r/call-resolver-query resolver env [recname attrs0])
                   (store/do-query (env/get-store env) nil [recname attrs0]))
-        result (if update-attrs (handle-upsert env resolver recname update-attrs result0) result0)
-        env0 (if (seq result) (env/bind-instances env recname result) env)
-        env1 (if alias (env/bind-instance-to-alias env0 alias result) env0)]
-    (make-result env1 result)))
+        env0 (if (seq result0) (env/bind-instances env recname result0) env)
+        result (if update-attrs (handle-upsert env0 resolver recname update-attrs result0) result0)
+        env1 (if (seq result) (env/bind-instances env0 recname result) env0)
+        env2 (if alias (env/bind-instance-to-alias env1 alias result) env1)]
+    (make-result env2 result)))
 
 (defn- handle-entity-crud-pattern [env recname attrs alias]
   (let [inst (cn/make-instance recname (resolve-attribute-values env recname attrs))
@@ -247,6 +266,20 @@
     (keyword? pat) ref-handler
     :else nil))
 
+(defn- maybe-preprocecss-pattern [env pat]
+  (if (map? pat)
+    (if-let [from (:from pat)]
+      (let [alias (:as pat)
+            pat (dissoc pat :from :alias)
+            data0 (if (keyword? from) (resolve-reference env from) from)
+            data1 (if (map? data0) data0 (u/throw-ex (str "Failed to resolve " from " in " pat)))
+            data (if (cn/an-instance? data1) (cn/instance-attributes data1) data1)
+            k (first (keys pat))
+            attrs (merge (get pat k) data)]
+        (merge {k attrs} (when alias {:as alias})))
+      pat)
+    pat))
+
 (defn evaluate-dataflow
   ([store env event-instance is-internal]
    (let [env0 (or env (env/bind-instance (env/make store nil) event-instance))
@@ -260,12 +293,16 @@
                          (gs/set-active-txn! txn)
                          true)]
           (try
-            (loop [df-patterns (cn/fetch-dataflow-patterns event-instance), env env, result nil]
-              (if-let [pat (first df-patterns)]
-                (if-let [handler (pattern-handler pat)]
-                  (let [{env1 :env r :result} (handler env pat)]
-                    (recur (rest df-patterns) env1 r))
-                  (u/throw-ex (str "Cannot handle invalid pattern " pat)))
+            (loop [df-patterns (cn/fetch-dataflow-patterns event-instance),
+                   pat-count 0, env env, result nil]
+              (if-let [pat0 (first df-patterns)]
+                (let [pat-count (inc pat-count)
+                      env (env/bind-eval-state env pat0 pat-count)
+                      pat (maybe-preprocecss-pattern env pat0)]
+                  (if-let [handler (pattern-handler pat)]
+                    (let [{env1 :env r :result} (handler env pat)]
+                      (recur (rest df-patterns) pat-count env1 r))
+                    (u/throw-ex (str "Cannot handle invalid pattern " pat))))
                 (make-result env result)))
             (finally
               (when txn-set? (gs/set-active-txn! nil)))))))))
