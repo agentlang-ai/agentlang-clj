@@ -2573,3 +2573,5 @@
     (or (map? obj) (string? obj)) obj
     (seqable? obj) (mapv cleanup-inst obj)
     :else obj))
+
+(def dataflow-opcode (constantly []))
