@@ -23,7 +23,7 @@
             [agentlang.global-state :as gs]
             [agentlang.inference.service.planner :as planner]
             [agentlang.inference.service.agent-gen :as agent-gen]
-            [agentlang.connections.client :as connections]
+            #?(:clj [agentlang.connections.client :as connections])
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
@@ -74,7 +74,8 @@
 ;; {:retrieval-service {:host "https://retrieval-service.fractl.io/pratik@fractl.io" :token "<token>"}}
 (defn- read-from-retrieval-service [file-name]
   (let [config (:retrieval-service (gs/get-app-config))
-        token (connections/get-auth-token)
+        token #?(:clj (connections/get-auth-token)
+                 :cljs (u/getenv "RETRIEVAL_SERVICE_TOKEN" ""))
         url (str (or (:host config)
                      (u/getenv "RETRIEVAL_SERVICE_HOST"))
                  "/" file-name "/chunks")
