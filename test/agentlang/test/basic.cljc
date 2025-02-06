@@ -173,8 +173,12 @@
     (relationship :Br01/AB {:meta {:contains [:Br01/A :Br01/B]}})
     (dataflow
      :Br01/CreateB
-     {:Br01/B {:Y :Br01/CreateB.Y}
-      :Br01/AB? {:Br01/A {:Id? :Br01/CreateB.A}}})))
+     {:Br01/B {:Id :Br01/CreateB.Id
+               :Y :Br01/CreateB.Y}
+      :Br01/AB {:Br01/A {:Id? :Br01/CreateB.A}}}))
+  (let [b? (partial cn/instance-of? :Br01/B)]
+    ;; TODO: handle proper path setting in child
+    (is (b? (tu/fetch-result {:Br01/CreateB {:Id 11 :Y 10 :A 1}})))))
 
 ;; (deftest compound-attributes
 ;;   (defcomponent :Df04

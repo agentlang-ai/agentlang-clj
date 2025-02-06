@@ -202,7 +202,7 @@
         env0 (if alias (env/bind-variable env alias inst) env)]
     (make-result env0 inst)))
 
-(defn- crud-handler [env pat]
+(defn- crud-handler [env pat sub-pats]
   (let [recname (li/record-name pat)
         recattrs (li/record-attributes pat)
         alias (:as pat)
@@ -246,7 +246,7 @@
         [(vec h) (first t)])
       [(vec h) nil])))
 
-(defn- expr-handler [env pat]
+(defn- expr-handler [env pat _]
   (let [[pat alias] (parse-expr-pattern pat)
         result
         (apply
@@ -257,7 +257,7 @@
         env (if alias (env/bind-variable env alias result) env)]
     (make-result env result)))
 
-(defn- ref-handler [env pat]
+(defn- ref-handler [env pat _]
   (make-result env (resolve-reference env pat)))
 
 (defn- pattern-handler [pat]
@@ -266,6 +266,14 @@
     (vector? pat) expr-handler
     (keyword? pat) ref-handler
     :else nil))
+
+(defn- maybe-lift-relationship-patterns [pat]
+  (if-let [rel-names (seq (map first (filter (fn [[k _]]
+                                               (cn/relationship? (li/normalize-name k)))
+                                             pat)))]
+    [(apply dissoc pat rel-names)
+     {:rels (into {} (mapv (fn [k] [k (get pat k)]) rel-names))}]
+    [pat]))
 
 (defn- maybe-preprocecss-pattern [env pat]
   (if (map? pat)
@@ -277,9 +285,9 @@
             data (if (cn/an-instance? data1) (cn/instance-attributes data1) data1)
             k (first (keys pat))
             attrs (merge (get pat k) data)]
-        (merge {k attrs} (when alias {:as alias})))
-      pat)
-    pat))
+        [(merge {k attrs} (when alias {:as alias}))])
+      (maybe-lift-relationship-patterns pat))
+    [pat]))
 
 (defn evaluate-dataflow
   ([store env event-instance is-internal]
@@ -299,9 +307,9 @@
               (if-let [pat0 (first df-patterns)]
                 (let [pat-count (inc pat-count)
                       env (env/bind-eval-state env pat0 pat-count)
-                      pat (maybe-preprocecss-pattern env pat0)]
+                      [pat sub-pats] (maybe-preprocecss-pattern env pat0)]
                   (if-let [handler (pattern-handler pat)]
-                    (let [{env1 :env r :result} (handler env pat)]
+                    (let [{env1 :env r :result} (handler env pat sub-pats)]
                       (recur (rest df-patterns) pat-count env1 r))
                     (u/throw-ex (str "Cannot handle invalid pattern " pat))))
                 (make-result env result)))
