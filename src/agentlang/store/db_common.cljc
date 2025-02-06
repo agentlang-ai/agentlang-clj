@@ -96,7 +96,7 @@
              (if-let [a (first attrs)]
                (let [atype (cn/attribute-type entity-schema a)
                      sql-type (sql/attribute-to-sql-type atype)
-                     is-ident (cn/attribute-is-identity? entity-schema a)
+                     is-ident (= a li/path-attr)
                      is-uk (some #{a} unique-attributes)
                      attr-ref (cn/attribute-ref entity-schema a)
                      col-name (as-col-name a)

@@ -142,7 +142,7 @@
    components
    #(assoc-in @components [component (str (get-model-version component))] spec)))
 
-(declare intern-attribute intern-event)
+(declare intern-attribute intern-event entity?)
 
 (defn create-component
   "Create a new component with the given name and references to
@@ -1020,6 +1020,13 @@
            (assoc result k (sh/crypto-hash v)))))
       result)))
 
+(defn- maybe-assoc-path [recname attrs]
+  (if (and (entity? recname)
+           (pi/default-path? (li/path-attr attrs)))
+    (let [idattr (identity-attribute-name recname)]
+      (assoc attrs li/path-attr (pr-str (idattr attrs))))
+    attrs))
+
 (defn make-instance
   "Initialize an instance of a record from the given map of attributes.
    All attribute values will be validated using the associated value predicates.
@@ -1028,10 +1035,12 @@
   ([record-name version attributes validate?]
    (let [record-name (li/split-path record-name)
          schema (ensure-schema record-name version)
-         attrs-with-insts (maps-to-insts attributes validate?)
-         attrs (if validate?
-                 (validate-record-attributes record-name attrs-with-insts schema)
-                 attrs-with-insts)]
+         attrs0 (maps-to-insts attributes validate?)
+         attrs (maybe-assoc-path
+                record-name
+                (if validate?
+                  (validate-record-attributes record-name attrs0 schema)
+                  attrs0))]
      (if (error? attrs)
        attrs
        (u/make-record-instance (type-tag-of record-name version) record-name attrs))))

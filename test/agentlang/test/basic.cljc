@@ -166,6 +166,16 @@
       (is (= 10 (:Y inst)))
       (is (= 1 (:Z inst))))))
 
+(deftest basic-rels-01
+  (defcomponent :Br01
+    (entity :Br01/A {:Id {:type :Int :guid true} :X :Int})
+    (entity :Br01/B {:Id {:type :Int :guid true} :Y :Int})
+    (relationship :Br01/AB {:meta {:contains [:Br01/A :Br01/B]}})
+    (dataflow
+     :Br01/CreateB
+     {:Br01/B {:Y :Br01/CreateB.Y}
+      :Br01/AB? {:Br01/A {:Id? :Br01/CreateB.A}}})))
+
 ;; (deftest compound-attributes
 ;;   (defcomponent :Df04
 ;;     (entity {:Df04/E1 {:A :Int}})

@@ -38,10 +38,7 @@
       k
       (li/make-path component k))))
 
-(def ^:private default-path-prefix (str path-prefix "/___/"))
-
-(defn default-path []
-  (str default-path-prefix (u/uuid-string)))
+(def ^:private default-path "_")
 
 (def path-attr-spec
   {:type :Agentlang.Kernel.Lang/String
@@ -49,9 +46,12 @@
    :unique true
    :indexed true})
 
+(defn default-path? [s]
+  (= s default-path))
+
 (defn null-path? [s]
   (if (seq s)
-    (s/starts-with? s default-path-prefix)
+    (s/starts-with? s default-path)
     true))
 
 (defn encoded-uri-path-part [entity-name]

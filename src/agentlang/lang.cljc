@@ -1045,7 +1045,7 @@
 (def serializable-entity (partial serializable-record :entity))
 
 (defn- assoc-parent-spec [attrs]
-  (assoc attrs li/parent-attr li/parent-attr-spec))
+  (assoc attrs li/parent-attr li/parent-attr-spec li/path-attr pi/path-attr-spec))
 
 (def ^:private audit-entity-attrs
   (preproc-attrs {:InstanceId :String
