@@ -4,10 +4,29 @@
             [agentlang.util :as u]
             [agentlang.util.logger :as log]
             [agentlang.inference.embeddings.internal.common :as vc]
-            [agentlang.global-state :as gs]))
+            [agentlang.global-state :as gs]
+            [clojure.java.io :as io])
+  (:import [java.nio.file Files]
+           [java.nio.file.attribute FileAttribute]))
 
 (def ^:private dbtype "sqlite")
-(def ^:private vec0-script-path "./scripts/maybe-download-vec0.sh")
+(def ^:private vec-script-name "maybe-download-vec0.sh")
+
+(defn- extract-script []
+  (let [temp-dir (Files/createTempDirectory "vec0-script" (make-array FileAttribute 0))
+        script-name vec-script-name
+        temp-script (.toFile (.. temp-dir (resolve script-name)))
+        resource (io/resource (str "scripts/" script-name))]
+    (if resource
+      (do
+        (with-open [in (io/input-stream resource)]
+          (io/copy in temp-script))
+        (.setExecutable temp-script true)
+        (.getAbsolutePath temp-script))
+      (throw (Exception. (str "Could not find resource: scripts/" script-name))))))
+
+(def ^:private vec0-script-path
+  (delay (extract-script)))
 
 (defn open-connection [config]
   (jdbc/get-connection
@@ -21,14 +40,17 @@
     true))
 
 (defn load-sqlite-vec0-extension [conn]
-  (log/info (str "checking if vec0 extension exists")) 
+  (log/info "checking if vec0 extension exists")
   (try
-    (u/execute-script vec0-script-path)
+    (u/execute-script @vec0-script-path)
     (catch Exception ex
-      (log/error (str "load-sqlite-vec0-extension: vec0 sqlite extension installation failed"))
+      (log/error "load-sqlite-vec0-extension: vec0 sqlite extension installation failed")
       (log/error ex)))
-  (jdbc/execute! conn ["SELECT load_extension ('vec0');"])
-  (log/debug (str "vec0 extension loaded")))
+  (let [extension-path (-> (io/file (System/getProperty "user.dir") "lib" "vec0.so")
+                          (.getAbsolutePath))]
+    (log/debug (str "Loading extension from: " extension-path))
+    (jdbc/execute! conn [(str "SELECT load_extension ('" extension-path "');")]))
+  (log/debug "vec0 extension loaded"))
 
 (def ^:private init-table
   "CREATE VIRTUAL TABLE IF NOT EXISTS text_embedding USING vec0
