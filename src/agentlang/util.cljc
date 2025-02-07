@@ -420,17 +420,33 @@
            (throw-ex (str "Environment variable " x " is not set.")))
          v))
 
+     (defn- env-var-call? [v]
+       (and (list? v) (= 'env (first v))))
+
+     (defn- process-env-var-calls [config]
+       (walk/prewalk
+        #(if (map? %)
+           (into {} (mapv (fn [[k v]]
+                            [k (if (env-var-call? v)
+                                 (let [[n default] (rest v)]
+                                   (getenv (name n) default))
+                                 v)])
+                          %))
+           %)
+        config))
+
      (defn read-config-file [config-file]
        (let [f (io/file config-file)]
          (when-not (.exists f)
            (with-open [out (io/writer f)]
              (binding [*out* out]
                (print {:service {:port 8080}})))))
-       (binding [*data-readers* {'$ read-env-var}]
-         (let [env-config (getenv "AGENT_CONFIG" "nil")]
-           (log/debug (str "AGENT_CONFIG = " env-config))
-           (merge (read-string (slurp config-file))
-                  (read-string env-config)))))))
+       (process-env-var-calls
+        (binding [*data-readers* {'$ read-env-var}]
+          (let [env-config (getenv "AGENT_CONFIG" "nil")]
+            (log/debug (str "AGENT_CONFIG = " env-config))
+            (merge (read-string (slurp config-file))
+                   (read-string env-config))))))))
 
 (defn strs
   ([j ss] (string/join j ss))
