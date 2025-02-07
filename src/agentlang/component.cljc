@@ -1020,11 +1020,21 @@
            (assoc result k (sh/crypto-hash v)))))
       result)))
 
+(defn- maybe-complete-path [path id]
+  (let [v (u/parse-string path)]
+    (pr-str
+     (mapv #(if (= li/id-attr %) id %) v))))
+
+(defn instance-path [inst]
+  (u/parse-string (li/path-attr inst)))
+
 (defn- maybe-assoc-path [recname attrs]
-  (if (and (entity? recname)
-           (pi/default-path? (li/path-attr attrs)))
-    (let [idattr (identity-attribute-name recname)]
-      (assoc attrs li/path-attr (pr-str [(idattr attrs)])))
+  (if (entity? recname)
+    (let [path (li/path-attr attrs)
+          id ((identity-attribute-name recname) attrs)]
+      (if (pi/default-path? path)
+        (assoc attrs li/path-attr (pr-str [(li/make-path recname) id]))
+        (assoc attrs li/path-attr (maybe-complete-path path id))))
     attrs))
 
 (defn make-instance

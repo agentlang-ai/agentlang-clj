@@ -38,7 +38,7 @@
       k
       (li/make-path component k))))
 
-(def ^:private default-path "_")
+(def ^:private default-path "[]")
 
 (def path-attr-spec
   {:type :Agentlang.Kernel.Lang/String

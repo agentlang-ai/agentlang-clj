@@ -229,14 +229,18 @@
                          recname " is not a child of "
                          parent " via the contains-relationship "
                          relname)))
-      (if-let [result (first (:result (evaluate-pattern env (as-query-pattern (k relpat)))))]
+      (if-let [result
+               (let [pat (k relpat)]
+                 (if (keyword? pat)
+                   (resolve-reference env pat)
+                   (first (:result (evaluate-pattern env (as-query-pattern pat))))))]
         (do (when-not (cn/instance-of? parent result)
               (u/throw-ex (str "Result of " relpat " is not of type " parent)))
             (let [pid (pr-str ((cn/identity-attribute-name parent) result))
-                  ppath (read-string (li/path-attr result))]
+                  ppath (u/parse-string (li/path-attr result))]
               (assoc recattrs li/parent-attr
                      pid li/path-attr
-                     (pr-str (concat ppath [recname child ((cn/identity-attribute-name child) recattrs)])))))
+                     (pr-str (concat ppath [relname child li/id-attr])))))
         (u/throw-ex (str "Query " relpat " failed to lookup " parent " for " child))))))
 
 (defn- crud-handler [env pat sub-pats]
@@ -245,14 +249,15 @@
         alias (:as pat)]
     (cond
       (cn/entity-schema (li/normalize-name recname))
-      (if (li/query-instance-pattern? pat)
-        (handle-query-pattern env recname recattrs alias)
-        (handle-entity-crud-pattern
-         env recname
-         (if-let [rels (:rels sub-pats)]
-           (maybe-set-parent env rels recname recattrs)
-           recattrs)
-         alias))
+      (let [q? (li/query-instance-pattern? pat)
+            f (if q? handle-query-pattern handle-entity-crud-pattern)
+            attrs
+            (if q?
+              recattrs
+              (if-let [rels (:rels sub-pats)]
+                (maybe-set-parent env rels recname recattrs)
+                recattrs))]
+        (f env recname attrs alias))
 
       (cn/event-schema recname)
       (handle-event-pattern env recname recattrs alias)

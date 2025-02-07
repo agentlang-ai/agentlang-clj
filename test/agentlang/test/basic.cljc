@@ -175,11 +175,24 @@
      :Br01/CreateB
      {:Br01/B {:Id :Br01/CreateB.Id
                :Y :Br01/CreateB.Y}
-      :Br01/AB? {:Br01/A {:Id :Br01/CreateB.A}}}))
+      :Br01/AB? {:Br01/A {:Id :Br01/CreateB.A}}})
+    (dataflow
+     :Br01/LookupAllB
+     {:Br01/B? {}
+      :Br01/AB {:Br01/A {:Id :Br01/CreateB.A}}}))
   (let [a? (partial cn/instance-of? :Br01/A)
-        b? (partial cn/instance-of? :Br01/B)]
+        b? (partial cn/instance-of? :Br01/B)
+        check-paths (fn [aid b]
+                      (is (b? b))
+                      (is (= (cn/instance-path b)
+                             (vec (concat [:Br01/A aid :Br01/AB :Br01/B] [(:Id b)])))))]
     (is (a? (tu/fetch-result {:Br01/Create_A {:Instance {:Br01/A {:Id 1 :X 100}}}})))
-    (is (b? (tu/fetch-result {:Br01/CreateB {:Id 11 :Y 10 :A 1}})))))
+    (is (a? (tu/fetch-result {:Br01/Create_A {:Instance {:Br01/A {:Id 2 :X 300}}}})))
+    (is (b? (tu/fetch-result {:Br01/CreateB {:Id 101 :Y 10 :A 1}})))
+    (is (b? (tu/fetch-result {:Br01/CreateB {:Id 102 :Y 11 :A 1}})))
+    (is (b? (tu/fetch-result {:Br01/CreateB {:Id 103 :Y 12 :A 2}})))
+    #_(let [bs (tu/fetch-result {:Br01/LookupAllB {:A 1}})]
+      (doseq [b bs] (check-paths 1 b)))))
 
 ;; (deftest compound-attributes
 ;;   (defcomponent :Df04
