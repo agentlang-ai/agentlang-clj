@@ -562,6 +562,9 @@
 (defn user-attribute-names [schema]
   (set/difference (attribute-names schema) system-attribute-names))
 
+(defn query-attribute-names [entity-name]
+  (concat (user-attribute-names (find-entity-schema entity-name)) [li/path-attr li/parent-attr]))
+
 (defn user-attributes [schema] (apply dissoc schema system-attribute-names))
 
 (defn entity-attribute-names [entity-name]

@@ -59,6 +59,9 @@
 (defn attribute-column-name [aname]
   (str "_" (name aname)))
 
+(defn attribute-column-name-kw [aname]
+  (keyword (attribute-column-name aname)))
+
 (defn index-table-name
   "Construct the lookup table-name for the attribute, from the main entity
   table-name and attribute-name."

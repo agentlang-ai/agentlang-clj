@@ -222,7 +222,7 @@
               (when-let [pat (get-in rels-query [k parent])]
                 (when-let [pid (and (= 1 (count (keys pat)))
                                     (force-fetch-only-id parent pat))]
-                  [(li/normalize-name recname) (assoc attrs li/parent-attr? [:= c-parent-attr (pr-str pid)]) nil]))))))
+                  [(li/normalize-name recname) (assoc attrs li/parent-attr? [:= c-parent-attr (pr-str [parent pid])]) nil]))))))
       args))
 
 (defn- handle-query-pattern [env recname [attrs sub-pats] alias]
@@ -283,7 +283,7 @@
                    (first (:result (evaluate-pattern env (as-query-pattern pat))))))]
         (do (when-not (cn/instance-of? parent result)
               (u/throw-ex (str "Result of " relpat " is not of type " parent)))
-            (let [pid (pr-str ((cn/identity-attribute-name parent) result))
+            (let [pid (li/path-attr result)
                   ppath (u/parse-string (li/path-attr result))]
               (assoc recattrs li/parent-attr
                      pid li/path-attr

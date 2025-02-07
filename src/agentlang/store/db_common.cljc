@@ -316,14 +316,37 @@
   ([datasource entity-name query-sql ids]
    (query-by-id query-by-id-statement datasource entity-name query-sql ids)))
 
+(defn- as-table-name [entity-name]
+  (keyword (stu/entity-table-name entity-name nil)))
+
+(defn- entity-attributes-as-queries [attrs sql-alias]
+  (mapv (fn [[k v]]
+          (let [c (li/make-ref sql-alias (stu/attribute-column-name-kw k))]
+            (if (vector? v)
+              `[~(first v) ~c ~(last v)]
+              [:= c v])))
+        attrs))
+
 (defn- generate-relationship-joins [rels-query-pattern]
-  )
+  (let [qpat (first (vals rels-query-pattern))
+        entity-name (first (keys qpat))
+        attrs (entity-name qpat)]
+    {:join [[(as-table-name entity-name) :t1]
+            (concat
+             [:and
+              [:= (li/make-ref :t1 stu/deleted-flag-col-kw) false]
+              [:= :t0.___parent__ :t1.___path__]]
+             (entity-attributes-as-queries attrs :t1))]}))
 
 (defn- insert-deleted-clause [w]
   (let [f (first w)]
     (if (= :and f)
       `[~f [:= ~stu/deleted-flag-col-kw false] ~@(rest w)]
       `[:and [:= ~stu/deleted-flag-col-kw false] ~w])))
+
+(defn- entity-column-names [entity-name sql-alias]
+  (let [attr-names (cn/query-attribute-names entity-name)]
+    (mapv #(li/make-ref sql-alias (stu/attribute-column-name-kw %)) attr-names)))
 
 (defn- query-by-attributes [datasource [entity-name attrs sub-query]]
   (let [select-all? (and (li/query-pattern? entity-name)
@@ -333,12 +356,12 @@
                       entity-name)
         sql-pat0
         (merge
-         {:select [:*] :from [[(keyword (stu/entity-table-name entity-name nil)) :t0]]}
+         {:select (entity-column-names entity-name :t0) :from [[(as-table-name entity-name) :t0]]}
          (or (:? attrs)
              (when-not select-all?
                {:where (vec (concat [:and] (vals attrs)))})))
         w0 (:where sql-pat0)
-        w1 (if w0 (insert-deleted-clause w0) [:= stu/deleted-flag-col-kw false])
+        w1 (if w0 (insert-deleted-clause w0) [:= (li/make-ref :t0 stu/deleted-flag-col-kw) false])
         sql-pat (merge (assoc sql-pat0 :where w1) (when sub-query (generate-relationship-joins sub-query)))
         sql-params (sql/raw-format-sql sql-pat)]
     (execute-fn!
