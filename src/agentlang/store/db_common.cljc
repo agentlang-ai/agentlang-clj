@@ -327,16 +327,27 @@
               [:= c v])))
         attrs))
 
-(defn- generate-relationship-joins [rels-query-pattern]
-  (let [qpat (first (vals rels-query-pattern))
-        entity-name (first (keys qpat))
-        attrs (entity-name qpat)]
-    {:join [[(as-table-name entity-name) :t1]
-            (concat
-             [:and
-              [:= (li/make-ref :t1 stu/deleted-flag-col-kw) false]
-              [:= :t0.___parent__ :t1.___path__]]
-             (entity-attributes-as-queries attrs :t1))]}))
+(defn- parse-names-from-rel-query [qpat]
+  [(first (filter #(cn/entity? (first %)) qpat))
+   (first (filter #(cn/relationship? (first %)) qpat))])
+
+(defn- generate-relationship-joins
+  ([depth rels-query-pattern]
+   (let [[[parent-entity attrs] [relname npat]] (parse-names-from-rel-query rels-query-pattern)
+         parent-alias (keyword (str "t" (inc depth)))
+         child-alias (keyword (str "t" depth))
+         join-pat
+         (concat
+          [[(as-table-name parent-entity) parent-alias]
+           (concat
+            [:and
+             [:= (li/make-ref parent-alias stu/deleted-flag-col-kw) false]
+             [:= (li/make-ref child-alias :___parent__) (li/make-ref parent-alias :___path__)]]
+            (entity-attributes-as-queries attrs parent-alias))]
+          (when npat
+            (generate-relationship-joins (inc depth) (first (vals npat)))))]
+     {:join (vec join-pat)}))
+  ([rels-query-pattern] (generate-relationship-joins 0 (first (vals rels-query-pattern)))))
 
 (defn- insert-deleted-clause [w]
   (let [f (first w)]
