@@ -175,9 +175,10 @@
      :Br01/CreateB
      {:Br01/B {:Id :Br01/CreateB.Id
                :Y :Br01/CreateB.Y}
-      :Br01/AB {:Br01/A {:Id? :Br01/CreateB.A}}}))
-  (let [b? (partial cn/instance-of? :Br01/B)]
-    ;; TODO: handle proper path setting in child
+      :Br01/AB? {:Br01/A {:Id :Br01/CreateB.A}}}))
+  (let [a? (partial cn/instance-of? :Br01/A)
+        b? (partial cn/instance-of? :Br01/B)]
+    (is (a? (tu/fetch-result {:Br01/Create_A {:Instance {:Br01/A {:Id 1 :X 100}}}})))
     (is (b? (tu/fetch-result {:Br01/CreateB {:Id 11 :Y 10 :A 1}})))))
 
 ;; (deftest compound-attributes

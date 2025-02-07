@@ -1024,7 +1024,7 @@
   (if (and (entity? recname)
            (pi/default-path? (li/path-attr attrs)))
     (let [idattr (identity-attribute-name recname)]
-      (assoc attrs li/path-attr (pr-str (idattr attrs))))
+      (assoc attrs li/path-attr (pr-str [(idattr attrs)])))
     attrs))
 
 (defn make-instance

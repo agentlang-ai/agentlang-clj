@@ -17,7 +17,20 @@
 
 (def ^:private resolve-reference env/lookup)
 
-(declare evaluate-dataflow-in-environment)
+(declare evaluate-dataflow-in-environment evaluate-pattern)
+
+(defn- as-query-pattern [pat]
+  (let [alias (:as pat)
+        n (li/record-name pat)
+        attrs (li/record-attributes pat)]
+    (merge
+     {n (into {} (mapv (fn [[k v]]
+                         [(if (li/query-pattern? k)
+                            k
+                            (li/name-as-query-pattern k))
+                          v])
+                       attrs))}
+     (when alias {:as alias}))))
 
 (defn- evaluate-attr-expr [env attrs attr-name exp]
   (let [final-exp (mapv #(if (keyword? %)
@@ -202,22 +215,52 @@
         env0 (if alias (env/bind-variable env alias inst) env)]
     (make-result env0 inst)))
 
+(defn- maybe-set-parent [env relpat recname recattrs]
+  (let [k (first (keys relpat))]
+    (when-not (li/query-pattern? k)
+      (u/throw-ex (str "Relationship name " k " should be a query in " relpat)))
+    (let [relname (li/normalize-name k)
+          _ (when-not (cn/contains-relationship? relname)
+              (u/throw-ex (str "Not a contains-relationship " relname " in " relpat)))
+          parent (cn/containing-parent relname)
+          child (cn/contained-child relname)]
+      (when (not= child recname)
+        (u/throw-ex (str "Error in query " relpat ", "
+                         recname " is not a child of "
+                         parent " via the contains-relationship "
+                         relname)))
+      (if-let [result (first (:result (evaluate-pattern env (as-query-pattern (k relpat)))))]
+        (do (when-not (cn/instance-of? parent result)
+              (u/throw-ex (str "Result of " relpat " is not of type " parent)))
+            (let [pid (pr-str ((cn/identity-attribute-name parent) result))
+                  ppath (read-string (li/path-attr result))]
+              (assoc recattrs li/parent-attr
+                     pid li/path-attr
+                     (pr-str (concat ppath [recname child ((cn/identity-attribute-name child) recattrs)])))))
+        (u/throw-ex (str "Query " relpat " failed to lookup " parent " for " child))))))
+
 (defn- crud-handler [env pat sub-pats]
   (let [recname (li/record-name pat)
         recattrs (li/record-attributes pat)
-        alias (:as pat)
-        result
-        (if (cn/entity-schema (li/normalize-name recname))
-          (if (li/query-instance-pattern? pat)
-            (handle-query-pattern env recname recattrs alias)
-            (handle-entity-crud-pattern env recname recattrs alias))
-          (if (cn/event-schema recname)
-            (handle-event-pattern env recname recattrs alias)
-            (when (cn/record-schema recname)
-              (handle-record-pattern env recname recattrs alias))))]
-    (when-not result
-      (u/throw-ex (str "Schema not found for " recname ". Cannot evaluate " pat)))
-    result))
+        alias (:as pat)]
+    (cond
+      (cn/entity-schema (li/normalize-name recname))
+      (if (li/query-instance-pattern? pat)
+        (handle-query-pattern env recname recattrs alias)
+        (handle-entity-crud-pattern
+         env recname
+         (if-let [rels (:rels sub-pats)]
+           (maybe-set-parent env rels recname recattrs)
+           recattrs)
+         alias))
+
+      (cn/event-schema recname)
+      (handle-event-pattern env recname recattrs alias)
+
+      (cn/record-schema recname)
+      (handle-record-pattern env recname recattrs alias)
+
+      :else (u/throw-ex (str "Schema not found for " recname ". Cannot evaluate " pat)))))
 
 (defn- delete-instance [env entity-name params]
   (if-let [resolver (rr/resolver-for-path entity-name)]
@@ -289,6 +332,12 @@
       (maybe-lift-relationship-patterns pat))
     [pat]))
 
+(defn evaluate-pattern [env pat]
+  (let [[pat sub-pats] (maybe-preprocecss-pattern env pat)]
+    (if-let [handler (pattern-handler pat)]
+      (handler env pat sub-pats)
+      (u/throw-ex (str "Cannot handle invalid pattern " pat)))))
+
 (defn evaluate-dataflow
   ([store env event-instance is-internal]
    (let [env0 (or env (env/bind-instance (env/make store nil) event-instance))
@@ -304,14 +353,11 @@
           (try
             (loop [df-patterns (cn/fetch-dataflow-patterns event-instance),
                    pat-count 0, env env, result nil]
-              (if-let [pat0 (first df-patterns)]
+              (if-let [pat (first df-patterns)]
                 (let [pat-count (inc pat-count)
-                      env (env/bind-eval-state env pat0 pat-count)
-                      [pat sub-pats] (maybe-preprocecss-pattern env pat0)]
-                  (if-let [handler (pattern-handler pat)]
-                    (let [{env1 :env r :result} (handler env pat sub-pats)]
-                      (recur (rest df-patterns) pat-count env1 r))
-                    (u/throw-ex (str "Cannot handle invalid pattern " pat))))
+                      env (env/bind-eval-state env pat pat-count)
+                      {env1 :env r :result} (evaluate-pattern env pat)]
+                  (recur (rest df-patterns) pat-count env1 r))
                 (make-result env result)))
             (finally
               (when txn-set? (gs/set-active-txn! nil)))))))))
