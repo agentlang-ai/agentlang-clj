@@ -15,9 +15,32 @@
 (defn- make-result [env result]
   {:env env :result result})
 
+(declare evaluate-dataflow-in-environment evaluate-pattern
+         evaluate-attr-expr)
+
 (def ^:private resolve-reference env/lookup)
 
-(declare evaluate-dataflow-in-environment evaluate-pattern)
+(defn- resolve-references-in-attributes [env pat]
+  (if-let [recname (li/record-name pat)]
+    (let [alias (:as pat)
+          attrs (li/record-attributes pat)
+          new-attrs (mapv (fn [[k v]]
+                            [k (cond
+                                 (keyword? v) (resolve-reference env v)
+                                 (vector? v) (mapv #(resolve-reference env %) v)
+                                 (list? v) (evaluate-attr-expr env nil k v)
+                                 :else v)])
+                          attrs)]
+      (merge {recname (into {} new-attrs)}
+             (when alias {:as alias})))
+    pat))
+
+(defn- resolve-all-references [env pat]
+  (if (keyword? pat)
+    (resolve-reference env pat)
+    (w/postwalk
+     #(if (map? %) (resolve-references-in-attributes env %) %)
+     pat)))
 
 (defn- as-query-pattern [pat]
   (let [alias (:as pat)
@@ -172,7 +195,37 @@
             (store/update-instances (env/get-store env) recname updated-instances))]
       (when rs updated-instances))))
 
-(defn- handle-query-pattern [env recname attrs alias]
+(defn- fetch-parent [relname child-recname relpat]
+  (when-not (cn/contains-relationship? relname)
+    (u/throw-ex (str "Not a contains-relationship " relname " in " relpat)))
+  (let [parent (cn/containing-parent relname)
+        child (cn/contained-child relname)]
+    (when (not= child (li/normalize-name child-recname))
+      (u/throw-ex (str "Error in query " relpat ", "
+                       child-recname " is not a child of "
+                       parent " via the contains-relationship "
+                       relname)))
+    parent))
+
+(defn- force-fetch-only-id [recname attrs]
+  (when (= 1 (count (keys attrs)))
+    (let [idattr (cn/identity-attribute-name recname)]
+      (idattr attrs))))
+
+(def ^:private c-parent-attr (keyword (su/attribute-column-name li/parent-attr)))
+
+(defn- maybe-merge-rels-query-to-attributes [[recname attrs rels-query :as args]]
+  (or (when rels-query
+        (let [[k _ :as ks] (keys rels-query)]
+          (when (and (= 1 (count ks)) (cn/contains-relationship? k))
+            (when-let [parent (fetch-parent k recname rels-query)]
+              (when-let [pat (get-in rels-query [k parent])]
+                (when-let [pid (and (= 1 (count (keys pat)))
+                                    (force-fetch-only-id parent pat))]
+                  [(li/normalize-name recname) (assoc attrs li/parent-attr? [:= c-parent-attr (pr-str pid)]) nil]))))))
+      args))
+
+(defn- handle-query-pattern [env recname [attrs sub-pats] alias]
   (let [select-clause (:? attrs)
         [update-attrs query-attrs] (when-not select-clause (lift-attributes-for-update attrs))
         attrs (if query-attrs query-attrs attrs)
@@ -181,9 +234,11 @@
                    {:? (preprocess-select-clause env recname select-clause)}
                    (into {} (mapv (partial process-query-attribute-value env) attrs))))
         resolver (rr/resolver-for-path recname)
+        rels-query0 (when sub-pats (resolve-all-references env (:rels sub-pats)))
+        [recname attrs0 rels-query] (maybe-merge-rels-query-to-attributes [recname attrs0 rels-query0])
         result0 (if resolver
-                  (r/call-resolver-query resolver env [recname attrs0])
-                  (store/do-query (env/get-store env) nil [recname attrs0]))
+                  (r/call-resolver-query resolver env [recname attrs0 rels-query])
+                  (store/do-query (env/get-store env) nil [recname attrs0 rels-query]))
         env0 (if (seq result0) (env/bind-instances env recname result0) env)
         result (if update-attrs (handle-upsert env0 resolver recname update-attrs result0) result0)
         env1 (if (seq result) (env/bind-instances env0 recname result) env0)
@@ -220,15 +275,7 @@
     (when-not (li/query-pattern? k)
       (u/throw-ex (str "Relationship name " k " should be a query in " relpat)))
     (let [relname (li/normalize-name k)
-          _ (when-not (cn/contains-relationship? relname)
-              (u/throw-ex (str "Not a contains-relationship " relname " in " relpat)))
-          parent (cn/containing-parent relname)
-          child (cn/contained-child relname)]
-      (when (not= child recname)
-        (u/throw-ex (str "Error in query " relpat ", "
-                         recname " is not a child of "
-                         parent " via the contains-relationship "
-                         relname)))
+          parent (fetch-parent relname recname relpat)]
       (if-let [result
                (let [pat (k relpat)]
                  (if (keyword? pat)
@@ -240,8 +287,8 @@
                   ppath (u/parse-string (li/path-attr result))]
               (assoc recattrs li/parent-attr
                      pid li/path-attr
-                     (pr-str (concat ppath [relname child li/id-attr])))))
-        (u/throw-ex (str "Query " relpat " failed to lookup " parent " for " child))))))
+                     (pr-str (concat ppath [relname recname li/id-attr])))))
+        (u/throw-ex (str "Query " relpat " failed to lookup " parent " for " recname))))))
 
 (defn- crud-handler [env pat sub-pats]
   (let [recname (li/record-name pat)
@@ -253,7 +300,7 @@
             f (if q? handle-query-pattern handle-entity-crud-pattern)
             attrs
             (if q?
-              recattrs
+              [recattrs sub-pats]
               (if-let [rels (:rels sub-pats)]
                 (maybe-set-parent env rels recname recattrs)
                 recattrs))]

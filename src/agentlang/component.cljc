@@ -510,7 +510,7 @@
      (li/normalize-instance-pattern
       (dissoc
        x type-tag-key
-       type-key dirty-key li/parent-attr
+       type-key dirty-key
        (when-not include-meta li/meta-attr)))))
   ([x] (instance-attributes x false)))
 
@@ -524,6 +524,10 @@
   [inst]
   (when (an-instance? inst)
     (apply dissoc inst non-instance-user-attr-keys)))
+
+(defn all-attributes-with-values [inst]
+  (let [attrs (instance-attributes inst)]
+    (into {} (filter #(not (nil? (second %))) attrs))))
 
 (def set-attribute-value assoc)
 
@@ -672,13 +676,7 @@
   "Return true if both entity instances have the same identity."
   [a b]
   (or (identical? a b)
-      (if (every? entity-instance? [a b])
-        (let [instname (parsed-instance-type a)]
-          (and (instance-of? instname b)
-               (when-let [idattr (identity-attribute-name instname)]
-                 (= (idattr (instance-attributes a))
-                    (idattr (instance-attributes b))))))
-        (= a b))))
+      (= (li/path-attr a) (li/path-attr b))))
 
 (defn attributes-eq?
   "Return true if both instances have the same attributes."
@@ -693,8 +691,9 @@
           (parsed-instance-type inst2))))
 
 (defn same-instance? [a b]
-  (and (instance-eq? a b) (attributes-eq? a b)
-       (= (li/parent-attr a) (li/parent-attr b))))
+  (or (identical? a b)
+      (= (all-attributes-with-values a)
+         (all-attributes-with-values b))))
 
 (defn exception->error [ex]
   #?(:clj

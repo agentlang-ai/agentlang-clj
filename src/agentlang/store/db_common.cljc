@@ -316,13 +316,16 @@
   ([datasource entity-name query-sql ids]
    (query-by-id query-by-id-statement datasource entity-name query-sql ids)))
 
+(defn- generate-relationship-joins [rels-query-pattern]
+  )
+
 (defn- insert-deleted-clause [w]
   (let [f (first w)]
     (if (= :and f)
       `[~f [:= ~stu/deleted-flag-col-kw false] ~@(rest w)]
       `[:and [:= ~stu/deleted-flag-col-kw false] ~w])))
 
-(defn- query-by-attributes [datasource [entity-name attrs]]
+(defn- query-by-attributes [datasource [entity-name attrs sub-query]]
   (let [select-all? (and (li/query-pattern? entity-name)
                          (not (seq attrs)))
         entity-name (if select-all?
@@ -330,13 +333,13 @@
                       entity-name)
         sql-pat0
         (merge
-         {:select [:*] :from [(keyword (stu/entity-table-name entity-name nil))]}
+         {:select [:*] :from [[(keyword (stu/entity-table-name entity-name nil)) :t0]]}
          (or (:? attrs)
              (when-not select-all?
                {:where (vec (concat [:and] (vals attrs)))})))
         w0 (:where sql-pat0)
         w1 (if w0 (insert-deleted-clause w0) [:= stu/deleted-flag-col-kw false])
-        sql-pat (assoc sql-pat0 :where w1)
+        sql-pat (merge (assoc sql-pat0 :where w1) (when sub-query (generate-relationship-joins sub-query)))
         sql-params (sql/raw-format-sql sql-pat)]
     (execute-fn!
      datasource
