@@ -1094,14 +1094,15 @@
                                        :client-url (:origin query-params)
                                        :server-redirect-host (:server_redirect_host query-params))))))
 
-(defn- process-auth-callback [evaluator call-post-signup [auth-config _] request]
+(defn- process-auth-callback [evaluator call-post-signup [auth-config _] request] 
   (log-request "Auth-callback request" request)
   (auth-response
    (auth/handle-auth-callback
     (assoc auth-config :args {:evaluate evaluate
                               :evaluator evaluator
                               :call-post-signup call-post-signup
-                              :request request}))))
+                              :request request
+                              :params (params/params-request request)}))))
 
 (defn- make-magic-link [username op payload description expiry]
   (let [hskey (u/getenv "AGENTLANG_HS256_KEY")]
@@ -1232,7 +1233,7 @@
            (POST uh/dynamic-eval-prefix [] (:eval handlers))
            (POST uh/ai-prefix [] (:ai handlers))
            (GET uh/auth-prefix [] (:auth handlers))
-           (GET uh/auth-callback-prefix [] (:auth-callback handlers))
+           (ANY uh/auth-callback-prefix [] (:auth-callback handlers))
            (POST uh/register-magiclink-prefix [] (:register-magiclink handlers))
            (GET uh/get-magiclink-prefix [] (:get-magiclink handlers))
            (POST uh/preview-magiclink-prefix [] (:preview-magiclink handlers))
