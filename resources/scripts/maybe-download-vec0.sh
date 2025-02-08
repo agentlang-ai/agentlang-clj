@@ -6,6 +6,9 @@ CURRENT_DIR="$(pwd)"
 LIB_DIR="$CURRENT_DIR/lib"  # Use absolute path for lib directory
 BUILD_DIR="$(mktemp -d)"
 
+# Check if the vec0* extension already exists and exit if it does
+ls "$LIB_DIR"/vec0* &>/dev/null && exit 0
+
 echo "Current directory: $CURRENT_DIR"
 echo "Creating lib directory: $LIB_DIR"
 

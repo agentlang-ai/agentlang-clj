@@ -10,13 +10,17 @@
 ;; {:embeddings {:vectordb :sqlitevector
 ;;               :config {:dbname "./test1.db"}]}}}
 
+(defn- default-sqlite-db-name []
+  (str "agentlang.sqlite." (System/currentTimeMillis) ".db"))
+
 (defn make []
   (let [db-conn (u/make-cell)
         provider-name (u/make-cell)
         cwp #(provider/call-with-provider @provider-name %1)]
     (reify p/EmbeddingDb
       (open-connection [this config]
-        (let [conn (sqv/open-connection config)] 
+        (let [dbname (or (:dbname config ) (default-sqlite-db-name))
+              conn (sqv/open-connection (assoc config :dbname dbname))] 
           (sqv/initialize-vector-table conn)
           (u/safe-set db-conn conn))
          (u/safe-set-once provider-name #(:llm-provider config))
