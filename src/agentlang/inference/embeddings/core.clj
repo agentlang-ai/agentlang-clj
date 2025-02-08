@@ -6,6 +6,7 @@
             [agentlang.inference.embeddings.internal.queue :as queue]
             [agentlang.inference.embeddings.internal.registry :as r]
             [agentlang.inference.embeddings.pgvector]
+            [agentlang.inference.embeddings.sqlitevector]
             [agentlang.inference.embeddings.protocol :as p]))
 
 (declare embed-schema)
