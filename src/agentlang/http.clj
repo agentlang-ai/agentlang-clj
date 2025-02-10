@@ -1088,12 +1088,14 @@
 (defn- process-auth [evaluator [auth-config _] request]
   (log-request "Auth request" request)
   (let [cookie (get-in request [:headers "cookie"])
-        query-params (when-let [s (:query-string request)] (uh/form-decode s))]
+        query-params (when-let [s (:query-string request)] (uh/form-decode s))
+        client-url (or (:origin query-params) (:client-url auth-config))
+        server-redirect-host (or (:server_redirect_host query-params) (:server-redirect-host auth-config))]
     (auth-response
      (auth/authenticate-session (assoc auth-config
                                        :cookie cookie
-                                       :client-url (:origin query-params)
-                                       :server-redirect-host (:server_redirect_host query-params))))))
+                                       :client-url client-url
+                                       :server-redirect-host server-redirect-host)))))
 
 (defn- process-auth-callback [evaluator call-post-signup [auth-config _] request] 
   (log-request "Auth-callback request" request)
@@ -1286,9 +1288,10 @@
 
 (defn make-auth-handler [config]
   
-  (let [auth-config-entity (-> (ev/fetch-model-config-instance :Agentlang)
-                               (dissoc :type-*-tag-*- :-*-type-*- :id)
-                               us/camel-to-kebab-keys)
+  (let [auth-config-entity (when-let [inst (ev/fetch-model-config-instance :Agentlang)]
+                             (-> inst
+                                 (dissoc :type-*-tag-*- :-*-type-*- :id :__instmeta__)
+                                 us/camel-to-kebab-keys))
         auth (merge auth-config-entity (:authentication config))
         auth-check (if auth (partial handle-request-auth auth) (constantly false))]
     [auth auth-check]))
