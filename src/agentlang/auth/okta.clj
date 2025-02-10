@@ -272,17 +272,18 @@
                                            :as auth-config}]
   (let [user-state (str (when client-url (b64/encode-string client-url)) user-state-delim
                         (when server-redirect-host (b64/encode-string server-redirect-host)))
-        auth-config (assoc auth-config :user-state user-state)]
+        auth-config (assoc auth-config :user-state user-state)
+        redirect-url (first (make-okta-url auth-config))]
     (if-let [sid (auth/cookie-to-session-id auth-config cookie)]
       (do
         (log/debug (str "auth/authenticate-session with cookie " sid))
         (if (sess/lookup-session-cookie-user-data sid)
           {:status :redirect-found
            :location client-url}
-          {:status :redirect-found}))
-      (let [redirect-url (first (make-okta-url auth-config))]
-        {:status :redirect-found
-         :location redirect-url}))))
+          {:status :redirect-found
+           :location redirect-url}))
+      {:status :redirect-found
+       :location redirect-url})))
 
 (defn- cleanup-roles [roles default-role]
   (let [roles (if (vector? roles)
