@@ -38,7 +38,8 @@
             [ring.middleware.params :refer [wrap-params] :as params]
             [ring.middleware.keyword-params :refer [wrap-keyword-params]]
             [ring.middleware.nested-params :refer [wrap-nested-params]]
-            [drawbridge.core :as drawbridge])
+            [drawbridge.core :as drawbridge]
+            [agentlang.util.seq :as us])
   (:use [compojure.core :only [DELETE GET POST PUT routes ANY]]
         [compojure.route :only [not-found]]))
 
@@ -1284,7 +1285,11 @@
   (some #{(:service auth)} [:keycloak :cognito :okta :dataflow]))
 
 (defn make-auth-handler [config]
-  (let [auth (:authentication config)
+  
+  (let [auth-config-entity (-> (ev/fetch-model-config-instance :Agentlang)
+                               (dissoc :type-*-tag-*- :-*-type-*- :id)
+                               us/camel-to-kebab-keys)
+        auth (merge auth-config-entity (:authentication config))
         auth-check (if auth (partial handle-request-auth auth) (constantly false))]
     [auth auth-check]))
 

@@ -313,7 +313,7 @@
                      saml/->Response
                      (saml/validate
                       (:saml-certificate auth-config)
-                      nil {:acs-url (:acs-url auth-config)})
+                      nil {:acs-url (:authorize-redirect-url auth-config)})
                      saml/assertions
                      first)
           user (get-in result [:name-id :value])]
