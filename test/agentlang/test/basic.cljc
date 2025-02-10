@@ -171,22 +171,41 @@
   (defcomponent :Br01
     (entity :Br01/A {:Id {:type :Int :guid true} :X :Int})
     (entity :Br01/B {:Id {:type :Int :guid true} :Y :Int})
+    (entity :Br01/C {:Id {:type :Int :guid true} :Z :Int})
     (relationship :Br01/AB {:meta {:contains [:Br01/A :Br01/B]}})
+    (relationship :Br01/BC {:meta {:contains [:Br01/B :Br01/C]}})
     (dataflow
      :Br01/CreateB
      {:Br01/B {:Id :Br01/CreateB.Id
                :Y :Br01/CreateB.Y}
-      :Br01/AB? {:Br01/A {:Id :Br01/CreateB.A}}})
+      :Br01/AB {:Br01/A {:Id? :Br01/CreateB.A}}})
     (dataflow
      :Br01/LookupAllB
      {:Br01/B? {}
-      :Br01/AB {:Br01/A {:Id :Br01/LookupAllB.A}}})
+      :Br01/AB? {:Br01/A {:Id :Br01/LookupAllB.A}}})
     (dataflow
      :Br01/LookupAllBByX
      {:Br01/B? {}
-      :Br01/AB {:Br01/A {:X :Br01/LookupAllBByX.X}}}))
+      :Br01/AB? {:Br01/A {:X :Br01/LookupAllBByX.X}}})
+    (dataflow
+     :Br01/CreateC
+     {:Br01/C {:Id :Br01/CreateC.Id
+               :Z :Br01/CreateC.Z}
+      :Br01/BC {:Br01/B {:Id :Br01/CreateC.B}
+                :Br01/AB? {:Br01/A {:Id :Br01/CreateC.A}}}})
+    (dataflow
+     :Br01/LookupAllC
+     {:Br01/C? {}
+      :Br01/BC? {:Br01/B {:Id :Br01/LookupAllC.B}
+                 :Br01/AB {:Br01/A {:Id :Br01/LookupAllC.A}}}})
+    (dataflow
+     :Br01/LookupAllCByZ
+     {:Br01/C {:Z? :Br01/LookupAllCByZ.Z}
+      :Br01/BC? {:Br01/B {:Id :Br01/LookupAllCByZ.B}
+                 :Br01/AB {:Br01/A {:Id :Br01/LookupAllCByZ.A}}}}))
   (let [a? (partial cn/instance-of? :Br01/A)
         b? (partial cn/instance-of? :Br01/B)
+        c? (partial cn/instance-of? :Br01/C)
         check-paths (fn [aid b]
                       (is (b? b))
                       (is (= (cn/instance-path b)
@@ -196,7 +215,16 @@
         check-bs (fn [aid bs]
                    (is (seq bs))
                    (is (every? b? bs))
-                   (doseq [b bs] (check-paths aid b)))]
+                   (doseq [b bs] (check-paths aid b)))
+        create-c (fn [id z b a]
+                   (tu/fetch-result
+                    {:Br01/CreateC {:Id id :Z z :B b :A a}}))
+        lookup-cs #(tu/fetch-result {:Br01/LookupAllC {:B %1 :A %2}})
+        check-cs (fn [n s cs]
+                   (is (count cs) n)
+                   (is (every? c? cs))
+                   (is (= s (apply + (mapv :Z cs)))))
+        lookup-all-cs #(tu/fetch-result {:Br01/LookupAllCByZ {:Z %1 :B %2 :A %3}})]
     (is (a? (tu/fetch-result {:Br01/Create_A {:Instance {:Br01/A {:Id 1 :X 100}}}})))
     (is (a? (tu/fetch-result {:Br01/Create_A {:Instance {:Br01/A {:Id 2 :X 300}}}})))
     (is (b? (tu/fetch-result {:Br01/CreateB {:Id 101 :Y 10 :A 1}})))
@@ -205,7 +233,20 @@
     (check-bs 1 (lookup-bs 1))
     (check-bs 2 (lookup-bs 2))
     (check-bs 1 (lookup-bs-by-x 100))
-    (check-bs 2 (lookup-bs-by-x 300))))
+    (check-bs 2 (lookup-bs-by-x 300))
+    (is (c? (create-c 201 30 101 1)))
+    (is (c? (create-c 202 40 101 1)))
+    (is (c? (create-c 203 40 101 1)))
+    (is (c? (create-c 204 50 102 1)))
+    (is (c? (create-c 205 60 102 1)))
+    (is (c? (create-c 206 70 103 2)))
+    (check-cs 3 (+ 40 40 30) (lookup-cs 101 1))
+    (check-cs 2 (+ 50 60) (lookup-cs 102 1))
+    (check-cs 2 70 (lookup-cs 103 2))
+    (check-cs 2 80 (lookup-all-cs 40 101 1))
+    (check-cs 1 30 (lookup-all-cs 30 101 1))
+    (check-cs 1 60 (lookup-all-cs 60 102 1))
+    (check-cs 1 70 (lookup-all-cs 70 103 2))))
 
 ;; (deftest compound-attributes
 ;;   (defcomponent :Df04

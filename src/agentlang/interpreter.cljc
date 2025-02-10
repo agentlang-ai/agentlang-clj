@@ -20,26 +20,46 @@
 
 (def ^:private resolve-reference env/lookup)
 
+(defn- resolve-references-in-attributes-helper [env attrs]
+  (into
+   {}
+   (mapv (fn [[k v]]
+           [k (cond
+                (keyword? v) (resolve-reference env v)
+                (vector? v) (mapv #(resolve-reference env %) v)
+                (list? v) (evaluate-attr-expr env nil k v)
+                :else v)])
+         attrs)))
+
 (defn- resolve-references-in-attributes [env pat]
   (if-let [recname (li/record-name pat)]
     (let [alias (:as pat)
           attrs (li/record-attributes pat)
-          new-attrs (mapv (fn [[k v]]
-                            [k (cond
-                                 (keyword? v) (resolve-reference env v)
-                                 (vector? v) (mapv #(resolve-reference env %) v)
-                                 (list? v) (evaluate-attr-expr env nil k v)
-                                 :else v)])
-                          attrs)]
+          new-attrs (resolve-references-in-attributes-helper env attrs)]
       (merge {recname (into {} new-attrs)}
              (when alias {:as alias})))
     pat))
+
+(defn- resolve-references-in-map [env m]
+  (let [res (mapv (fn [[k v]]
+                    [k (cond
+                         (= k :as) v
+                         (map? v)
+                         (if (li/instance-pattern? v)
+                           (resolve-references-in-attributes env v)
+                           (resolve-references-in-attributes-helper env v))
+                         (keyword? v) (resolve-reference env v)
+                         :else v)])
+                  m)]
+    (into {} res)))
 
 (defn- resolve-all-references [env pat]
   (if (keyword? pat)
     (resolve-reference env pat)
     (w/postwalk
-     #(if (map? %) (resolve-references-in-attributes env %) %)
+     #(if (map? %)
+        (resolve-references-in-map env %)
+        %)
      pat)))
 
 (defn- as-query-pattern [pat]
@@ -272,7 +292,7 @@
 
 (defn- maybe-set-parent [env relpat recname recattrs]
   (let [k (first (keys relpat))]
-    (when-not (li/query-pattern? k)
+    #_(when-not (li/query-pattern? k)
       (u/throw-ex (str "Relationship name " k " should be a query in " relpat)))
     (let [relname (li/normalize-name k)
           parent (fetch-parent relname recname relpat)]

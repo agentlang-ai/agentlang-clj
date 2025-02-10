@@ -345,15 +345,25 @@
              [:= (li/make-ref child-alias :___parent__) (li/make-ref parent-alias :___path__)]]
             (entity-attributes-as-queries attrs parent-alias))]
           (when npat
-            (generate-relationship-joins (inc depth) (first (vals npat)))))]
+            (:join (generate-relationship-joins (inc depth) npat))))]
      {:join (vec join-pat)}))
-  ([rels-query-pattern] (generate-relationship-joins 0 (first (vals rels-query-pattern)))))
+  ([rels-query-pattern]
+   (generate-relationship-joins 0 (first (vals rels-query-pattern)))))
 
-(defn- insert-deleted-clause [w]
+(defn- insert-deleted-clause [w sql-alias]
   (let [f (first w)]
     (if (= :and f)
-      `[~f [:= ~stu/deleted-flag-col-kw false] ~@(rest w)]
-      `[:and [:= ~stu/deleted-flag-col-kw false] ~w])))
+      `[~f [:= ~(li/make-ref sql-alias stu/deleted-flag-col-kw) false] ~@(rest w)]
+      `[:and [:= ~(li/make-ref sql-alias stu/deleted-flag-col-kw) false] ~w])))
+
+(defn- fix-refs [sql-alias args]
+  (mapv (fn [arg]
+          `[~(first arg)
+            ~@(mapv #(if (keyword? %)
+                       (li/make-ref sql-alias %)
+                       %)
+                    (rest arg))])
+        args))
 
 (defn- entity-column-names [entity-name sql-alias]
   (let [attr-names (cn/query-attribute-names entity-name)]
@@ -370,9 +380,9 @@
          {:select (entity-column-names entity-name :t0) :from [[(as-table-name entity-name) :t0]]}
          (or (:? attrs)
              (when-not select-all?
-               {:where (vec (concat [:and] (vals attrs)))})))
+               {:where (vec (concat [:and] (fix-refs :t0 (vals attrs))))})))
         w0 (:where sql-pat0)
-        w1 (if w0 (insert-deleted-clause w0) [:= (li/make-ref :t0 stu/deleted-flag-col-kw) false])
+        w1 (if w0 (insert-deleted-clause w0 :t0) [:= (li/make-ref :t0 stu/deleted-flag-col-kw) false])
         sql-pat (merge (assoc sql-pat0 :where w1) (when sub-query (generate-relationship-joins sub-query)))
         sql-params (sql/raw-format-sql sql-pat)]
     (execute-fn!
