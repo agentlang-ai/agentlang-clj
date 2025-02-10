@@ -142,7 +142,7 @@
    components
    #(assoc-in @components [component (str (get-model-version component))] spec)))
 
-(declare intern-attribute intern-event entity?)
+(declare intern-attribute intern-event entity? between-relationship?)
 
 (defn create-component
   "Create a new component with the given name and references to
@@ -1031,13 +1031,15 @@
   (u/parse-string (li/path-attr inst)))
 
 (defn- maybe-assoc-path [recname attrs]
-  (if (entity? recname)
+  (cond
+    (between-relationship? recname) attrs
+    (entity? recname)
     (let [path (li/path-attr attrs)
           id ((identity-attribute-name recname) attrs)]
       (if (pi/default-path? path)
         (assoc attrs li/path-attr (pr-str [(li/make-path recname) id]))
         (assoc attrs li/path-attr (maybe-complete-path path id))))
-    attrs))
+    :else attrs))
 
 (defn make-instance
   "Initialize an instance of a record from the given map of attributes.

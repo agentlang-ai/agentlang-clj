@@ -290,17 +290,18 @@
         env0 (if alias (env/bind-variable env alias inst) env)]
     (make-result env0 inst)))
 
+(defn- resolve-pattern [env pat]
+  (if (keyword? pat)
+    (resolve-reference env pat)
+    (first (:result (evaluate-pattern env (as-query-pattern pat))))))
+
 (defn- maybe-set-parent [env relpat recname recattrs]
   (let [k (first (keys relpat))]
     #_(when-not (li/query-pattern? k)
       (u/throw-ex (str "Relationship name " k " should be a query in " relpat)))
     (let [relname (li/normalize-name k)
           parent (fetch-parent relname recname relpat)]
-      (if-let [result
-               (let [pat (k relpat)]
-                 (if (keyword? pat)
-                   (resolve-reference env pat)
-                   (first (:result (evaluate-pattern env (as-query-pattern pat))))))]
+      (if-let [result (resolve-pattern env (k relpat))]
         (do (when-not (cn/instance-of? parent result)
               (u/throw-ex (str "Result of " relpat " is not of type " parent)))
             (let [pid (li/path-attr result)
@@ -310,6 +311,24 @@
                      (pr-str (concat ppath [relname recname li/id-attr])))))
         (u/throw-ex (str "Query " relpat " failed to lookup " parent " for " recname))))))
 
+(defn- create-between-relationships [env bet-rels recname result]
+  (when-let [inst (when-let [r (:result result)]
+                    (let [inst (if (map? r) r (first r))]
+                      (when-not (cn/instance-of? recname inst)
+                        (u/throw-ex (str "Cannot create relationship " recname " for " inst)))
+                      inst))]
+    (doseq [[relname relspec] bet-rels]
+      (let [other-inst (resolve-pattern env relspec)
+            _ (when-not (cn/an-instance? other-inst)
+                (u/throw-ex (str "Cannot create between-relationship " relname ". "
+                                 "Query failed - " relspec)))
+            a1 (first (cn/find-between-keys relname recname))
+            other-recname (cn/instance-type-kw other-inst)
+            a2 (first (cn/find-between-keys relname other-recname))]
+        (when-not (or a1 a2)
+          (u/throw-ex (str "No relationship " relname " between " recname " and " other-recname)))
+        (:result (evaluate-pattern env {relname {a1 (li/path-attr inst) a2 (li/path-attr other-inst)}}))))))
+
 (defn- crud-handler [env pat sub-pats]
   (let [recname (li/record-name pat)
         recattrs (li/record-attributes pat)
@@ -318,13 +337,21 @@
       (cn/entity-schema (li/normalize-name recname))
       (let [q? (li/query-instance-pattern? pat)
             f (if q? handle-query-pattern handle-entity-crud-pattern)
+            rels (:rels sub-pats)
+            [cont-rels bet-rels]
+            (and rels
+                 [(into {} (filter #(cn/contains-relationship? (li/normalize-name (first %))) rels))
+                  (into {} (filter #(cn/between-relationship? (li/normalize-name (first %))) rels))])
             attrs
             (if q?
               [recattrs sub-pats]
-              (if-let [rels (:rels sub-pats)]
-                (maybe-set-parent env rels recname recattrs)
-                recattrs))]
-        (f env recname attrs alias))
+              (if (seq cont-rels)
+                (maybe-set-parent env cont-rels recname recattrs)
+                recattrs))
+            result (f env recname attrs alias)]
+        (when (seq bet-rels)
+          (create-between-relationships env bet-rels recname result))
+        result)
 
       (cn/event-schema recname)
       (handle-event-pattern env recname recattrs alias)
@@ -401,7 +428,9 @@
             k (first (keys pat))
             attrs (merge (get pat k) data)]
         [(merge {k attrs} (when alias {:as alias}))])
-      (maybe-lift-relationship-patterns pat))
+      (if (cn/between-relationship? (li/record-name pat))
+        [pat]
+        (maybe-lift-relationship-patterns pat)))
     [pat]))
 
 (defn evaluate-pattern [env pat]

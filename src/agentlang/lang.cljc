@@ -1157,19 +1157,12 @@
         (u/throw-ex (str "failed to register relationship - " relname)))
       (u/throw-ex (str "failed to define schema for " relname)))))
 
-(defn- between-node-types [node1 node2]
-  (let [id1 (cn/identity-attribute-name node1)
-        t1 (cn/attribute-type node1 id1)]
-    (if (= node1 node2)
-      [t1 t1]
-      [t1 (cn/attribute-type node2 (cn/identity-attribute-name node2))])))
-
 (defn- assoc-relnode-attributes [attrs [node1 node2] relmeta]
   (let [[a1 a2 :as attr-names] (li/between-nodenames node1 node2 relmeta)
-        [t1 t2] (between-node-types node1 node2)]
+        t :Agentlang.Kernel.Lang/String]
     (when-not (and a1 a2)
       (u/throw-ex (str "failed to resolve both node-attributes for between-relationship - " [a1 a2])))
-    [attr-names (assoc attrs a1 t1 a2 t2)]))
+    [attr-names (assoc attrs a1 t a2 t)]))
 
 (defn- between-unique-meta [meta relmeta [node1 node2] [n1 n2] new-attrs]
   (cond

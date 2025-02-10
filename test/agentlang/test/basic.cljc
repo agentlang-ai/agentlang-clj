@@ -167,69 +167,69 @@
       (is (= 10 (:Y inst)))
       (is (= 1 (:Z inst))))))
 
-(deftest basic-rels-01
-  (defcomponent :Br01
-    (entity :Br01/A {:Id {:type :Int :guid true} :X :Int})
-    (entity :Br01/B {:Id {:type :Int :guid true} :Y :Int})
-    (entity :Br01/C {:Id {:type :Int :guid true} :Z :Int})
-    (relationship :Br01/AB {:meta {:contains [:Br01/A :Br01/B]}})
-    (relationship :Br01/BC {:meta {:contains [:Br01/B :Br01/C]}})
+(deftest basic-contains
+  (defcomponent :BC01
+    (entity :BC01/A {:Id {:type :Int :guid true} :X :Int})
+    (entity :BC01/B {:Id {:type :Int :guid true} :Y :Int})
+    (entity :BC01/C {:Id {:type :Int :guid true} :Z :Int})
+    (relationship :BC01/AB {:meta {:contains [:BC01/A :BC01/B]}})
+    (relationship :BC01/BC {:meta {:contains [:BC01/B :BC01/C]}})
     (dataflow
-     :Br01/CreateB
-     {:Br01/B {:Id :Br01/CreateB.Id
-               :Y :Br01/CreateB.Y}
-      :Br01/AB {:Br01/A {:Id? :Br01/CreateB.A}}})
+     :BC01/CreateB
+     {:BC01/B {:Id :BC01/CreateB.Id
+               :Y :BC01/CreateB.Y}
+      :BC01/AB {:BC01/A {:Id? :BC01/CreateB.A}}})
     (dataflow
-     :Br01/LookupAllB
-     {:Br01/B? {}
-      :Br01/AB? {:Br01/A {:Id :Br01/LookupAllB.A}}})
+     :BC01/LookupAllB
+     {:BC01/B? {}
+      :BC01/AB? {:BC01/A {:Id :BC01/LookupAllB.A}}})
     (dataflow
-     :Br01/LookupAllBByX
-     {:Br01/B? {}
-      :Br01/AB? {:Br01/A {:X :Br01/LookupAllBByX.X}}})
+     :BC01/LookupAllBByX
+     {:BC01/B? {}
+      :BC01/AB? {:BC01/A {:X :BC01/LookupAllBByX.X}}})
     (dataflow
-     :Br01/CreateC
-     {:Br01/C {:Id :Br01/CreateC.Id
-               :Z :Br01/CreateC.Z}
-      :Br01/BC {:Br01/B {:Id :Br01/CreateC.B}
-                :Br01/AB? {:Br01/A {:Id :Br01/CreateC.A}}}})
+     :BC01/CreateC
+     {:BC01/C {:Id :BC01/CreateC.Id
+               :Z :BC01/CreateC.Z}
+      :BC01/BC {:BC01/B {:Id :BC01/CreateC.B}
+                :BC01/AB? {:BC01/A {:Id :BC01/CreateC.A}}}})
     (dataflow
-     :Br01/LookupAllC
-     {:Br01/C? {}
-      :Br01/BC? {:Br01/B {:Id :Br01/LookupAllC.B}
-                 :Br01/AB {:Br01/A {:Id :Br01/LookupAllC.A}}}})
+     :BC01/LookupAllC
+     {:BC01/C? {}
+      :BC01/BC? {:BC01/B {:Id :BC01/LookupAllC.B}
+                 :BC01/AB {:BC01/A {:Id :BC01/LookupAllC.A}}}})
     (dataflow
-     :Br01/LookupAllCByZ
-     {:Br01/C {:Z? :Br01/LookupAllCByZ.Z}
-      :Br01/BC? {:Br01/B {:Id :Br01/LookupAllCByZ.B}
-                 :Br01/AB {:Br01/A {:Id :Br01/LookupAllCByZ.A}}}}))
-  (let [a? (partial cn/instance-of? :Br01/A)
-        b? (partial cn/instance-of? :Br01/B)
-        c? (partial cn/instance-of? :Br01/C)
+     :BC01/LookupAllCByZ
+     {:BC01/C {:Z? :BC01/LookupAllCByZ.Z}
+      :BC01/BC? {:BC01/B {:Id :BC01/LookupAllCByZ.B}
+                 :BC01/AB {:BC01/A {:Id :BC01/LookupAllCByZ.A}}}}))
+  (let [a? (partial cn/instance-of? :BC01/A)
+        b? (partial cn/instance-of? :BC01/B)
+        c? (partial cn/instance-of? :BC01/C)
         check-paths (fn [aid b]
                       (is (b? b))
                       (is (= (cn/instance-path b)
-                             (vec (concat [:Br01/A aid :Br01/AB :Br01/B] [(:Id b)])))))
-        lookup-bs #(tu/fetch-result {:Br01/LookupAllB {:A %}})
-        lookup-bs-by-x #(tu/fetch-result {:Br01/LookupAllBByX {:X %}})
+                             (vec (concat [:BC01/A aid :BC01/AB :BC01/B] [(:Id b)])))))
+        lookup-bs #(tu/fetch-result {:BC01/LookupAllB {:A %}})
+        lookup-bs-by-x #(tu/fetch-result {:BC01/LookupAllBByX {:X %}})
         check-bs (fn [aid bs]
                    (is (seq bs))
                    (is (every? b? bs))
                    (doseq [b bs] (check-paths aid b)))
         create-c (fn [id z b a]
                    (tu/fetch-result
-                    {:Br01/CreateC {:Id id :Z z :B b :A a}}))
-        lookup-cs #(tu/fetch-result {:Br01/LookupAllC {:B %1 :A %2}})
+                    {:BC01/CreateC {:Id id :Z z :B b :A a}}))
+        lookup-cs #(tu/fetch-result {:BC01/LookupAllC {:B %1 :A %2}})
         check-cs (fn [n s cs]
                    (is (count cs) n)
                    (is (every? c? cs))
                    (is (= s (apply + (mapv :Z cs)))))
-        lookup-all-cs #(tu/fetch-result {:Br01/LookupAllCByZ {:Z %1 :B %2 :A %3}})]
-    (is (a? (tu/fetch-result {:Br01/Create_A {:Instance {:Br01/A {:Id 1 :X 100}}}})))
-    (is (a? (tu/fetch-result {:Br01/Create_A {:Instance {:Br01/A {:Id 2 :X 300}}}})))
-    (is (b? (tu/fetch-result {:Br01/CreateB {:Id 101 :Y 10 :A 1}})))
-    (is (b? (tu/fetch-result {:Br01/CreateB {:Id 102 :Y 11 :A 1}})))
-    (is (b? (tu/fetch-result {:Br01/CreateB {:Id 103 :Y 12 :A 2}})))
+        lookup-all-cs #(tu/fetch-result {:BC01/LookupAllCByZ {:Z %1 :B %2 :A %3}})]
+    (is (a? (tu/fetch-result {:BC01/Create_A {:Instance {:BC01/A {:Id 1 :X 100}}}})))
+    (is (a? (tu/fetch-result {:BC01/Create_A {:Instance {:BC01/A {:Id 2 :X 300}}}})))
+    (is (b? (tu/fetch-result {:BC01/CreateB {:Id 101 :Y 10 :A 1}})))
+    (is (b? (tu/fetch-result {:BC01/CreateB {:Id 102 :Y 11 :A 1}})))
+    (is (b? (tu/fetch-result {:BC01/CreateB {:Id 103 :Y 12 :A 2}})))
     (check-bs 1 (lookup-bs 1))
     (check-bs 2 (lookup-bs 2))
     (check-bs 1 (lookup-bs-by-x 100))
@@ -247,6 +247,24 @@
     (check-cs 1 30 (lookup-all-cs 30 101 1))
     (check-cs 1 60 (lookup-all-cs 60 102 1))
     (check-cs 1 70 (lookup-all-cs 70 103 2))))
+
+(deftest basic-between
+  (defcomponent :BB01
+    (entity :BB01/A {:Id {:type :Int :guid true} :X :Int})
+    (entity :BB01/B {:Id {:type :Int :guid true} :Y :Int})
+    (relationship :BB01/AB {:meta {:between [:BB01/A :BB01/B]}})
+    (dataflow
+     :BB01/CreateB
+     {:BB01/B {:Id :BB01/CreateB.Id :Y :BB01/CreateB.Y}
+      :BB01/AB {:BB01/A {:Id? :BB01/CreateB.A}}}))
+  (let [create-a #(tu/fetch-result {:BB01/Create_A
+                                    {:Instance
+                                     {:BB01/A {:Id %1 :X %2}}}})
+        create-b #(tu/fetch-result {:BB01/CreateB {:Id %1 :Y %2 :A %3}})
+        a? (partial cn/instance-of? :BB01/A)
+        b? (partial cn/instance-of? :BB01/B)]
+    (is (a? (create-a 1 100)))
+    (u/pprint (create-b 11 200 1))))
 
 ;; (deftest compound-attributes
 ;;   (defcomponent :Df04
