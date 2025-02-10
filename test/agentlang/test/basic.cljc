@@ -256,15 +256,30 @@
     (dataflow
      :BB01/CreateB
      {:BB01/B {:Id :BB01/CreateB.Id :Y :BB01/CreateB.Y}
-      :BB01/AB {:BB01/A {:Id? :BB01/CreateB.A}}}))
+      :BB01/AB {:BB01/A {:Id? :BB01/CreateB.A}}})
+    (dataflow
+     :BB01/LookupB
+     {:BB01/B? {}
+      :BB01/AB? {:BB01/A {:Id :BB01/LookupB.A}}}))
   (let [create-a #(tu/fetch-result {:BB01/Create_A
                                     {:Instance
                                      {:BB01/A {:Id %1 :X %2}}}})
         create-b #(tu/fetch-result {:BB01/CreateB {:Id %1 :Y %2 :A %3}})
+        lookup-b #(tu/fetch-result {:BB01/LookupB {:A %}})
         a? (partial cn/instance-of? :BB01/A)
-        b? (partial cn/instance-of? :BB01/B)]
-    (is (a? (create-a 1 100)))
-    (u/pprint (create-b 11 200 1))))
+        b? (partial cn/instance-of? :BB01/B)
+        check-bs (fn [ids bs]
+                   (is (= (count bs) (count ids)))
+                   (is (every? b? bs))
+                   (doseq [b bs]
+                     (is (some (fn [id] (= id (:Id b))) ids))))]
+    (is (a? (create-a 1 10)))
+    (is (a? (create-a 2 20)))
+    (is (b? (create-b 11 110 1)))
+    (is (b? (create-b 12 120 1)))
+    (is (b? (create-b 13 130 2)))
+    (check-bs [11 12] (lookup-b 1))
+    (check-bs [13] (lookup-b 2))))
 
 ;; (deftest compound-attributes
 ;;   (defcomponent :Df04

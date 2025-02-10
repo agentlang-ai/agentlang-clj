@@ -331,24 +331,68 @@
   [(first (filter #(cn/entity? (first %)) qpat))
    (first (filter #(cn/relationship? (first %)) qpat))])
 
-(defn- generate-relationship-joins
-  ([depth rels-query-pattern]
-   (let [[[parent-entity attrs] [relname npat]] (parse-names-from-rel-query rels-query-pattern)
-         parent-alias (keyword (str "t" (inc depth)))
-         child-alias (keyword (str "t" depth))
-         join-pat
-         (concat
-          [[(as-table-name parent-entity) parent-alias]
+(def ^:private path-col (stu/attribute-column-name-kw li/path-attr))
+(def ^:private parent-col (stu/attribute-column-name-kw li/parent-attr))
+
+(defn- generate-between-relationship-joins [entity-name rels-query-pattern]
+  (let [rel-name (li/normalize-name (li/record-name rels-query-pattern))
+        rel-attrs (li/record-attributes rels-query-pattern)
+        is-attr-inst? (cn/an-instance? rel-attrs)
+        inst-name (if is-attr-inst?
+                    (cn/instance-type-kw rel-attrs)
+                    (li/record-name rel-attrs))
+        inst-attrs (when-not is-attr-inst?
+                     (li/record-attributes rel-attrs))
+        n1 (first (cn/find-between-keys rel-name inst-name))
+        n2 (first (cn/find-between-keys rel-name entity-name))]
+    (when-not (or n1 n2)
+      (u/throw-ex (str "Query " rels-query-pattern " failed, "
+                       "no relationship " rel-name " between " entity-name " and " inst-name)))
+    (let [rel-alias :bt0
+          rel-ref (partial li/make-ref rel-alias)
+          this-ref (partial li/make-ref :t0)
+          that-alias :bt1
+          that-ref (partial li/make-ref that-alias)
+          p (li/path-attr inst-attrs)
+          main-joins
+          [[(as-table-name rel-name) rel-alias]
+           [:and
+            [:= (rel-ref stu/deleted-flag-col-kw) false]
+            [:= (rel-ref (stu/attribute-column-name-kw n1)) (or p (that-ref path-col))]
+            [:= (rel-ref (stu/attribute-column-name-kw n2)) (this-ref path-col)]]]
+          sub-joins
+          (when-not p
+            [[(as-table-name inst-name) that-alias]
+             (vec
+              (concat
+               [:and
+                [:= (that-ref stu/deleted-flag-col-kw) false]]
+               (entity-attributes-as-queries inst-attrs that-alias)))])]
+      (vec (concat sub-joins main-joins)))))
+
+(defn- generate-contains-relationship-joins [depth rels-query-pattern]
+  (let [[[parent-entity attrs] [relname npat]] (parse-names-from-rel-query rels-query-pattern)
+        parent-alias (keyword (str "t" (inc depth)))
+        child-alias (keyword (str "t" depth))
+        join-pat
+        (concat
+         [[(as-table-name parent-entity) parent-alias]
+          (vec
            (concat
             [:and
              [:= (li/make-ref parent-alias stu/deleted-flag-col-kw) false]
-             [:= (li/make-ref child-alias :___parent__) (li/make-ref parent-alias :___path__)]]
-            (entity-attributes-as-queries attrs parent-alias))]
-          (when npat
-            (:join (generate-relationship-joins (inc depth) npat))))]
-     {:join (vec join-pat)}))
-  ([rels-query-pattern]
-   (generate-relationship-joins 0 (first (vals rels-query-pattern)))))
+             [:= (li/make-ref child-alias parent-col) (li/make-ref parent-alias path-col)]]
+            (entity-attributes-as-queries attrs parent-alias)))]
+         (when npat
+           (generate-contains-relationship-joins (inc depth) npat)))]
+    (vec join-pat)))
+
+(defn- generate-relationship-joins [entity-name sub-query]
+  (let [q0 (when-let [rels-query-pattern (:cont-rels sub-query)]
+             (generate-contains-relationship-joins 0 (first (vals rels-query-pattern))))
+        q1 (when-let [rels-query-pattern (:bet-rels sub-query)]
+             (generate-between-relationship-joins entity-name rels-query-pattern))]
+    {:join (vec (concat q0 q1))}))
 
 (defn- insert-deleted-clause [w sql-alias]
   (let [f (first w)]
@@ -383,7 +427,7 @@
                {:where (vec (concat [:and] (fix-refs :t0 (vals attrs))))})))
         w0 (:where sql-pat0)
         w1 (if w0 (insert-deleted-clause w0 :t0) [:= (li/make-ref :t0 stu/deleted-flag-col-kw) false])
-        sql-pat (merge (assoc sql-pat0 :where w1) (when sub-query (generate-relationship-joins sub-query)))
+        sql-pat (merge (assoc sql-pat0 :where w1) (when sub-query (generate-relationship-joins entity-name sub-query)))
         sql-params (sql/raw-format-sql sql-pat)]
     (execute-fn!
      datasource

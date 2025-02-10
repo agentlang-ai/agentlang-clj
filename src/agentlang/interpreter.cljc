@@ -234,7 +234,7 @@
 
 (def ^:private c-parent-attr (keyword (su/attribute-column-name li/parent-attr)))
 
-(defn- maybe-merge-rels-query-to-attributes [[recname attrs rels-query :as args]]
+(defn- maybe-merge-cont-rels-query-to-attributes [[recname attrs rels-query :as args]]
   (or (when rels-query
         (let [[k _ :as ks] (keys rels-query)]
           (when (and (= 1 (count ks)) (cn/contains-relationship? k))
@@ -254,8 +254,11 @@
                    {:? (preprocess-select-clause env recname select-clause)}
                    (into {} (mapv (partial process-query-attribute-value env) attrs))))
         resolver (rr/resolver-for-path recname)
-        rels-query0 (when sub-pats (resolve-all-references env (:rels sub-pats)))
-        [recname attrs0 rels-query] (maybe-merge-rels-query-to-attributes [recname attrs0 rels-query0])
+        cont-rels-query0 (when-let [rels (:cont-rels sub-pats)] (resolve-all-references env rels))
+        [recname attrs0 cont-rels-query] (maybe-merge-cont-rels-query-to-attributes [recname attrs0 cont-rels-query0])
+        bet-rels-query (when-let [rels (:bet-rels sub-pats)] (resolve-all-references env rels))
+        rels-query {:cont-rels cont-rels-query
+                    :bet-rels bet-rels-query}
         result0 (if resolver
                   (r/call-resolver-query resolver env [recname attrs0 rels-query])
                   (store/do-query (env/get-store env) nil [recname attrs0 rels-query]))
@@ -337,11 +340,8 @@
       (cn/entity-schema (li/normalize-name recname))
       (let [q? (li/query-instance-pattern? pat)
             f (if q? handle-query-pattern handle-entity-crud-pattern)
-            rels (:rels sub-pats)
             [cont-rels bet-rels]
-            (and rels
-                 [(into {} (filter #(cn/contains-relationship? (li/normalize-name (first %))) rels))
-                  (into {} (filter #(cn/between-relationship? (li/normalize-name (first %))) rels))])
+            (and (seq sub-pats) [(:cont-rels sub-pats) (:bet-rels sub-pats)])
             attrs
             (if q?
               [recattrs sub-pats]
@@ -349,7 +349,7 @@
                 (maybe-set-parent env cont-rels recname recattrs)
                 recattrs))
             result (f env recname attrs alias)]
-        (when (seq bet-rels)
+        (when (and (not q?) (seq bet-rels))
           (create-between-relationships env bet-rels recname result))
         result)
 
@@ -409,13 +409,18 @@
     (keyword? pat) ref-handler
     :else nil))
 
+(defn- filter-relationships [predic? pats]
+  (into {} (filter (fn [[k _]] (predic? (li/normalize-name k))) pats)))
+
+(def ^:private filter-between-relationships (partial filter-relationships cn/between-relationship?))
+(def ^:private filter-contains-relationships (partial filter-relationships cn/contains-relationship?))
+
 (defn- maybe-lift-relationship-patterns [pat]
-  (if-let [rel-names (seq (map first (filter (fn [[k _]]
-                                               (cn/relationship? (li/normalize-name k)))
-                                             pat)))]
-    [(apply dissoc pat rel-names)
-     {:rels (into {} (mapv (fn [k] [k (get pat k)]) rel-names))}]
-    [pat]))
+  (let [bet-rels (filter-between-relationships pat)
+        cont-rels (filter-contains-relationships pat)]
+    [(apply dissoc pat (keys (merge bet-rels cont-rels)))
+     {:cont-rels (when (seq cont-rels) cont-rels)
+      :bet-rels (when (seq bet-rels) bet-rels)}]))
 
 (defn- maybe-preprocecss-pattern [env pat]
   (if (map? pat)
