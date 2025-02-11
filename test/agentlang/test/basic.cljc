@@ -200,7 +200,16 @@
      :BC01/LookupAllCByZ
      {:BC01/C {:Z? :BC01/LookupAllCByZ.Z}
       :BC01/BC? {:BC01/B {:Id :BC01/LookupAllCByZ.B}
-                 :BC01/AB {:BC01/A {:Id :BC01/LookupAllCByZ.A}}}}))
+                 :BC01/AB {:BC01/A {:Id :BC01/LookupAllCByZ.A}}}})
+    (dataflow
+     :BC01/LookupAFromB
+     {:BC01/A? {}
+      :BC01/AB? {:BC01/B {:Id :BC01/LookupAFromB.B}}})
+    (dataflow
+     :BC01/LookupAFromC
+     {:BC01/A? {}
+      :BC01/AB? {:BC01/B {}
+                 :BC01/BC {:BC01/C {:Id :BC01/LookupAFromC.C}}}}))
   (let [a? (partial cn/instance-of? :BC01/A)
         b? (partial cn/instance-of? :BC01/B)
         c? (partial cn/instance-of? :BC01/C)
@@ -222,7 +231,10 @@
                    (is (count cs) n)
                    (is (every? c? cs))
                    (is (= s (apply + (mapv :Z cs)))))
-        lookup-all-cs #(tu/fetch-result {:BC01/LookupAllCByZ {:Z %1 :B %2 :A %3}})]
+        lookup-all-cs #(tu/fetch-result {:BC01/LookupAllCByZ {:Z %1 :B %2 :A %3}})
+        check-a (fn [id inst]
+                  (is (a? inst))
+                  (is (= id (:Id inst))))]
     (is (a? (tu/fetch-result {:BC01/Create_A {:Instance {:BC01/A {:Id 1 :X 100}}}})))
     (is (a? (tu/fetch-result {:BC01/Create_A {:Instance {:BC01/A {:Id 2 :X 300}}}})))
     (is (b? (tu/fetch-result {:BC01/CreateB {:Id 101 :Y 10 :A 1}})))
@@ -244,7 +256,16 @@
     (check-cs 2 80 (lookup-all-cs 40 101 1))
     (check-cs 1 30 (lookup-all-cs 30 101 1))
     (check-cs 1 60 (lookup-all-cs 60 102 1))
-    (check-cs 1 70 (lookup-all-cs 70 103 2))))
+    (check-cs 1 70 (lookup-all-cs 70 103 2))
+    (let [res (tu/fetch-result {:BC01/LookupAFromB {:B 101}})]
+      (is (= 1 (count res)))
+      (check-a 1 (first res)))
+    (let [res (tu/fetch-result {:BC01/LookupAFromB {:B 102}})]
+      (is (= 1 (count res)))
+      (check-a 1 (first res)))
+    (let [res (tu/fetch-result {:BC01/LookupAFromC {:C 206}})]
+      (is (= 1 (count res)))
+      (check-a 2 (first res)))))
 
 (deftest basic-between
   (defcomponent :BB01

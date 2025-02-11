@@ -370,26 +370,31 @@
                (entity-attributes-as-queries inst-attrs that-alias)))])]
       (vec (concat sub-joins main-joins)))))
 
-(defn- generate-contains-relationship-joins [depth rels-query-pattern]
-  (let [[[parent-entity attrs] [relname npat]] (parse-names-from-rel-query rels-query-pattern)
-        parent-alias (keyword (str "t" (inc depth)))
-        child-alias (keyword (str "t" depth))
+(defn- generate-contains-relationship-joins [traverse-up? depth rels-query-pattern]
+  (let [[[target-entity attrs] [relname npat]] (parse-names-from-rel-query rels-query-pattern)
+        target-alias (keyword (str "t" (inc depth)))
+        src-alias (keyword (str "t" depth))
         join-pat
         (concat
-         [[(as-table-name parent-entity) parent-alias]
+         [[(as-table-name target-entity) target-alias]
           (vec
            (concat
             [:and
-             [:= (li/make-ref parent-alias stu/deleted-flag-col-kw) false]
-             [:= (li/make-ref child-alias parent-col) (li/make-ref parent-alias path-col)]]
-            (entity-attributes-as-queries attrs parent-alias)))]
+             [:= (li/make-ref target-alias stu/deleted-flag-col-kw) false]
+             (if traverse-up?
+               [:= (li/make-ref target-alias parent-col) (li/make-ref src-alias path-col)]
+               [:= (li/make-ref src-alias parent-col) (li/make-ref target-alias path-col)])]
+            (entity-attributes-as-queries attrs target-alias)))]
          (when npat
-           (generate-contains-relationship-joins (inc depth) npat)))]
+           (generate-contains-relationship-joins traverse-up? (inc depth) npat)))]
     (vec join-pat)))
 
 (defn- generate-relationship-joins [entity-name sub-query]
   (let [q0 (when-let [rels-query-pattern (:cont-rels sub-query)]
-             (generate-contains-relationship-joins 0 (first (vals rels-query-pattern))))
+             (let [relname (first (keys rels-query-pattern))]
+               (generate-contains-relationship-joins
+                (not (cn/child-in? (li/normalize-name relname) entity-name))
+                0 (relname rels-query-pattern))))
         q1 (when-let [rels-query-pattern (:bet-rels sub-query)]
              (generate-between-relationship-joins entity-name rels-query-pattern))]
     {:join (vec (concat q0 q1))}))

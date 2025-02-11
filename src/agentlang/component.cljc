@@ -1905,10 +1905,12 @@
         child (li/make-path child)
         parent (li/make-path parent)]
     (if (first (filter #(and (= relname (first %))
-                             (= parent (last %)))
+                             (if parent (= parent (last %)) true))
                        (containing-parents child)))
       true
       false)))
+
+(defn child-in? [relname child] (parent-via? relname child nil))
 
 (defn parent-relationship [parent-name child-name]
   (ffirst (filter #(= parent-name (last %)) (containing-parents child-name))))
