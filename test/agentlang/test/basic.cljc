@@ -50,7 +50,7 @@
                     :X :BasicEval/UpdateE.X}})
     (dataflow
      :BasicEval/DeleteById
-     [:delete :BasicEval/E {:Id :BasicEval/DeleteById.Id} :as :R]
+     [:delete {:BasicEval/E {:Id? :BasicEval/DeleteById.Id}} :as :R]
      :R)
     (dataflow
      :BasicEval/DeleteAll
@@ -83,7 +83,7 @@
         (is (= (:Id result) (:Id r0)))
         (is (cn/same-instance? r0 r1))
         (lookup-all-e)
-        (is (= (:Id r0) (ev {:BasicEval/DeleteById {:Id (:Id r0)}})))
+        (is (= (:Id r0) (:Id (first (ev {:BasicEval/DeleteById {:Id (:Id r0)}})))))
         (is (nil? (ev {:BasicEval/LookupE {:Id (:Id result)}})))
         (is (ev {:BasicEval/DeleteAll {}}))
         (is (nil? (ev {:BasicEval/LookupE {:Id (:Id e2)}})))))))
@@ -173,10 +173,22 @@
     (relationship :BC01/AB {:meta {:contains [:BC01/A :BC01/B]}})
     (relationship :BC01/BC {:meta {:contains [:BC01/B :BC01/C]}})
     (dataflow
+     :BC01/DeleteA
+     [:delete {:BC01/A {:Id? :BC01/DeleteA.Id}}])
+    (dataflow
+     :BC01/LookupAllA
+     {:BC01/A? {}})
+    (dataflow
      :BC01/CreateB
      {:BC01/B {:Id :BC01/CreateB.Id
                :Y :BC01/CreateB.Y}
       :BC01/AB {:BC01/A {:Id? :BC01/CreateB.A}}})
+    (dataflow
+     :BC01/LookupEveryB
+     {:BC01/B? {}})
+    (dataflow
+     :BC01/LookupEveryC
+     {:BC01/C? {}})
     (dataflow
      :BC01/LookupAllB
      {:BC01/B? {}
@@ -274,7 +286,24 @@
       (check-a 1 (first res)))
     (let [res (tu/fetch-result {:BC01/LookupAFromC {:C 206}})]
       (is (= 1 (count res)))
-      (check-a 2 (first res)))))
+      (check-a 2 (first res)))
+    (let [as (tu/fetch-result {:BC01/LookupAllA {}})]
+      (is (= 2 (count as)))
+      (is (every? a? as)))
+    (let [as (tu/fetch-result {:BC01/DeleteA {:Id 1}})]
+      (is (= 1 (count as)))
+      (is (= 1 (:Id (first as)))))
+    (let [as (tu/fetch-result {:BC01/LookupAllA {}})]
+      (is (= 1 (count as)))
+      (is (every? a? as)))
+    (let [bs (tu/fetch-result {:BC01/LookupEveryB {}})]
+      (is (= 1 (count bs)))
+      (is (every? b? bs)))
+    (let [cs (tu/fetch-result {:BC01/LookupEveryC {}})]
+      (is (= 1 (count cs)))
+      (is (every? c? cs)))
+    (is (nil? (seq (lookup-bs 1))))
+    (check-bs 2 (lookup-bs 2))))
 
 (deftest basic-between
   (defcomponent :BB01

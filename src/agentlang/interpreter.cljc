@@ -362,21 +362,28 @@
 
       :else (u/throw-ex (str "Schema not found for " recname ". Cannot evaluate " pat)))))
 
-(defn- delete-instance [env entity-name params]
-  (if-let [resolver (rr/resolver-for-path entity-name)]
-    (r/call-resolver-delete [entity-name params])
-    (let [store (env/get-store env)]
-      (cond
-        (= :* params)
-        (store/delete-all store entity-name false)
+(defn- call-resolver-delete [entity-name args]
+  (when-let [resolver (rr/resolver-for-path entity-name)]
+    (r/call-resolver-delete [entity-name args])))
 
-        (= :purge params)
-        (store/delete-all store entity-name true)
-
-        :else
-        (let [attrs (resolve-attribute-values env entity-name params false)
-              n (first (keys attrs))]
-          (store/delete-by-id store entity-name n (get attrs n)))))))
+(defn- delete-instances [env pattern & params]
+  (let [store (env/get-store env)
+        params (first params)
+        purge? (= :purge params)
+        delall? (= :* params)]
+    (when (or purge? delall?)
+      (when-not (and (keyword? pattern)
+                     (cn/entity? pattern))
+        (u/throw-ex (str "Second element must be a valid entity name - [:delete " pattern " " params "]"))))
+    (if (or purge? delall?)
+      (or (call-resolver-delete pattern params) (store/delete-all store pattern purge?))
+      (let [r (evaluate-pattern env pattern)
+            env (:env r), insts (:result r)]
+        (when-let [entity-name (and (seq insts) (cn/instance-type-kw (first insts)))]
+          (or (call-resolver-delete entity-name insts)
+              (doseq [inst insts]
+                (store/delete-by-id store entity-name li/path-attr (li/path-attr inst)))
+              insts))))))
 
 (defn- parse-expr-pattern [pat]
   (let [[h t] (split-with #(not= % :as) pat)]
@@ -394,7 +401,7 @@
         result
         (apply
          (case (first pat)
-           :delete delete-instance
+           :delete delete-instances
            (u/throw-ex (str "Invalid expression - " pat)))
          env (rest pat))
         env (if alias (env/bind-variable env alias result) env)]

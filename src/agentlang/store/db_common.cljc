@@ -267,8 +267,25 @@
   (let [[pstmt params] (delete-by-id-statement conn tabname id-attr-name id)]
     (execute-stmt-once! conn pstmt params)))
 
+(defn delete-children [datasource entity-name path]
+  (let [tabname (stu/entity-table-name entity-name)]
+    (execute-fn!
+     datasource
+     (fn [conn]
+       (let [pstmt (delete-children-statement conn tabname path)]
+         (execute-stmt-once! conn pstmt nil))))
+    entity-name))
+
+(defn- delete-children-cascade [datasource child-entity-names path]
+  (when (seq child-entity-names)
+    (doseq [en child-entity-names]
+      (delete-children-cascade datasource (cn/contained-children-names en) path)
+      (delete-children datasource en path))))
+
 (defn delete-by-id
   ([delete-by-id-statement datasource entity-name id-attr-name id]
+   (when (cn/check-cascade-delete-children entity-name)
+     (delete-children-cascade datasource (cn/contained-children-names entity-name) id))
    (let [tabname (stu/entity-table-name entity-name)]
      (execute-fn!
       datasource
@@ -284,15 +301,6 @@
      datasource
      (fn [conn]
        (let [pstmt (delete-all-statement conn tabname purge)]
-         (execute-stmt-once! conn pstmt nil))))
-    entity-name))
-
-(defn delete-children [datasource entity-name path]
-  (let [tabname (stu/entity-table-name entity-name)]
-    (execute-fn!
-     datasource
-     (fn [conn]
-       (let [pstmt (delete-children-statement conn tabname path)]
          (execute-stmt-once! conn pstmt nil))))
     entity-name))
 
@@ -440,14 +448,16 @@
        (let [pstmt (prepare conn [(first sql-params)])]
          (stu/results-as-instances entity-name (execute-stmt-once! conn pstmt (rest sql-params))))))))
 
-(defn do-query [datasource query-sql query-params]
-  (if-not query-sql
-    (query-by-attributes datasource query-params)
-    (execute-fn!
-     datasource
-     (fn [conn]
-       (let [[pstmt params] (do-query-statement conn query-sql query-params)]
-         (execute-stmt-once! conn pstmt params))))))
+(defn do-query
+  ([datasource query-sql query-params]
+   (if-not query-sql
+     (query-by-attributes datasource query-params)
+     (execute-fn!
+      datasource
+      (fn [conn]
+        (let [[pstmt params] (do-query-statement conn query-sql query-params)]
+          (execute-stmt-once! conn pstmt params))))))
+   ([datasource query-params] (do-query datasource nil query-params)))
 
 (defn- query-relational-entity-by-unique-keys [datasource entity-name unique-keys attribute-values]
   (let [sql (sql/compile-to-direct-query (stu/entity-table-name entity-name) (mapv name unique-keys) :and)]

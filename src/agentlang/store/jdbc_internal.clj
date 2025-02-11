@@ -95,12 +95,7 @@
       (str/replace "$" "\\$")))
 
 (defn delete-children-statement [conn table-name path]
-  (let [full-path (if (str/starts-with? path "path://")
-                    path
-                    (str "path://" path))
-        base-path (if (str/ends-with? full-path "%")
-                    (subs full-path 0 (dec (count full-path)))
-                    full-path)
+  (let [base-path (subs path 0 (dec (count path)))
         escaped-path (str (escape-like-pattern base-path) "%")
         sql (str "UPDATE " table-name
                  " SET _" su/deleted-flag-col " = TRUE"

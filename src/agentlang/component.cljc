@@ -1879,6 +1879,9 @@
 
 (def contained-children (partial contain-rels false))
 
+(defn contained-children-names [parent]
+  (mapv last (contained-children parent)))
+
 (defn containing-parents
   ([recname]
    (contain-rels true recname))

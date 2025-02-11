@@ -35,8 +35,8 @@
 
 (def path-identity :id)
 
-(def path-query-tag :?)
-(defn path-query-tag? [x] (= x :?))
+(defn contains-spec-to-path [spec parent-id]
+  (vec (assoc (reverse spec) 1 parent-id)))
 
 (def meta-attr :__instmeta__)
 (def meta-attr-spec {:type :Agentlang.Kernel.Lang/Map
