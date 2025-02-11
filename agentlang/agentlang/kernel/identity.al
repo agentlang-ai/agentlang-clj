@@ -15,7 +15,7 @@
   :LastName {:type :String
              :optional true}
   :Email {:type :Email
-          li/guid true}
+          li/path-identity true}
   :UserData {:type :Any :optional true}
   :AppId {:type :UUID
           :default u/uuid-string
@@ -41,12 +41,12 @@
 
 (entity
  :UserSession
- {:User {:type :String :guid true}
+ {:User {:type :String :id true}
   :LoggedIn :Boolean})
 
 (entity
  :SessionCookie
- {:Id {:type :String :guid true}
+ {:Id {:type :String :id true}
   :UserData :Any
   :CreatedTimeMillis :Int64})
 

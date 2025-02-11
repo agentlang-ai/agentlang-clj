@@ -52,19 +52,10 @@
   (or (:store-handle config)
       (e/store-from-config (:store config))))
 
-(defn set-aot-dataflow-compiler! [config]
-  (when-let [store (store-from-config config)]
-    (cn/set-aot-dataflow-compiler!
-     (partial
-      c/maybe-compile-dataflow
-      (partial store/compile-query store)))))
-
 (defn load-components [components model-root config]
-  (set-aot-dataflow-compiler! config)
   (loader/load-components components model-root))
 
 (defn load-components-from-model [model model-root config]
-  (set-aot-dataflow-compiler! config)
   (loader/load-components-from-model
    model model-root
    (:load-model-from-resource config)))

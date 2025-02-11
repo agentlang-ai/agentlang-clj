@@ -7,7 +7,6 @@
             [agentlang.lang.internal :as li]
             [agentlang.lang.raw :as raw]
             [agentlang.meta :as mt]
-            [agentlang.paths.internal :as pi]
             [agentlang.util :as u]
             [agentlang.util.errors :refer [make-error raise-error throw-ex-info]]
             [agentlang.util.hash :as sh]
@@ -155,7 +154,7 @@
    {:type :Agentlang.Kernel.Lang/UUID
     :unique true
     :immutable true
-    li/guid true
+    li/path-identity true
     :default u/uuid-string})
   (intern-event [component (component-init-event-name component)]
                 {:ComponentName :Agentlang.Kernel.Lang/Keyword})
@@ -622,7 +621,7 @@
 
 (def identity-attributes
   "Return the names of all identity attributes in the schema."
-  (make-attributes-filter li/guid))
+  (make-attributes-filter li/path-identity))
 
 (def immutable-attributes
   "Return the names of all immutable attributes in the schema."
@@ -1036,7 +1035,7 @@
     (entity? recname)
     (let [path (li/path-attr attrs)
           id ((identity-attribute-name recname) attrs)]
-      (if (pi/default-path? path)
+      (if (li/default-path? path)
         (assoc attrs li/path-attr (pr-str [(li/make-path recname) id]))
         (assoc attrs li/path-attr (maybe-complete-path path id))))
     :else attrs))
@@ -1205,13 +1204,9 @@
 (defn user-event-names [component]
   (filter user-defined-event? (event-names component)))
 
-(def ^:private aot-dataflow-compiler (atom nil))
-
-(defn set-aot-dataflow-compiler! [f]
-  (reset! aot-dataflow-compiler f))
-
-(defn maybe-aot-compile-dataflow [df]
-  ((or @aot-dataflow-compiler identity) df))
+(defn verify-dataflow [df]
+  ;; TODO: pre-check df syntax
+  df)
 
 (defn register-dataflow
   "Attach a dataflow to the event."
@@ -1221,7 +1216,7 @@
     #(let [ms @components
            ename (normalize-type-name (event-name event))
            path [component (get-model-version component) :events ename]
-           newpats [(maybe-aot-compile-dataflow
+           newpats [(verify-dataflow
                      [event
                       {:head head
                        :event-pattern event
@@ -1453,7 +1448,7 @@
       (or (:type ascm) ascm0)
       ascm)))
 
-(def identity-attribute? li/guid)
+(def identity-attribute? li/path-identity)
 
 (defn attribute-is-identity? [entity-schema attr]
   (let [a (get entity-schema attr)]
@@ -1719,7 +1714,7 @@
 (def meta-entity-id :EntityId)
 
 (defn meta-entity-attributes [component]
-  {meta-entity-id {:type :Agentlang.Kernel.Lang/String li/guid true}
+  {meta-entity-id {:type :Agentlang.Kernel.Lang/String li/path-identity true}
    :Owner {:type :Agentlang.Kernel.Lang/String
            :immutable true}
    :Created {:type :Agentlang.Kernel.Lang/DateTime
@@ -1895,7 +1890,7 @@
                    (identity-attribute-name parent-recname))]
     (let [[ascm ascm0] (entity-attribute-schema parent-recname a)]
       (if (map? ascm)
-        (dissoc ascm :unique :guid :optional)
+        (dissoc ascm :unique :id :optional)
         (or ascm ascm0)))))
 
 (defn parent-of? [child parent]
@@ -2152,7 +2147,7 @@
 
 (defn null-parent-path? [inst]
   (when-let [p (li/path-attr inst)]
-    (pi/null-path? p)))
+    (li/default-path? p)))
 
 (defn find-parent-info [rel-inst]
   (let [tp (instance-type-kw rel-inst)]
@@ -2216,55 +2211,6 @@
       (assoc-in inst path (dissoc ps user))
       inst)))
 
-(defn instance-to-partial-path
-  ([child-type parent-inst relname version]
-   (let [pt (instance-type-kw parent-inst)
-         ct (li/make-path child-type)]
-     (if-let [rel (or relname (parent-relationship pt ct))]
-       (let [pp (li/path-attr parent-inst)
-             rn (pi/encoded-uri-path-part rel)]
-         (if pp
-           (str (pi/path-string pp) "/" rn)
-           (str "/" (pi/encoded-uri-path-part pt)
-                "/" ((identity-attribute-name pt version) parent-inst)
-                "/" rn)))
-       (u/throw-ex (str "no parent-child relationship found for - " [pt ct])))))
-  ([child-type parent-inst relname]
-   (child-type parent-inst relname nil))
-  ([child-type parent-inst]
-   (instance-to-partial-path child-type parent-inst nil)))
-
-(defn instance-to-full-path
-  ([child-type child-id parent-inst relname version]
-   (let [parent-inst (cond
-                       (map? parent-inst)
-                       parent-inst
-
-                       (seqable? parent-inst)
-                       (first parent-inst)
-
-                       :else parent-inst)]
-     (when (entity-instance? parent-inst)
-       (let [[c _] (li/split-path child-type)]
-         (str (pi/as-fully-qualified-path c (instance-to-partial-path child-type parent-inst relname version))
-              "/" (pi/encoded-uri-path-part child-type) "/" child-id)))))
-  ([child-type child-id parent-inst relname]
-   (instance-to-full-path child-type child-id parent-inst relname nil))
-  ([child-type child-id parent-inst]
-   (instance-to-full-path child-type child-id parent-inst nil)))
-
-(defn full-path-from-references
-  ([parent-inst relname child-id child-type version]
-   (instance-to-full-path
-    (if (keyword? child-type)
-      child-type
-      (keyword child-type))
-    (or child-id "%") parent-inst relname version))
-  ([parent-inst relname child-type version]
-   (full-path-from-references parent-inst relname nil child-type version))
-  ([parent-inst relname child-type]
-   (full-path-from-references parent-inst relname nil child-type nil)))
-
 (defn between-relationship-instance? [inst]
   (when-let [t (instance-type-kw inst)]
     (between-relationship? t)))
@@ -2308,52 +2254,6 @@
 (def fire-post-event (partial fire-prepost-event :after))
 (def force-fire-post-event (partial do-fire-prepost-event :after))
 (def fire-pre-event (partial fire-prepost-event :before))
-
-(defn find-path-prefix [record-name inst]
-  (or (li/path-attr inst)
-      (let [[c n] (li/split-path record-name)]
-        (str pi/path-prefix "/" (name c) "$" (name n) "/"
-             ((identity-attribute-name record-name) inst)))))
-
-(defn find-path-prefix-with-wildcard
-  ([record-name inst]
-   (str (find-path-prefix record-name inst) "%"))
-  ([inst] (find-path-prefix-with-wildcard (instance-type-kw inst) inst)))
-
-(defn- delete-all-children-helper [delallfn record-name purge]
-  (loop [rels (contained-children record-name)]
-    (if-let [[_ _ child] (first rels)]
-      (when (delete-all-children-helper delallfn child purge)
-        (delallfn child purge)
-        (recur (rest rels)))
-      record-name)))
-
-(defn maybe-delete-all-children [delallfn record-name purge]
-  (let [record-name (li/make-path record-name)]
-    (case (check-cascade-delete-children record-name)
-      :delete (delete-all-children-helper delallfn record-name purge)
-      :ignore record-name
-      (u/throw-ex (str "cannot cascade delete children - " record-name)))))
-
-(defn- delete-children-helper [delfn record-name path-prefix]
-  (loop [rels (contained-children record-name)]
-    (if-let [[_ _ child] (first rels)]
-      (when (or (= record-name child)
-                (delete-children-helper delfn child path-prefix))
-        (delfn child path-prefix)
-        (recur (rest rels)))
-      record-name)))
-
-(defn maybe-delete-children
-  ([delfn record-name inst]
-   (let [record-name (li/make-path record-name)]
-     (case (check-cascade-delete-children record-name)
-       :delete (delete-children-helper
-                delfn record-name
-                (find-path-prefix-with-wildcard record-name inst))
-       :ignore record-name
-       (u/throw-ex (str "cannot cascade delete children - " record-name)))))
-  ([delfn inst] (maybe-delete-children delfn (instance-type-kw inst) inst)))
 
 (defn encode-expressions-in-schema [scm]
   (let [norm-scm (mapv (fn [[k v]]
@@ -2598,3 +2498,6 @@
     :else obj))
 
 (def dataflow-opcode (constantly []))
+
+(defn full-path-from-references [_ _ _]
+  (u/raise-not-implemented 'full-path-from-references))

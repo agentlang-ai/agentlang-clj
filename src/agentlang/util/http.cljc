@@ -7,7 +7,6 @@
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
             [agentlang.component :as cn]
-            [agentlang.paths.internal :as pi]
             [agentlang.datafmt.json :as json]
             [agentlang.datafmt.transit :as t]
             [agentlang.global-state :as gs]
@@ -202,11 +201,7 @@
       (= 2 c) {:entity (fqn (first f)) :id (second f)}
       :else {:entity (fqn (second ps)) :id (nth 2 f)})))
 
-(defn- normalize-path [uri]
-  (let [uri-parts (s/split uri #"/")
-        child-path (rest uri-parts)]
-    (when (> (count child-path) 2)
-      (pi/as-fully-qualified-path (keyword (first uri-parts)) (str "/" (s/join "/" child-path))))))
+(defn- normalize-path [uri] (s/split uri #"/"))
 
 (defn parse-rest-uri [uri]
   (let [parts (s/split uri #"/")

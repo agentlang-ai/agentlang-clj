@@ -4,8 +4,6 @@
             [clojure.string :as s]
             [clojure.walk :as w]
             #?(:clj [clojure.core.async :as async])
-            [agentlang.compiler :as c]
-            [agentlang.compiler.context :as ctx]
             [agentlang.compiler.rule :as rl]
             [agentlang.component :as cn]
             [agentlang.global-state :as gs]
@@ -14,7 +12,6 @@
             [agentlang.lang.raw :as raw]
             [agentlang.lang.rbac :as lr]
             [agentlang.meta :as mt]
-            [agentlang.paths.internal :as pi]
             [agentlang.resolvers]
             [agentlang.resolver.registry :as rr]
             [agentlang.resolver.core :as rc]
@@ -176,7 +173,7 @@
 
 (defn- finalize-raw-attribute-schema [scm]
   (doseq [[k v] scm]
-    (if (or (= k li/guid) (= k li/path-identity))
+    (if (= k li/path-identity)
       (li/validate-bool k v)
       (case k
         (:unique
@@ -251,14 +248,9 @@
                 (finalize-raw-attribute-schema
                  (oneof-as-check
                   (normalize-kernel-types scm))))]
-    (cond
-      (:unique newscm)
+    (if (:unique newscm)
       (assoc newscm :indexed true)
-
-      (li/guid newscm)
-      (assoc newscm :indexed true :unique true)
-
-      :else newscm)))
+      newscm)))
 
 (defn- validate-attribute-schema [n scm]
   (if (fn? scm)
@@ -343,38 +335,18 @@
   (let [[[_ _] a] (li/ref-as-names n)]
     (if a true false)))
 
-(defn- compile-eval-block [recname attrs evblock]
-  (let [ctx (ctx/make)]
-    (ctx/put-record! ctx (li/split-path recname) attrs)
-    (if-let [opcode (mapv (partial c/compile-pattern ctx) (:patterns evblock))]
-      opcode
-      (u/throw-ex (str recname " - failed to compile eval-block")))))
-
-(defn- normalize-eval-block [evblock]
-  (when evblock
-    (if (and (map? evblock) (:patterns evblock))
-      evblock
-      {:patterns [evblock]})))
-
 (defn- normalize-compound-attr [recname attrs nm [k v]]
-  (if-let [ev (normalize-eval-block (:eval v))]
-    (attribute
-     nm
-     (assoc
-      v
-      :eval (assoc ev :opcode (compile-eval-block recname attrs ev))
-      :optional true))
-    (when-let [expr (:expr v)]
-      (cond
-        (fn? expr)
-        (attribute nm v)
+  (when-let [expr (:expr v)]
+    (cond
+      (fn? expr)
+      (attribute nm v)
 
-        :else (attribute
-               nm
-               (merge (if-let [t (:type v)]
-                        {:type t}
-                        (u/throw-ex (str ":type is required for attribute " k " with compound expression")))
-                      {:expr expr}))))))
+      :else (attribute
+             nm
+             (merge (if-let [t (:type v)]
+                      {:type t}
+                      (u/throw-ex (str ":type is required for attribute " k " with compound expression")))
+                    {:expr expr})))))
 
 (defn- normalize-attr [recname attrs fqn [k v]]
   (let [newv
@@ -390,7 +362,7 @@
           (list? v)
           (attribute
            (fqn (li/unq-name))
-           {:expr (c/compile-attribute-expression recname attrs k v)})
+           {:expr v})
 
           :else
           (let [fulln (fqn v)]
@@ -1045,7 +1017,7 @@
 (def serializable-entity (partial serializable-record :entity))
 
 (defn- assoc-parent-spec [attrs]
-  (assoc attrs li/parent-attr li/parent-attr-spec li/path-attr pi/path-attr-spec))
+  (assoc attrs li/parent-attr li/parent-attr-spec li/path-attr li/path-attr-spec))
 
 (def ^:private audit-entity-attrs
   (preproc-attrs {:InstanceId :String
@@ -1084,11 +1056,7 @@
         (u/throw-ex (str "invalid view attribute-specification: " [n k]))))))
 
 (defn- preproc-view-query [q attrs]
-  (c/compile-complex-query
-   (if (or (:join q) (:left-join q))
-     (assoc q :with-attributes attrs)
-     (let [clause (assoc (first (vals q)) :with-attributes attrs)]
-       {(first (keys q)) clause}))))
+  q)
 
 (defn- as-view-attributes [attrs]
   (into

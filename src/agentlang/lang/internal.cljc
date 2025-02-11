@@ -15,14 +15,24 @@
 (def path-attr :__path__)
 (def path-attr? :__path__?)
 
+(def ^:private default-path "[]")
+
+(defn default-path? [s] (= s default-path))
+
+(def path-attr-spec
+  {:type :Agentlang.Kernel.Lang/String
+   :default default-path
+   :unique true
+   :indexed true})
+
 (def parent-attr :__parent__)
 (def parent-attr? :__parent__?)
+
 (def parent-attr-spec
   {:type :Agentlang.Kernel.Lang/String
    :optional true
    :indexed true})
 
-(def guid :guid)
 (def path-identity :id)
 
 (def path-query-tag :?)

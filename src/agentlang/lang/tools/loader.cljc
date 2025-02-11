@@ -13,8 +13,7 @@
             [agentlang.lang.name-util :as nu]
             [agentlang.lang.internal :as li]
             [agentlang.lang.tools.util :as tu]
-            [agentlang.lang.tools.schema.model :as sm]
-            [agentlang.evaluator.state :as es])
+            [agentlang.lang.tools.schema.model :as sm])
   #?(:clj
      (:import [java.io FileInputStream InputStreamReader PushbackReader])))
 

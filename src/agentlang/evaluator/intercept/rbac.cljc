@@ -12,7 +12,6 @@
             [agentlang.lang.relgraph :as rg]
             [agentlang.rbac.core :as rbac]
             [agentlang.global-state :as gs]
-            [agentlang.paths :as p]
             #?(:clj [agentlang.inference.service.model :as agent-model])
             [agentlang.resolver.registry :as rr]
             [agentlang.evaluator.intercept.internal :as ii]))
@@ -130,6 +129,9 @@
     (owner? (owner-node between-nodes))
     (every? owner? (vals between-nodes))))
 
+(defn- find-parent-by-full-path [_ _ _]
+  (u/raise-not-implemented 'find-parent-by-full-path))
+
 (defn- apply-rbac-checks [user env opr arg resource check-input]
   (cond
     (instance-priv-assignment? resource)
@@ -164,7 +166,7 @@
             (let [inst-type (when (cn/an-instance? resource) (cn/instance-type-kw resource))
                   rel-ctx (when inst-type (inst-type (env/relationship-context env)))
                   p0 (when rel-ctx (maybe-force (:parent rel-ctx)))
-                  parent (or p0 (and inst-type (p/find-parent-by-full-path env inst-type resource)))]
+                  parent (or p0 (and inst-type (find-parent-by-full-path env inst-type resource)))]
               (when parent
                 (or (owner? parent) (has-instance-privilege? user opr parent))))))))))
 

@@ -1,7 +1,5 @@
 (ns agentlang.test.util
-  (:require [agentlang.evaluator :as e]
-            [agentlang.evaluator.internal :as ei]
-            [agentlang.evaluator.intercept :as ec]
+  (:require [agentlang.evaluator.intercept :as ec]
             [agentlang.interpreter :as intrp]
             [agentlang.component :as cn]
             [agentlang.lang.internal :as li]
@@ -40,7 +38,7 @@
 (defn is-error [f]
   (is (try
         (if-let [r (maybe-result-map (f))]
-          (ei/error? r)
+          (:error r)
           true)
         #?(:clj (catch Exception ex
                   (report-expected-ex ex))
@@ -86,17 +84,6 @@
   (if (keyword? evt)
     {evt {}}
     evt))
-
-(defn result [evt]
-  (fresult
-   (e/eval-all-dataflows
-    (maybe-as-map evt))))
-
-(def eval-all-dataflows e/eval-all-dataflows)
-
-(defn first-result [evt]
-  (let [r (result (maybe-as-map evt))]
-    (if (map? r) r (first r))))
 
 (defn sleep [msec f]
   #?(:clj
@@ -317,11 +304,6 @@
        (finalize))))
   ([f] (call-with-rbac f ec/reset-interceptors!)))
 
-(defn finalize-events []
-  (lr/finalize-events eval-all-dataflows))
-
-(def reset-events! lr/reset-events!)
-
 (defn with-user [email event]
   (cn/assoc-event-context-user
    email
@@ -330,7 +312,6 @@
       {event {}}
       event))))
 
-(def guid li/guid)
 (def path-identity li/path-identity)
 
 (defn windows? []

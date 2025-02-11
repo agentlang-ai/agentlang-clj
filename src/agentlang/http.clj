@@ -20,7 +20,6 @@
             [agentlang.lang :as ln]
             [agentlang.lang.internal :as li]
             [agentlang.lang.raw :as lr]
-            [agentlang.paths.internal :as pi]
             [agentlang.user-session :as sess]
             [agentlang.util :as u]
             [agentlang.util.errors :refer [get-internal-error-message]]
@@ -457,11 +456,14 @@
       (and (apply ln/dataflow event-name (compiler/parse-relationship-tree path-attr obj))
            event-name))))
 
+(defn- as-partial-path [_]
+  (u/raise-not-implemented 'as-partial-path))
+
 (def process-post-request
   (partial
    process-generic-request
    (fn [{entity-name :entity component :component path :path} obj]
-     (let [path-attr (when path {li/path-attr (pi/as-partial-path path)})]
+     (let [path-attr (when path {li/path-attr (as-partial-path path)})]
        (if (cn/event? entity-name)
          [obj nil]
          (if-let [evt (maybe-generate-multi-post-event obj component path-attr)]
@@ -564,16 +566,20 @@
                 (ok result data-fmt)))
             (wrap-result rs data-fmt))))))
 
+(defn- uri-path-split [_] (u/raise-not-implemented 'uri-path-split))
+(defn- decode-uri-path-part [_] (u/raise-not-implemented 'decode-uri-path-part))
+(defn- uri-join-parts [_] (u/raise-not-implemented 'uri-join-parts))
+
 (defn- between-rel-path? [path]
   (when path
-    (when-let [p (first (take-last 2 (pi/uri-path-split path)))]
-      (cn/between-relationship? (pi/decode-uri-path-part p)))))
+    (when-let [p (first (take-last 2 (uri-path-split path)))]
+      (cn/between-relationship? (decode-uri-path-part p)))))
 
 (defn- generate-query-by-between-rel-event [component path]
-  (let [parts (pi/uri-path-split path)
-        relname (pi/decode-uri-path-part (first (take-last 2 parts)))
-        query-entity (pi/decode-uri-path-part (last parts))
-        entity-name (pi/decode-uri-path-part (first (take-last 4 parts)))
+  (let [parts (uri-path-split path)
+        relname (decode-uri-path-part (first (take-last 2 parts)))
+        query-entity (decode-uri-path-part (last parts))
+        entity-name (decode-uri-path-part (first (take-last 4 parts)))
         event-name (li/temp-event-name component)
         pats (if (= 4 (count parts))
                (let [id (get parts 1)]
@@ -583,7 +589,7 @@
                (let [alias (li/unq-name)
                      id (li/make-ref alias li/id-attr)]
                  [{entity-name
-                   {li/path-attr? (pi/uri-join-parts (drop-last 2 parts))}
+                   {li/path-attr? (uri-join-parts (drop-last 2 parts))}
                    :as [alias]}
                   {(li/name-as-query-pattern query-entity) {}
                    :-> [[{relname {(li/name-as-query-pattern

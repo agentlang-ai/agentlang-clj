@@ -12,8 +12,6 @@
                      entity record dataflow inference]]
             [agentlang.lang.internal :as li]
             [agentlang.api :as api]
-            [agentlang.evaluator :as e]
-            [agentlang.lang.opcode :as opc]
             [agentlang.compiler.context :as ctx]
             [agentlang.lang.datetime :as dt]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
@@ -169,9 +167,9 @@
 
 (deftest basic-contains
   (defcomponent :BC01
-    (entity :BC01/A {:Id {:type :Int :guid true} :X :Int})
-    (entity :BC01/B {:Id {:type :Int :guid true} :Y :Int})
-    (entity :BC01/C {:Id {:type :Int :guid true} :Z :Int})
+    (entity :BC01/A {:Id {:type :Int :id true} :X :Int})
+    (entity :BC01/B {:Id {:type :Int :id true} :Y :Int})
+    (entity :BC01/C {:Id {:type :Int :id true} :Z :Int})
     (relationship :BC01/AB {:meta {:contains [:BC01/A :BC01/B]}})
     (relationship :BC01/BC {:meta {:contains [:BC01/B :BC01/C]}})
     (dataflow
@@ -250,8 +248,8 @@
 
 (deftest basic-between
   (defcomponent :BB01
-    (entity :BB01/A {:Id {:type :Int :guid true} :X :Int})
-    (entity :BB01/B {:Id {:type :Int :guid true} :Y :Int})
+    (entity :BB01/A {:Id {:type :Int :id true} :X :Int})
+    (entity :BB01/B {:Id {:type :Int :id true} :Y :Int})
     (relationship :BB01/AB {:meta {:between [:BB01/A :BB01/B]}})
     (dataflow
      :BB01/CreateB

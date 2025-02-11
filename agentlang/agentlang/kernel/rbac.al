@@ -9,7 +9,7 @@
 (entity
  :Role
  {:Name {:type :String
-         li/guid true}})
+         li/path-identity true}})
 
 (def ^:private oprs li/rbac-oprs)
 
@@ -21,7 +21,7 @@
  :Privilege
  {:Name {:type :String
          :default u/uuid-string
-         li/guid true}
+         li/path-identity true}
   :Actions {:check crud-list?}
   :Resource :Edn})
 
@@ -29,7 +29,7 @@
  :PrivilegeAssignment
  {:Name {:type :String
          :default u/uuid-string
-         li/guid true}
+         li/path-identity true}
   :Role {:ref :Role.Name
          :indexed true}
   :Privilege {:ref :Privilege.Name}
@@ -39,7 +39,7 @@
  :RoleAssignment
  {:Name {:type :String
          :default u/uuid-string
-         li/guid true}
+         li/path-identity true}
   :Role {:ref :Role.Name
          :indexed true}
   :Assignee {:type :String ; usually a :Agentlang.Kernel.Identity/User.Name
@@ -80,7 +80,7 @@
  {:InstancePrivilegeAssignment
   {:Name {:type :String
           :default u/uuid-string
-          li/guid true}
+          li/path-identity true}
    :Actions {:check crud-list?
              :optional true}
    :Resource :Path
@@ -91,7 +91,7 @@
  {:OwnershipAssignment
   {:Name {:type :String
           :default u/uuid-string
-          li/guid true}
+          li/path-identity true}
    :Resource :Path
    :ResourceId :Any
    :Assignee {:type :String :indexed true}}})

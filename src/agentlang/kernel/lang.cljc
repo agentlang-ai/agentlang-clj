@@ -58,7 +58,7 @@
  :Agentlang.Kernel.Lang/Identity
  {:type :Agentlang.Kernel.Lang/UUID,
   :default u/uuid-string,
-  li/guid true})
+  li/path-identity true})
 (attribute
  :Agentlang.Kernel.Lang/Now
  {:type :Agentlang.Kernel.Lang/DateTime, :default dt/now})
@@ -89,7 +89,7 @@
   {:oneof ["Seconds" "Minutes" "Hours" "Days"], :default "Seconds"},
   :CreatedTimeSecs
   {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp},
-  :Name {:type :Agentlang.Kernel.Lang/String, :guid true},
+  :Name {:type :Agentlang.Kernel.Lang/String, :id true},
   :Retries {:type :Agentlang.Kernel.Lang/Int, :default 0},
   :Expiry :Agentlang.Kernel.Lang/Int,
   :Status
@@ -165,7 +165,7 @@
  :Agentlang.Kernel.Lang/Config
  {:Id
   {:type :Agentlang.Kernel.Lang/Int,
-   :guid true,
+   :id true,
    :default 1,
    :read-only true}})
 (defn- http-response? [x] (and (map? x) (int? (:status x))))

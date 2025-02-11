@@ -3,7 +3,6 @@
             [clojure.string :as s]
             [agentlang.util :as u]
             [agentlang.lang.internal :as li]
-            [agentlang.paths.internal :as pi]
             [agentlang.datafmt.json :as json]
             [agentlang.datafmt.transit :as t]))
 
@@ -234,8 +233,11 @@
    (when-let [als (alias-tag ir)] {alias-tag als})
    (when-let [throws (throws-tag ir)] {throws-tag (raw-throws throws)})))
 
+;; TODO: temporary placeholder. fix once path syntax is finalized.
+(def ^:private proper-path? vector?)
+
 (defn- query-attrs? [attrs]
-  (or (pi/proper-path? attrs) (some li/query-pattern? (keys attrs))))
+  (or (proper-path? attrs) (some li/query-pattern? (keys attrs))))
 
 (defn- query-record-name [recname]
   (if (li/query-pattern? recname)
@@ -306,7 +308,7 @@
         attrs (recname pat)]
     (when-not (li/name? recname)
       (u/throw-ex (str "invalid record name - " recname)))
-    (when-not (or (map? attrs) (pi/proper-path? attrs))
+    (when-not (or (map? attrs) (proper-path? attrs))
       (u/throw-ex (str "expected a map or a path query - " attrs)))
     (let [attr-names (and (map? attrs ) (seq (keys attrs)))
           qpat (if attr-names
@@ -806,9 +808,13 @@
       nil
       {:model mname :component cname :record recname})))
 
+;; TODO: temporary placeholders. fix once path syntax is finalized.
+(def ^:private ref-path-name? (constantly true))
+(def ^:private full-path-name? (constantly true))
+
 (defn- full-path-name-info [model-name n]
   (let [{c :component r :record} (li/path-parts n)]
-    (if (pi/ref-path-name? c)
+    (if (ref-path-name? c)
       (when-let [info (ref-path-name-info model-name c)]
         (merge info {:record r}))
       {:component c :record r})))
@@ -816,8 +822,8 @@
 (defn name-info
   ([model-name n]
    (cond
-     (pi/full-path-name? n) (full-path-name-info model-name n)
-     (pi/ref-path-name? n) (ref-path-name-info model-name n)
+     (full-path-name? n) (full-path-name-info model-name n)
+     (ref-path-name? n) (ref-path-name-info model-name n)
      (li/name? n) {:record n}
      :else nil))
   ([n] (name-info nil n)))

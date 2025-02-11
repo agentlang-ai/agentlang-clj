@@ -33,7 +33,7 @@
      [agentlang.lang.internal :as li])]})
 (entity
  :Agentlang.Kernel.Rbac/Role
- {:Name {:type :String, li/guid true}})
+ {:Name {:type :String, li/path-identity true}})
 (def oprs li/rbac-oprs)
 (defn-
  crud-list?
@@ -43,12 +43,12 @@
   (every? (fn* [p1__400#] (some #{p1__400#} oprs)) (set xs))))
 (entity
  :Agentlang.Kernel.Rbac/Privilege
- {:Name {:type :String, :default u/uuid-string, li/guid true},
+ {:Name {:type :String, :default u/uuid-string, li/path-identity true},
   :Actions {:check agentlang.kernel.rbac/crud-list?},
   :Resource :Edn})
 (entity
  :Agentlang.Kernel.Rbac/PrivilegeAssignment
- {:Name {:type :String, :default u/uuid-string, li/guid true},
+ {:Name {:type :String, :default u/uuid-string, li/path-identity true},
   :Role {:ref :Agentlang.Kernel.Rbac/Role.Name, :indexed true},
   :Privilege {:ref :Agentlang.Kernel.Rbac/Privilege.Name},
   :meta
@@ -56,7 +56,7 @@
    [:Agentlang.Kernel.Rbac/Role :Agentlang.Kernel.Rbac/Privilege]}})
 (entity
  :Agentlang.Kernel.Rbac/RoleAssignment
- {:Name {:type :String, :default u/uuid-string, li/guid true},
+ {:Name {:type :String, :default u/uuid-string, li/path-identity true},
   :Role {:ref :Agentlang.Kernel.Rbac/Role.Name, :indexed true},
   :Assignee {:type :String, :indexed true},
   :meta {:unique [:Agentlang.Kernel.Rbac/Role :Assignee]}})
@@ -116,7 +116,7 @@
                          {:Name
                           {:type :String,
                            :default u/uuid-string,
-                           li/guid true},
+                           li/path-identity true},
                           :Actions
                           {:check agentlang.kernel.rbac/crud-list?,
                            :optional true},
@@ -128,7 +128,7 @@
                          {:Name
                           {:type :String,
                            :default u/uuid-string,
-                           li/guid true},
+                           li/path-identity true},
                           :Resource :Path,
                           :ResourceId :Any,
                           :Assignee {:type :String, :indexed true}}})

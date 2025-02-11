@@ -2,6 +2,7 @@
   (:require [clojure.set :as set]
             [clojure.walk :as w]
             #?(:clj [clojure.core.cache.wrapped :as cache])
+            [agentlang.model]
             [agentlang.util :as u]
             [agentlang.component :as cn]
             [agentlang.env :as env]

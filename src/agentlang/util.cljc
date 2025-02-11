@@ -492,3 +492,6 @@
     (let [exit-val (.waitFor process)]
       (log/info (str "Exit code: " exit-val)))
     (io/copy (io/reader (.getErrorStream process)) *out*)))
+
+(defn raise-not-implemented [fn-name]
+  (throw-ex "Not implemented - " fn-name))

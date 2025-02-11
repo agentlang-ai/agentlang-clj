@@ -33,7 +33,7 @@
   :Password {:type :Password, :optional true},
   :FirstName {:type :String, :optional true},
   :LastName {:type :String, :optional true},
-  :Email {:type :Email, li/guid true},
+  :Email {:type :Email, li/path-identity true},
   :UserData {:type :Any, :optional true},
   :AppId {:type :UUID, :default u/uuid-string, :indexed true}})
 (event
@@ -51,10 +51,10 @@
  {:User :Agentlang.Kernel.Identity/User, :OtherDetails :Map})
 (entity
  :Agentlang.Kernel.Identity/UserSession
- {:User {:type :String, :guid true}, :LoggedIn :Boolean})
+ {:User {:type :String, :id true}, :LoggedIn :Boolean})
 (entity
  :Agentlang.Kernel.Identity/SessionCookie
- {:Id {:type :String, :guid true},
+ {:Id {:type :String, :id true},
   :UserData :Any,
   :CreatedTimeMillis :Int64})
 (event
