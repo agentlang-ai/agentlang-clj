@@ -197,6 +197,12 @@
       :BC01/BC? {:BC01/B {:Id :BC01/LookupAllC.B}
                  :BC01/AB {:BC01/A {:Id :BC01/LookupAllC.A}}}})
     (dataflow
+     :BC01/UpdateC
+     {:BC01/C {:Id? :BC01/UpdateC.C
+               :Z '(* 10 :BC01/C.Z)}
+      :BC01/BC? {:BC01/B {:Id :BC01/UpdateC.B}
+                 :BC01/AB {:BC01/A {:Id :BC01/UpdateC.A}}}})
+    (dataflow
      :BC01/LookupAllCByZ
      {:BC01/C {:Z? :BC01/LookupAllCByZ.Z}
       :BC01/BC? {:BC01/B {:Id :BC01/LookupAllCByZ.B}
@@ -234,7 +240,8 @@
         lookup-all-cs #(tu/fetch-result {:BC01/LookupAllCByZ {:Z %1 :B %2 :A %3}})
         check-a (fn [id inst]
                   (is (a? inst))
-                  (is (= id (:Id inst))))]
+                  (is (= id (:Id inst))))
+        update-c #(tu/fetch-result {:BC01/UpdateC {:C %1 :B %2 :A %3}})]
     (is (a? (tu/fetch-result {:BC01/Create_A {:Instance {:BC01/A {:Id 1 :X 100}}}})))
     (is (a? (tu/fetch-result {:BC01/Create_A {:Instance {:BC01/A {:Id 2 :X 300}}}})))
     (is (b? (tu/fetch-result {:BC01/CreateB {:Id 101 :Y 10 :A 1}})))
@@ -257,6 +264,8 @@
     (check-cs 1 30 (lookup-all-cs 30 101 1))
     (check-cs 1 60 (lookup-all-cs 60 102 1))
     (check-cs 1 70 (lookup-all-cs 70 103 2))
+    (check-cs 1 300 (update-c 201 101 1))
+    (check-cs 3 (+ 40 40 300) (lookup-cs 101 1))
     (let [res (tu/fetch-result {:BC01/LookupAFromB {:B 101}})]
       (is (= 1 (count res)))
       (check-a 1 (first res)))
