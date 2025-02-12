@@ -10,6 +10,7 @@
 
 (def id-attr :__Id__)
 (def id-attr? :__Id__?)
+(def id-attr-s (str id-attr))
 (def with-types-tag :with-types)
 
 (def path-attr :__path__)
@@ -621,3 +622,6 @@
               (or (keyword? n) (symbol? n))
               ;; is there an attributes map?
               (map? (get pat n))))))
+
+(defn vec-to-path [v] (s/join "," v))
+(defn path-to-vec [s] (s/split s #","))

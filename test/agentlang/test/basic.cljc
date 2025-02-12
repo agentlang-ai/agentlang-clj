@@ -234,7 +234,7 @@
         check-paths (fn [aid b]
                       (is (b? b))
                       (is (= (cn/instance-path b)
-                             (vec (concat [:BC01/A aid :BC01/AB :BC01/B] [(:Id b)])))))
+                             (li/vec-to-path (vec (concat [:BC01/A aid :BC01/AB :BC01/B] [(:Id b)]))))))
         lookup-bs #(tu/fetch-result {:BC01/LookupAllB {:A %}})
         lookup-bs-by-x #(tu/fetch-result {:BC01/LookupAllBByX {:X %}})
         check-bs (fn [aid bs]

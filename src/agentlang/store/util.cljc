@@ -110,6 +110,11 @@
 (defn find-entity-schema [rec-name]
   (if-let [scm (cn/entity-schema rec-name)]
     scm
+    (u/throw-ex (str "schema not found for entity - " rec-name))))
+
+(defn find-record-schema [rec-name]
+  (if-let [scm (cn/record-schema rec-name)]
+    scm
     (u/throw-ex (str "schema not found for record - " rec-name))))
 
 (defn table-name->entity

@@ -69,7 +69,7 @@
  :FindPrivileges
  {:Privilege {:Name? [:in :Agentlang.Kernel.Rbac/FindPrivileges.Names]}})
 
-(entity
+(record
  {:InstancePrivilegeAssignment
   {:Name {:type :String
           :default u/uuid-string
@@ -77,6 +77,5 @@
    :CanRead {:type :Boolean :default false}
    :CanUpdate {:type :Boolean :default false}
    :CanDelete {:type :Boolean :default false}
-   :Resource {:type :Path :indexed true}
-   :ResourceId {:type :Any :indexed true}
+   :ResourcePath {:type :String :indexed true}
    :Assignee {:type :String :indexed true}}})

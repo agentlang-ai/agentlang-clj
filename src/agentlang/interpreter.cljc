@@ -313,11 +313,10 @@
       (if-let [result (resolve-pattern env (k relpat))]
         (do (when-not (cn/instance-of? parent result)
               (u/throw-ex (str "Result of " relpat " is not of type " parent)))
-            (let [pid (li/path-attr result)
-                  ppath (u/parse-string (li/path-attr result))]
-              (assoc recattrs li/parent-attr
-                     pid li/path-attr
-                     (pr-str (concat ppath [relname recname li/id-attr])))))
+            (let [ppath (li/path-attr result)]
+              (assoc recattrs
+                     li/parent-attr ppath
+                     li/path-attr (str ppath "," (li/vec-to-path [relname recname li/id-attr])))))
         (u/throw-ex (str "Query " relpat " failed to lookup " parent " for " recname))))))
 
 (defn- create-between-relationships [env bet-rels recname result]

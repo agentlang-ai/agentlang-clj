@@ -1025,12 +1025,11 @@
       result)))
 
 (defn- maybe-complete-path [path id]
-  (let [v (u/parse-string path)]
-    (pr-str
-     (mapv #(if (= li/id-attr %) id %) v))))
+  (let [v (li/path-to-vec path)]
+    (li/vec-to-path
+     (mapv #(if (= li/id-attr-s %) id %) v))))
 
-(defn instance-path [inst]
-  (u/parse-string (li/path-attr inst)))
+(def instance-path li/path-attr)
 
 (defn- maybe-assoc-path [recname attrs]
   (cond
@@ -1039,7 +1038,7 @@
     (let [path (li/path-attr attrs)
           id ((identity-attribute-name recname) attrs)]
       (if (li/default-path? path)
-        (assoc attrs li/path-attr (pr-str [(li/make-path recname) id]))
+        (assoc attrs li/path-attr (str (li/make-path recname) "," id))
         (assoc attrs li/path-attr (maybe-complete-path path id))))
     :else attrs))
 

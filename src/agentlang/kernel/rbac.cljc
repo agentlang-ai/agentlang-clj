@@ -40,7 +40,7 @@
  [xs]
  (let
   [xs (mapv u/string-as-keyword xs)]
-  (every? (fn* [p1__422#] (some #{p1__422#} oprs)) (set xs))))
+  (every? (fn* [p1__416#] (some #{p1__416#} oprs)) (set xs))))
 (entity
  :Agentlang.Kernel.Rbac/Privilege
  {:Name
@@ -94,7 +94,7 @@
                          {:Name?
                           [:in
                            :Agentlang.Kernel.Rbac/FindPrivileges.Names]}})
-(entity
+(record
  #:Agentlang.Kernel.Rbac{:InstancePrivilegeAssignment
                          {:Name
                           {:type :String,
@@ -103,9 +103,8 @@
                           :CanRead {:type :Boolean, :default false},
                           :CanUpdate {:type :Boolean, :default false},
                           :CanDelete {:type :Boolean, :default false},
-                          :Resource {:type :Path, :indexed true},
-                          :ResourceId {:type :Any, :indexed true},
+                          :ResourcePath {:type :String, :indexed true},
                           :Assignee {:type :String, :indexed true}}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "e3ff6d89-3f9d-443c-abc5-14e2c9f502e1")
+ "317215f3-54f9-44ca-99cf-32f857ee9be2")

@@ -182,13 +182,21 @@
         (.printStackTrace ex)))
     view-name))
 
+(defn- inst-priv-table [entity-name]
+  (let [[c n] (li/split-path entity-name)]
+    (stu/entity-table-name (li/make-path c (str (name n) "_ipa")))))
+
 (defn create-schema
   "Create the schema, tables and indexes for the component."
   ([datasource component-name post-init]
    (let [scmname (stu/db-schema-for-component component-name)
          table-data (atom nil)
          create-views (atom nil)
-         component-meta-table (stu/component-meta-table-name component-name)]
+         component-meta-table (stu/component-meta-table-name component-name)
+         [inst-priv-schema ip-indexed ip-uq ip-cuq]
+          (when (gs/rbac-enabled?)
+            (let [scm (stu/find-record-schema :Agentlang.Kernel.Rbac/InstancePrivilegeAssignment)]
+              [scm (cn/indexed-attributes scm) (cn/unique-attributes scm) (cn/compound-unique-attributes scm)]))]
      (execute-fn!
       datasource
       (fn [txn]
@@ -205,6 +213,10 @@
                    (cn/unique-attributes schema)
                    (cn/compound-unique-attributes ename)
                    table-data)
+                  (when inst-priv-schema
+                    (create-relational-table
+                     txn inst-priv-schema (inst-priv-table ename)
+                     ip-indexed ip-uq ip-cuq table-data))
                   (execute-sql!
                    txn [(insert-entity-meta-sql
                          component-meta-table tabname
@@ -427,8 +439,24 @@
   (let [attr-names (cn/query-attribute-names entity-name)]
     (mapv #(li/make-ref sql-alias (stu/attribute-column-name-kw %)) attr-names)))
 
-(defn- maybe-add-rbac-joins [opr entity-name sql-pat]
-  )
+(def ^:private ipa-alias :ipa)
+(def ^:private ipa-path (li/make-ref ipa-alias (stu/attribute-column-name-kw :ResourcePath)))
+(def ^:private ipa-user (li/make-ref ipa-alias (stu/attribute-column-name-kw :Assignee)))
+
+(def ^:private ipa-flag-cols
+  {:read (li/make-ref ipa-alias :CanRead)
+   :update (li/make-ref ipa-alias :CanUpdate)
+   :delete (li/make-ref ipa-alias :CanDelete)})
+
+(defn- maybe-add-rbac-joins [opr user entity-name sql-pat]
+  (let [join (:join sql-pat)
+        inv-privs-join
+        [[(keyword (inst-priv-table entity-name)) ipa-alias]
+         [:and
+          [:like (li/make-ref :t0 path-col) ipa-path]
+          [:= ipa-user user]
+          [:= (opr ipa-flag-cols) true]]]]
+    (assoc sql-pat :join (concat join inv-privs-join))))
 
 (defn- maybe-add-owner-query [attrs user]
   (assoc attrs li/owner-attr? user))
@@ -458,7 +486,7 @@
         sql-pat (if rbac-enabled?
                   (if can-read-all
                     sql-pat0
-                    (maybe-add-rbac-joins :read entity-name sql-pat0))
+                    (maybe-add-rbac-joins :read user entity-name sql-pat0))
                   sql-pat0)
         sql-params (sql/raw-format-sql sql-pat)]
     (execute-fn!
