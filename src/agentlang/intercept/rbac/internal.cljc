@@ -25,7 +25,7 @@
 
 (defn superuser-email? [email]
   (when (seq email)
-    (when-let [su @superuser]
+    (when-let [su (lookup-superuser)]
       (= email (:Email su)))))
 
 #?(:clj

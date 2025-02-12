@@ -40,7 +40,7 @@
  [xs]
  (let
   [xs (mapv u/string-as-keyword xs)]
-  (every? (fn* [p1__407#] (some #{p1__407#} oprs)) (set xs))))
+  (every? (fn* [p1__405#] (some #{p1__405#} oprs)) (set xs))))
 (entity
  :Agentlang.Kernel.Rbac/Privilege
  {:Name
@@ -82,47 +82,18 @@
  [:delete
   :Agentlang.Kernel.Rbac/RoleAssignment
   {:Assignee :Agentlang.Kernel.Rbac/DeleteRoleAssignments.Assignee}])
-(defn-
- priv-assigns-query
- [env]
- (let
-  [role-names
-   (env :Agentlang.Kernel.Rbac/FindPrivilegeAssignments.RoleNames)]
-  (str
-   "SELECT * FROM "
-   (stu/entity-table-name :Agentlang.Kernel.Rbac/PrivilegeAssignment)
-   " WHERE ("
-   (stu/attribute-column-name :Role)
-   " in ("
-   (s/join
-    ","
-    (map (fn* [p1__408#] (str "'" (str p1__408#) "'")) role-names))
-   "))")))
 (dataflow
  :Agentlang.Kernel.Rbac/FindPrivilegeAssignments
- [:query
-  #:Agentlang.Kernel.Rbac{:PrivilegeAssignment?
-                          agentlang.kernel.rbac/priv-assigns-query}])
-(defn-
- privileges-query
- [env]
- (let
-  [names (env :Agentlang.Kernel.Rbac/FindPrivileges.Names)]
-  (str
-   "SELECT * FROM "
-   (stu/entity-table-name :Agentlang.Kernel.Rbac/Privilege)
-   " WHERE ("
-   (stu/attribute-column-name :Name)
-   " in ("
-   (s/join
-    ","
-    (map (fn* [p1__409#] (str "'" (str p1__409#) "'")) names))
-   "))")))
+ #:Agentlang.Kernel.Rbac{:PrivilegeAssignment
+                         {:Role?
+                          [:in
+                           :Agentlang.Kernel.Rbac/FindPrivilegeAssignments.RoleNames]}})
 (dataflow
  :Agentlang.Kernel.Rbac/FindPrivileges
- [:query
-  #:Agentlang.Kernel.Rbac{:Privilege?
-                          agentlang.kernel.rbac/privileges-query}])
+ #:Agentlang.Kernel.Rbac{:Privilege
+                         {:Name?
+                          [:in
+                           :Agentlang.Kernel.Rbac/FindPrivileges.Names]}})
 (entity
  #:Agentlang.Kernel.Rbac{:InstancePrivilegeAssignment
                          {:Name
@@ -146,4 +117,4 @@
                           :Assignee {:type :String, :indexed true}}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "6fabde13-de73-4fa3-b4b1-835d3c15c613")
+ "9a0812a0-8549-4e2d-8a95-1be927fc5e4c")

@@ -1,5 +1,5 @@
 (ns agentlang.test.util
-  (:require [agentlang.evaluator.intercept :as ec]
+  (:require [agentlang.intercept :as ec]
             [agentlang.interpreter :as intrp]
             [agentlang.component :as cn]
             [agentlang.lang.internal :as li]
@@ -7,8 +7,6 @@
                :cljs [cljs.test :refer-macros [is]])
             [agentlang.util :as u]
             [agentlang.store :as store]
-            [agentlang.rbac.core :as rbac]
-            [agentlang.lang.rbac :as lr]
             [clojure.spec.gen.alpha :as gen]
             [clojure.spec.alpha :as s]
             [cljc.java-time.local-date-time :as local-date-time]
@@ -296,7 +294,6 @@
 
 (defn call-with-rbac
   ([f finalize]
-   (is (rbac/init))
    (is (= [:rbac] (ec/init-interceptors [:rbac])))
    (try
      (f)
