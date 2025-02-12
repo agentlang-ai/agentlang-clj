@@ -60,25 +60,14 @@
  :DeleteRoleAssignments
  [:delete :RoleAssignment {:Assignee :DeleteRoleAssignments.Assignee}])
 
-(defn- priv-assigns-query [env]
-  (let [role-names (env :Agentlang.Kernel.Rbac/FindPrivilegeAssignments.RoleNames)]
-    (str "SELECT * FROM " (stu/entity-table-name :Agentlang.Kernel.Rbac/PrivilegeAssignment)
-         " WHERE (" (stu/attribute-column-name :Role) " in ("
-         (s/join "," (map #(str "'" (str %) "'") role-names)) "))")))
-
 (dataflow
  :FindPrivilegeAssignments
- [:query {:PrivilegeAssignment? priv-assigns-query}])
-
-(defn- privileges-query [env]
-  (let [names (env :Agentlang.Kernel.Rbac/FindPrivileges.Names)]
-    (str "SELECT * FROM " (stu/entity-table-name :Agentlang.Kernel.Rbac/Privilege)
-         " WHERE (" (stu/attribute-column-name :Name) " in ("
-         (s/join "," (map #(str "'" (str %) "'") names)) "))")))
+ {:PrivilegeAssignment
+  {:Role? [:in :Agentlang.Kernel.Rbac/FindPrivilegeAssignments.RoleNames]}})
 
 (dataflow
  :FindPrivileges
- [:query {:Privilege? privileges-query}])
+ {:Privilege {:Name? [:in :Agentlang.Kernel.Rbac/FindPrivileges.Names]}})
 
 (entity
  {:InstancePrivilegeAssignment

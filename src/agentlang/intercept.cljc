@@ -1,8 +1,8 @@
-(ns agentlang.evaluator.intercept
+(ns agentlang.intercept
   (:require #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
-            [agentlang.evaluator.intercept.rbac :as irbac]
-            [agentlang.evaluator.intercept.core :as interceptors]))
+            [agentlang.intercept.rbac :as irbac]
+            [agentlang.intercept.core :as interceptors]))
 
 (def ^:private makers {:rbac irbac/make})
 

@@ -601,7 +601,7 @@
 (defn- make-attributes-filter [predic]
   (partial filter-attributes predic))
 
-(def indexed-attributes
+(def user-indexed-attributes
   "Return the names of all attributes marked :indexed."
   (make-attributes-filter :indexed))
 
@@ -622,6 +622,9 @@
 (def identity-attributes
   "Return the names of all identity attributes in the schema."
   (make-attributes-filter li/path-identity))
+
+(defn indexed-attributes [schema]
+  (concat (user-indexed-attributes schema) (identity-attributes schema)))
 
 (def immutable-attributes
   "Return the names of all immutable attributes in the schema."

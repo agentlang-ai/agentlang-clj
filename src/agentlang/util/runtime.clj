@@ -18,14 +18,13 @@
    [agentlang.component :as cn]
    [agentlang.interpreter :as intrp]
    [agentlang.evaluator :as e]
-   [agentlang.evaluator.intercept :as ei]
+   [agentlang.intercept :as ei]
    [agentlang.global-state :as gs]
    [agentlang.lang :as ln]
    [agentlang.lang.rbac :as lr]
    [agentlang.lang.tools.loader :as loader]
    [agentlang.lang.tools.build :as build]
    [agentlang.auth :as auth]
-   [agentlang.rbac.core :as rbac]
    [agentlang.connections.client :as cc]
    [agentlang.inference.embeddings.core :as ec]
    [agentlang.inference.service.core :as isc]
@@ -221,9 +220,6 @@
         (run-appinit-tasks! ev (or (:init-data model)
                                    (:init-data config)))
         (when embeddings-config (isc/setup-agent-documents))
-        (when has-rbac
-          (when-not (rbac/init (merge (:rbac ins) (:authentication config)))
-            (log/error "failed to initialize rbac")))
         (ei/init-interceptors ins)
         [ev store]))))
 

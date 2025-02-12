@@ -476,7 +476,11 @@
                 (make-result env result)))
             (finally
               (when txn-set? (gs/set-active-txn! nil)))))))))
-  ([store event-instance] (evaluate-dataflow store nil event-instance false)))
+  ([store event-instance] (evaluate-dataflow store nil event-instance false))
+  ([event-instance] (evaluate-dataflow (store/get-default-store) nil event-instance false)))
 
 (defn evaluate-dataflow-in-environment [env event-instance]
   (evaluate-dataflow nil env event-instance false))
+
+(defn evaluate-dataflow-internal [event-instance]
+  (evaluate-dataflow (store/get-default-store) nil event-instance true))

@@ -1,35 +1,27 @@
-(ns agentlang.rbac.core
+(ns agentlang.intercept.rbac.internal
   (:require [agentlang.global-state :as gs]
             [agentlang.util :as u]
             [agentlang.component :as cn]
-            [agentlang.evaluator :as ev]
-            [agentlang.lang.internal :as li]
-            [agentlang.evaluator.intercept.internal :as ii]))
+            [agentlang.interpreter :as interp]
+            [agentlang.lang.internal :as li]))
 
 (defn get-superuser-email []
   (or (get-in (gs/get-app-config) [:authentication :superuser-email])
       "superuser@superuser.com"))
-
-(def ^:private superuser (atom nil))
 
 (defn- find-su-event []
   (cn/make-instance
    {:Agentlang.Kernel.Identity/FindUser
     {:Email (get-superuser-email)}}))
 
-(defn- lookup-superuser []
-  (when-let [r (ev/safe-eval (find-su-event))]
-    (first r)))
-
-(defn init
-  ([config]
-   (when-let [su (lookup-superuser)]
-     (reset! superuser su))
-   true)
-  ([] (init nil)))
+(def ^:private lookup-superuser
+  (memoize
+   (fn []
+     (when-let [r (interp/evaluate-dataflow (find-su-event))]
+       (first r)))))
 
 (defn superuser? [user]
-  (cn/same-instance? user @superuser))
+  (cn/same-instance? user (lookup-superuser)))
 
 (defn superuser-email? [email]
   (when (seq email)
@@ -56,7 +48,7 @@
     (when (seq role-names)
       (or (cached role-names)
           (cache role-names
-                 (ev/safe-eval-internal
+                 (interp/evaluate-dataflow-internal
                   {:Agentlang.Kernel.Rbac/FindPrivilegeAssignments
                    {:RoleNames role-names}}))))))
 
@@ -64,7 +56,7 @@
   (fn [user-name]
     (or (cached user-name)
         (cache user-name
-               (ev/safe-eval-internal
+               (interp/evaluate-dataflow-internal
                 {:Agentlang.Kernel.Rbac/FindRoleAssignments
                  {:Assignee user-name}})))))
 
@@ -81,7 +73,7 @@
             (when (seq names)
               (or (cached names)
                   (cache names
-                         (ev/safe-eval-internal
+                         (interp/evaluate-dataflow-internal
                           {:Agentlang.Kernel.Rbac/FindPrivileges
                            {:Names names}}))))))))))
 
@@ -115,38 +107,11 @@
   ;; Assumes - (not (superuser-email? userid))
   (let [resource (:data arg)
         privs (privileges userid)
-        predic (partial filter-privs privs action (:ignore-refs arg))]
-    (if (ii/attribute-ref? resource)
-      (let [rp (li/root-path resource)]
-        (or (predic rp)
-            (predic resource)))
-      (predic resource))))
+        predic (partial filter-privs privs action true)]
+    (predic resource)))
 
 (def can-read? (partial has-priv? :read))
 (def can-create? (partial has-priv? :create))
 (def can-update? (partial has-priv? :update))
 (def can-delete? (partial has-priv? :delete))
 (def can-eval? (partial has-priv? :eval))
-
-(def ^:private priv-assignment-callbacks (atom nil))
-
-(defn register-privilege-assignment-callback [type-name callback-fn]
-  (swap! priv-assignment-callbacks assoc type-name callback-fn)
-  type-name)
-
-(defn run-privilege-assignment-callback
-  ([tag inst user privs]
-   ;; tag - oneof [:ownership :instpriv]
-   ;; inst - instance for which privilege assignment happens
-   ;; user - assignee
-   ;; privs - optional, setof actions in the case of :instpriv
-   (let [type-name (cn/instance-type-kw inst)]
-     (when-let [callback-fn (get @priv-assignment-callbacks type-name)]
-       (callback-fn tag inst user privs))))
-  ([tag inst user] (run-privilege-assignment-callback tag inst user nil)))
-
-(def run-instance-privilege-assignment-callback
-  (partial run-privilege-assignment-callback :instpriv))
-
-(def run-ownership-assignment-callback
-  (partial run-privilege-assignment-callback :ownership))
