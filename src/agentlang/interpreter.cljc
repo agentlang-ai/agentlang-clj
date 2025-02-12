@@ -8,6 +8,7 @@
             [agentlang.env :as env]
             [agentlang.store :as store]
             [agentlang.store.util :as su]
+            [agentlang.intercept :as intercept]
             [agentlang.global-state :as gs]
             [agentlang.lang.internal :as li]
             [agentlang.resolver.registry :as rr]
@@ -210,7 +211,8 @@
 
 (defn- handle-upsert [env resolver recname update-attrs instances]
   (when (seq instances)
-    (let [updated-instances (mapv #(resolve-instance-values env recname (merge % update-attrs)) instances)
+    (let [can-update-all (intercept/call-interceptors-for-update env recname)
+          updated-instances (mapv #(resolve-instance-values env recname (merge % update-attrs)) instances)
           rs
           (if resolver
             (every? identity (mapv #(r/call-resolver-update resolver env %) updated-instances))
@@ -248,7 +250,8 @@
       args))
 
 (defn- handle-query-pattern [env recname [attrs sub-pats] alias]
-  (let [select-clause (:? attrs)
+  (let [can-read-all (intercept/call-interceptors-for-read env recname)
+        select-clause (:? attrs)
         [update-attrs query-attrs] (when-not select-clause (lift-attributes-for-update attrs))
         attrs (if query-attrs query-attrs attrs)
         attrs0 (when (seq attrs)
@@ -262,16 +265,17 @@
         rels-query {:cont-rels cont-rels-query
                     :bet-rels bet-rels-query}
         result0 (if resolver
-                  (r/call-resolver-query resolver env [recname attrs0 rels-query])
-                  (store/do-query (env/get-store env) nil [recname attrs0 rels-query]))
+                  (r/call-resolver-query resolver env [recname attrs0 rels-query can-read-all])
+                  (store/do-query (env/get-store env) nil [recname attrs0 rels-query can-read-all]))
         env0 (if (seq result0) (env/bind-instances env recname result0) env)
         result (if update-attrs (handle-upsert env0 resolver recname update-attrs result0) result0)
         env1 (if (seq result) (env/bind-instances env0 recname result) env0)
         env2 (if alias (env/bind-instance-to-alias env1 alias result) env1)]
     (make-result env2 result)))
 
-(defn- handle-entity-crud-pattern [env recname attrs alias]
-  (let [inst (cn/make-instance recname (resolve-attribute-values env recname attrs))
+(defn- handle-entity-create-pattern [env recname attrs alias]
+  (let [_ (intercept/call-interceptors-for-create env recname)
+        inst (cn/make-instance recname (resolve-attribute-values env recname attrs))
         resolver (rr/resolver-for-path recname)
         final-inst (if resolver
                      (r/call-resolver-create resolver env inst)
@@ -341,7 +345,7 @@
     (cond
       (cn/entity-schema (li/normalize-name recname))
       (let [q? (li/query-instance-pattern? pat)
-            f (if q? handle-query-pattern handle-entity-crud-pattern)
+            f (if q? handle-query-pattern handle-entity-create-pattern)
             [cont-rels bet-rels]
             (and (seq sub-pats) [(:cont-rels sub-pats) (:bet-rels sub-pats)])
             attrs
@@ -367,6 +371,11 @@
   (when-let [resolver (rr/resolver-for-path entity-name)]
     (r/call-resolver-delete [entity-name args])))
 
+(defn- extract-entity-name [pattern]
+  (let [pattern (dissoc pattern :as :from)
+        ks (keys pattern)]
+    (first (filter #(cn/entity? (li/normalize-name %)) ks))))
+
 (defn- delete-instances [env pattern & params]
   (let [store (env/get-store env)
         params (first params)
@@ -376,15 +385,17 @@
       (when-not (and (keyword? pattern)
                      (cn/entity? pattern))
         (u/throw-ex (str "Second element must be a valid entity name - [:delete " pattern " " params "]"))))
-    (if (or purge? delall?)
-      (or (call-resolver-delete pattern params) (store/delete-all store pattern purge?))
-      (let [r (evaluate-pattern env pattern)
-            env (:env r), insts (:result r)]
-        (when-let [entity-name (and (seq insts) (cn/instance-type-kw (first insts)))]
-          (or (call-resolver-delete entity-name insts)
-              (doseq [inst insts]
-                (store/delete-by-id store entity-name li/path-attr (li/path-attr inst)))
-              insts))))))
+    (let [can-delete-all (intercept/call-interceptors-for-delete env (if (keyword? pattern) pattern (extract-entity-name pattern)))]
+      (if (or purge? delall?)
+        (or (call-resolver-delete pattern params) (store/delete-all store pattern purge?))
+        (let [r (evaluate-pattern env pattern)
+              env (:env r), insts (:result r)]
+          (when-let [entity-name (and (seq insts) (cn/instance-type-kw (first insts)))]
+            (let [insts (if can-delete-all insts (intercept/call-interceptors-for-delete env insts))]
+              (or (call-resolver-delete entity-name insts)
+                  (doseq [inst insts]
+                    (store/delete-by-id store entity-name li/path-attr (li/path-attr inst)))
+                  insts))))))))
 
 (defn- parse-expr-pattern [pat]
   (let [[h t] (split-with #(not= % :as) pat)]
@@ -484,3 +495,6 @@
 
 (defn evaluate-dataflow-internal [event-instance]
   (evaluate-dataflow (store/get-default-store) nil event-instance true))
+
+(gs/set-evaluate-dataflow-fn! evaluate-dataflow)
+(gs/set-evaluate-dataflow-internal-fn! evaluate-dataflow-internal)

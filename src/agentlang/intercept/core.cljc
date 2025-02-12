@@ -24,7 +24,13 @@
 
 (defn reset-interceptors! [] (u/safe-set interceptors []))
 
-(defn- do-intercept-opr [intercept-fn env data continuation]
-  (if (env/interceptors-blocked? env)
-    (continuation data)
-    (intercept-fn env data continuation)))
+(defn call-interceptors [opr env arg]
+  (if-let [ins (seq @interceptors)]
+    (if-not (env/interceptors-blocked? env)
+      (loop [ins ins, arg arg]
+        (if-let [i (first ins)]
+          (when-let [r ((:fn i) env opr arg)]
+            (recur (rest ins) r))
+          arg))
+      arg)
+    arg))

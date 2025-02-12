@@ -2,7 +2,6 @@
   (:require [agentlang.global-state :as gs]
             [agentlang.util :as u]
             [agentlang.component :as cn]
-            [agentlang.interpreter :as interp]
             [agentlang.lang.internal :as li]))
 
 (defn get-superuser-email []
@@ -17,7 +16,7 @@
 (def ^:private lookup-superuser
   (memoize
    (fn []
-     (when-let [r (interp/evaluate-dataflow (find-su-event))]
+     (when-let [r (gs/evaluate-dataflow (find-su-event))]
        (first r)))))
 
 (defn superuser? [user]
@@ -48,7 +47,7 @@
     (when (seq role-names)
       (or (cached role-names)
           (cache role-names
-                 (interp/evaluate-dataflow-internal
+                 (gs/evaluate-dataflow-internal
                   {:Agentlang.Kernel.Rbac/FindPrivilegeAssignments
                    {:RoleNames role-names}}))))))
 
@@ -56,7 +55,7 @@
   (fn [user-name]
     (or (cached user-name)
         (cache user-name
-               (interp/evaluate-dataflow-internal
+               (gs/evaluate-dataflow-internal
                 {:Agentlang.Kernel.Rbac/FindRoleAssignments
                  {:Assignee user-name}})))))
 
@@ -73,7 +72,7 @@
             (when (seq names)
               (or (cached names)
                   (cache names
-                         (interp/evaluate-dataflow-internal
+                         (gs/evaluate-dataflow-internal
                           {:Agentlang.Kernel.Rbac/FindPrivileges
                            {:Names names}}))))))))))
 
@@ -95,17 +94,13 @@
   (seq
    (filter
     (fn [p]
-      (and (some (partial has-priv-on-resource? resource)
-                 (map #(if (and ignore-refs (not= % :*))
-                         (li/root-path %)
-                         %)
-                      (:Resource p)))
+      (and (some (partial has-priv-on-resource? resource) (:Resource p))
            (some #{action :*} (:Actions p))))
     privs)))
 
 (defn- has-priv? [action userid arg]
   ;; Assumes - (not (superuser-email? userid))
-  (let [resource (:data arg)
+  (let [resource arg
         privs (privileges userid)
         predic (partial filter-privs privs action true)]
     (predic resource)))

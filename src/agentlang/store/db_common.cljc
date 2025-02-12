@@ -9,6 +9,7 @@
             [agentlang.store.util :as stu]
             [agentlang.store.sql :as sql]
             [agentlang.util.seq :as su]
+            [agentlang.global-state :as gs]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
             #?(:clj [agentlang.store.jdbc-internal :as ji])
@@ -426,21 +427,39 @@
   (let [attr-names (cn/query-attribute-names entity-name)]
     (mapv #(li/make-ref sql-alias (stu/attribute-column-name-kw %)) attr-names)))
 
-(defn- query-by-attributes [datasource [entity-name attrs sub-query]]
-  (let [select-all? (and (li/query-pattern? entity-name)
+(defn- maybe-add-rbac-joins [opr entity-name sql-pat]
+  )
+
+(defn- maybe-add-owner-query [attrs user]
+  (assoc attrs li/owner-attr? user))
+
+(defn- query-by-attributes [datasource [entity-name attrs sub-query can-read-all]]
+  (let [rbac-enabled? (gs/rbac-enabled?)
+        user (when rbac-enabled? (gs/active-user))
+        select-all? (and (li/query-pattern? entity-name)
                          (not (seq attrs)))
         entity-name (if select-all?
                       (li/normalize-name entity-name)
                       entity-name)
+        attrs (if rbac-enabled?
+                (if can-read-all
+                  attrs
+                  (maybe-add-owner-query attrs user))
+                attrs)
         sql-pat0
         (merge
          {:select (entity-column-names entity-name :t0) :from [[(as-table-name entity-name) :t0]]}
          (or (:? attrs)
-             (when-not select-all?
+             (when (seq attrs)
                {:where (vec (concat [:and] (fix-refs :t0 (vals attrs))))})))
         w0 (:where sql-pat0)
         w1 (if w0 (insert-deleted-clause w0 :t0) [:= (li/make-ref :t0 stu/deleted-flag-col-kw) false])
-        sql-pat (merge (assoc sql-pat0 :where w1) (when sub-query (generate-relationship-joins entity-name sub-query)))
+        sql-pat0 (merge (assoc sql-pat0 :where w1) (when sub-query (generate-relationship-joins entity-name sub-query)))
+        sql-pat (if rbac-enabled?
+                  (if can-read-all
+                    sql-pat0
+                    (maybe-add-rbac-joins :read entity-name sql-pat0))
+                  sql-pat0)
         sql-params (sql/raw-format-sql sql-pat)]
     (execute-fn!
      datasource

@@ -35,6 +35,14 @@
 
 (def path-identity :id)
 
+(def owner-attr :__owner__)
+(def owner-attr? :__owner__?)
+
+(def owner-attr-spec
+  {:type :Agentlang.Kernel.Lang/String
+   :optional true
+   :indexed true})
+
 (defn contains-spec-to-path [spec parent-id]
   (vec (assoc (reverse spec) 1 parent-id)))
 

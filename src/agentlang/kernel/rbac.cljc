@@ -40,7 +40,7 @@
  [xs]
  (let
   [xs (mapv u/string-as-keyword xs)]
-  (every? (fn* [p1__405#] (some #{p1__405#} oprs)) (set xs))))
+  (every? (fn* [p1__422#] (some #{p1__422#} oprs)) (set xs))))
 (entity
  :Agentlang.Kernel.Rbac/Privilege
  {:Name
@@ -100,21 +100,12 @@
                           {:type :String,
                            :default u/uuid-string,
                            li/path-identity true},
-                          :Actions
-                          {:check agentlang.kernel.rbac/crud-list?,
-                           :optional true},
-                          :Resource :Path,
-                          :ResourceId :Any,
-                          :Assignee {:type :String, :indexed true}}})
-(entity
- #:Agentlang.Kernel.Rbac{:OwnershipAssignment
-                         {:Name
-                          {:type :String,
-                           :default u/uuid-string,
-                           li/path-identity true},
-                          :Resource :Path,
-                          :ResourceId :Any,
+                          :CanRead {:type :Boolean, :default false},
+                          :CanUpdate {:type :Boolean, :default false},
+                          :CanDelete {:type :Boolean, :default false},
+                          :Resource {:type :Path, :indexed true},
+                          :ResourceId {:type :Any, :indexed true},
                           :Assignee {:type :String, :indexed true}}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "9a0812a0-8549-4e2d-8a95-1be927fc5e4c")
+ "e3ff6d89-3f9d-443c-abc5-14e2c9f502e1")

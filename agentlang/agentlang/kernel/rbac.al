@@ -74,17 +74,9 @@
   {:Name {:type :String
           :default u/uuid-string
           li/path-identity true}
-   :Actions {:check crud-list?
-             :optional true}
-   :Resource :Path
-   :ResourceId :Any
-   :Assignee {:type :String :indexed true}}})
-
-(entity
- {:OwnershipAssignment
-  {:Name {:type :String
-          :default u/uuid-string
-          li/path-identity true}
-   :Resource :Path
-   :ResourceId :Any
+   :CanRead {:type :Boolean :default false}
+   :CanUpdate {:type :Boolean :default false}
+   :CanDelete {:type :Boolean :default false}
+   :Resource {:type :Path :indexed true}
+   :ResourceId {:type :Any :indexed true}
    :Assignee {:type :String :indexed true}}})

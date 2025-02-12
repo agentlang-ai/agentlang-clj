@@ -1016,8 +1016,12 @@
 
 (def serializable-entity (partial serializable-record :entity))
 
-(defn- assoc-parent-spec [attrs]
-  (assoc attrs li/parent-attr li/parent-attr-spec li/path-attr li/path-attr-spec))
+(defn- assoc-system-attrs [attrs]
+  (assoc
+   attrs
+   li/parent-attr li/parent-attr-spec
+   li/path-attr li/path-attr-spec
+   li/owner-attr li/owner-attr-spec))
 
 (def ^:private audit-entity-attrs
   (preproc-attrs {:InstanceId :String
@@ -1035,7 +1039,7 @@
 (defn entity
   "A record that can be persisted with a unique id."
   ([n attrs raw-attrs]
-   (let [attrs (if raw-attrs (assoc-parent-spec attrs) attrs)]
+   (let [attrs (if raw-attrs (assoc-system-attrs attrs) attrs)]
      (when-let [r (serializable-entity n (preproc-attrs attrs))]
        (let [result (and (if raw-attrs (raw/entity r raw-attrs) true) r)]
          (and (audit-entity r raw-attrs) result)))))

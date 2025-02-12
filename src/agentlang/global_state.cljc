@@ -82,3 +82,17 @@
 (defn uninstall-standalone-patterns! [] (reset! standalone-patterns nil))
 
 (def fire-post-events (atom nil))
+
+(defn rbac-enabled? [] (:rbac @app-config))
+
+(def ^:private evaluate-dataflow-fn (atom nil))
+(def ^:private evaluate-dataflow-internal-fn (atom nil))
+
+(defn set-evaluate-dataflow-fn! [f] (reset! evaluate-dataflow-fn f))
+(defn set-evaluate-dataflow-internal-fn! [f] (reset! evaluate-dataflow-internal-fn f))
+
+(defn evaluate-dataflow [event-instance]
+  (@evaluate-dataflow-fn event-instance))
+
+(defn evaluate-dataflow-internal [event-instance]
+  (@evaluate-dataflow-internal-fn event-instance))
