@@ -9,6 +9,7 @@
 (entity
  :Role
  {:Name {:type :String
+         :unique true
          li/path-identity true}})
 
 (def ^:private oprs li/rbac-oprs)
@@ -21,6 +22,7 @@
  :Privilege
  {:Name {:type :String
          :default u/uuid-string
+         :unique true
          li/path-identity true}
   :Actions {:check crud-list?}
   :Resource :Edn})
@@ -28,6 +30,7 @@
 (entity
  :PrivilegeAssignment
  {:Name {:type :String
+         :unique true
          :default u/uuid-string
          li/path-identity true}
   :Role {:ref :Role.Name
@@ -38,6 +41,7 @@
 (entity
  :RoleAssignment
  {:Name {:type :String
+         :unique true
          :default u/uuid-string
          li/path-identity true}
   :Role {:ref :Role.Name

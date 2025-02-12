@@ -169,21 +169,22 @@
   (let [attrs (resolve-attribute-values env recname (cn/instance-attributes inst))]
     (cn/make-instance recname attrs false)))
 
-(defn- normalize-query-comparison [k v]
-  (let [c (count v)]
-    (cond
-      (= c 3) v
-      (= c 2) [(first v) k v]
-      :else (u/throw-ex (str "Invalid query syntax: " v)))))
+(defn- normalize-query-comparison [k v] `[~(first v) ~k ~@(rest v)])
 
 (defn- as-column-name [k]
   (keyword (su/attribute-column-name (li/normalize-name k))))
+
+(defn- resolve-query-value [env v]
+  (cond
+    (keyword? v) (resolve-reference env v)
+    (vector? v) `[~(first v) ~@(mapv (partial resolve-query-value env) (rest v))]
+    :else v))
 
 (defn- parse-query-value [env k v]
   (let [k (as-column-name k)]
     (cond
       (keyword? v) [:= k (resolve-reference env v)]
-      (vector? v) (normalize-query-comparison k (vec (concat [(first v)] (mapv parse-query-value (rest v)))))
+      (vector? v) (normalize-query-comparison k (vec (concat [(first v)] (mapv (partial resolve-query-value env) (rest v)))))
       :else [:= k v])))
 
 (defn- process-query-attribute-value [env [k v]]

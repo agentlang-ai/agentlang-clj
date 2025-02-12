@@ -338,6 +338,36 @@
     (check-bs [11 12] (lookup-b 1))
     (check-bs [13] (lookup-b 2))))
 
+(deftest query-operators
+  (defcomponent :QO
+    (entity
+     :QO/E
+     {:Id :Identity
+      :S :String
+      :I :Int})
+    (dataflow
+     :QO/FindEByS
+     {:QO/E
+      {:S? [:in :QO/FindEByS.Values]}})
+    (dataflow
+     :QO/FindEByI
+     {:QO/E
+      {:I? [:between :QO/FindEByI.Start :QO/FindEByI.End]}}))
+  (let [cre #(tu/fetch-result
+              {:QO/Create_E
+               {:Instance
+                {:QO/E {:S %1 :I %2}}}})
+        e? (partial cn/instance-of? :QO/E)
+        es (mapv cre ["a" "b" "c" "d" "e"] [1 2 3 4 5])
+        chkes (fn [n predic? es]
+                (is (= n (count es)))
+                (is (every? e? es))
+                (when predic?
+                  (is (every? identity (mapv predic? es)))))]
+    (chkes 5 nil es)
+    (chkes 2 (fn [e] (some #{(:S e)} #{"a" "c"})) (tu/fetch-result {:QO/FindEByS {:Values ["a" "c"]}}))
+    (chkes 3 (fn [e] (some #{(:I e)} #{2 3 4})) (tu/fetch-result {:QO/FindEByI {:Start 2 :End 4}}))))
+
 ;; (deftest compound-attributes
 ;;   (defcomponent :Df04
 ;;     (entity {:Df04/E1 {:A :Int}})
