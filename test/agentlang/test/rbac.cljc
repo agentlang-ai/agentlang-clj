@@ -66,95 +66,94 @@
 (def ^:private reset-events! lr/reset-events!)
 (def ^:private with-user tu/with-user)
 
-;; (deftest basic-rbac-dsl
-;;   (reset-events!)
-;;   (defcomponent :Brd
-;;     (entity
-;;      :Brd/E
-;;      {:rbac [{:roles ["brd-user"] :allow [:create]}
-;;              {:roles ["brd-manager"] :allow [:create :update :read]}]
-;;       :meta {li/owner-exclusive-crud false}
-;;       :Id {:type :Int tu/guid true}
-;;       :X :Int})
-;;     (dataflow
-;;      :Brd/InitUsers
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u1@brd.com"}}
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u2@brd.com"}}
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u3@brd.com"}}
-;;      {:Agentlang.Kernel.Rbac/RoleAssignment
-;;       {:Role "brd-user" :Assignee "u2@brd.com"}}
-;;      {:Agentlang.Kernel.Rbac/RoleAssignment
-;;       {:Role "brd-manager" :Assignee "u1@brd.com"}}))
-;;   (is (finalize-events))
-;;   (is (cn/instance-of?
-;;        :Agentlang.Kernel.Rbac/RoleAssignment
-;;        (tu/first-result {:Brd/InitUsers {}})))
-;;   (let [e? (partial cn/instance-of? :Brd/E)]
-;;     (call-with-rbac
-;;      (fn []
-;;        (let [create-e (fn [id]
-;;                         {:Brd/Create_E
-;;                          {:Instance
-;;                           {:Brd/E {:Id id :X (* id 100)}}}})
-;;              update-e (fn [id]
-;;                         {:Brd/Update_E
-;;                          {:Id id :Data {:X (* id 200)}}})
-;;              lookup-e (fn [id]
-;;                         {:Brd/Lookup_E {:Id id}})
-;;              delete-e (fn [id] {:Brd/Delete_E {:Id id}})
-;;              test-lookup (fn [user factor err e]
-;;                            (if err
-;;                              (let [r (tu/eval-all-dataflows (with-user user (lookup-e e)))]
-;;                                (or (tu/not-found? r) (tu/is-error #(identity r))))
-;;                              (let [r (tu/first-result (with-user user (lookup-e e)))]
-;;                                (is (e? r)) (is (= (:Id r) e)) (is (= (:X r) (* factor e))))))]
-;;          (tu/is-error #(tu/eval-all-dataflows (create-e 1)))
-;;          (is (e? (tu/first-result (with-user "u1@brd.com" (create-e 1)))))
-;;          (is (e? (tu/first-result (with-user "u2@brd.com" (create-e 2)))))
-;;          (tu/is-error #(tu/eval-all-dataflows (with-user "u3@brd.com" (create-e 3))))
-;;          (let [t1 (partial test-lookup "u1@brd.com" 100 false)
-;;                t2 (partial test-lookup "u2@brd.com" 100)
-;;                t3 (partial test-lookup "u3@brd.com" 100 true)]
-;;            (t1 1)
-;;            (t1 2)
-;;            (t2 false 2)
-;;            (t2 true 1)
-;;            (test-lookup "u3@brd.com" 100 true 1)
-;;            (t3 1)
-;;            (t3 2))
-;;          (let [test-update (fn [user err e]
-;;                              (if err
-;;                                (tu/is-error #(tu/eval-all-dataflows (with-user user (update-e e))))
-;;                                (let [r (tu/first-result (with-user user (update-e e)))]
-;;                                  (is (e? r))
-;;                                  (is (= (:Id r) e))
-;;                                  (is (= (:X r) (* e 200))))))
-;;                t1 (partial test-update "u1@brd.com" false)
-;;                t2 (partial test-update "u2@brd.com")
-;;                t3 (partial test-update "u3@brd.com" true)]
-;;            (t1 1)
-;;            (t1 2)
-;;            (test-lookup "u1@brd.com" 200 false 1)
-;;            (test-lookup "u1@brd.com" 200 false 2)
-;;            (t2 false 2)
-;;            (test-lookup "u2@brd.com" 200 false 2)
-;;            (t2 true 1)
-;;            (t3 1)
-;;            (t3 2)
-;;            (tu/is-error #(tu/eval-all-dataflows (with-user "u2@brd.com" (delete-e 1))))
-;;            (tu/is-error #(tu/eval-all-dataflows (with-user "u1@brd.com" (delete-e 2))))
-;;            (test-lookup "u1@brd.com" 200 false 1)
-;;            (test-lookup "u1@brd.com" 200 false 2)
-;;            (let [r (tu/first-result (with-user "u2@brd.com" (delete-e 2)))]
-;;              (is (e? r)) (is (= (:Id r) 2)))
-;;            (test-lookup "u1@brd.com" 200 true 2)
-;;            (test-lookup "u2@brd.com" 200 true 2)
-;;            (let [r (tu/first-result (with-user "u1@brd.com" (delete-e 1)))]
-;;              (is (e? r)) (is (= (:Id r) 1)))
-;;            (test-lookup "u1@brd.com" 200 true 1)))))))
+(deftest basic-rbac-dsl
+  (reset-events!)
+  (defcomponent :Brd
+    (entity
+     :Brd/E
+     {:rbac [{:roles ["brd-user"] :allow [:create]}
+             {:roles ["brd-manager"] :allow [:create :update :read]}]
+      :Id {:type :Int :id true}
+      :X :Int})
+    (dataflow
+     :Brd/InitUsers
+     {:Agentlang.Kernel.Identity/User
+      {:Email "u1@brd.com"}}
+     {:Agentlang.Kernel.Identity/User
+      {:Email "u2@brd.com"}}
+     {:Agentlang.Kernel.Identity/User
+      {:Email "u3@brd.com"}}
+     {:Agentlang.Kernel.Rbac/RoleAssignment
+      {:Role "brd-user" :Assignee "u2@brd.com"}}
+     {:Agentlang.Kernel.Rbac/RoleAssignment
+      {:Role "brd-manager" :Assignee "u1@brd.com"}}))
+  (is (finalize-events))
+  (is (cn/instance-of?
+       :Agentlang.Kernel.Rbac/RoleAssignment
+       (tu/fetch-result {:Brd/InitUsers {}})))
+  #_(let [e? (partial cn/instance-of? :Brd/E)]
+    (call-with-rbac
+     (fn []
+       (let [create-e (fn [id]
+                        {:Brd/Create_E
+                         {:Instance
+                          {:Brd/E {:Id id :X (* id 100)}}}})
+             update-e (fn [id]
+                        {:Brd/Update_E
+                         {:Id id :Data {:X (* id 200)}}})
+             lookup-e (fn [id]
+                        {:Brd/Lookup_E {:Id id}})
+             delete-e (fn [id] {:Brd/Delete_E {:Id id}})
+             test-lookup (fn [user factor err e]
+                           (if err
+                             (let [r (tu/eval-all-dataflows (with-user user (lookup-e e)))]
+                               (or (tu/not-found? r) (tu/is-error #(identity r))))
+                             (let [r (tu/first-result (with-user user (lookup-e e)))]
+                               (is (e? r)) (is (= (:Id r) e)) (is (= (:X r) (* factor e))))))]
+         (tu/is-error #(tu/eval-all-dataflows (create-e 1)))
+         (is (e? (tu/first-result (with-user "u1@brd.com" (create-e 1)))))
+         (is (e? (tu/first-result (with-user "u2@brd.com" (create-e 2)))))
+         (tu/is-error #(tu/eval-all-dataflows (with-user "u3@brd.com" (create-e 3))))
+         (let [t1 (partial test-lookup "u1@brd.com" 100 false)
+               t2 (partial test-lookup "u2@brd.com" 100)
+               t3 (partial test-lookup "u3@brd.com" 100 true)]
+           (t1 1)
+           (t1 2)
+           (t2 false 2)
+           (t2 true 1)
+           (test-lookup "u3@brd.com" 100 true 1)
+           (t3 1)
+           (t3 2))
+         (let [test-update (fn [user err e]
+                             (if err
+                               (tu/is-error #(tu/eval-all-dataflows (with-user user (update-e e))))
+                               (let [r (tu/first-result (with-user user (update-e e)))]
+                                 (is (e? r))
+                                 (is (= (:Id r) e))
+                                 (is (= (:X r) (* e 200))))))
+               t1 (partial test-update "u1@brd.com" false)
+               t2 (partial test-update "u2@brd.com")
+               t3 (partial test-update "u3@brd.com" true)]
+           (t1 1)
+           (t1 2)
+           (test-lookup "u1@brd.com" 200 false 1)
+           (test-lookup "u1@brd.com" 200 false 2)
+           (t2 false 2)
+           (test-lookup "u2@brd.com" 200 false 2)
+           (t2 true 1)
+           (t3 1)
+           (t3 2)
+           (tu/is-error #(tu/eval-all-dataflows (with-user "u2@brd.com" (delete-e 1))))
+           (tu/is-error #(tu/eval-all-dataflows (with-user "u1@brd.com" (delete-e 2))))
+           (test-lookup "u1@brd.com" 200 false 1)
+           (test-lookup "u1@brd.com" 200 false 2)
+           (let [r (tu/first-result (with-user "u2@brd.com" (delete-e 2)))]
+             (is (e? r)) (is (= (:Id r) 2)))
+           (test-lookup "u1@brd.com" 200 true 2)
+           (test-lookup "u2@brd.com" 200 true 2)
+           (let [r (tu/first-result (with-user "u1@brd.com" (delete-e 1)))]
+             (is (e? r)) (is (= (:Id r) 1)))
+           (test-lookup "u1@brd.com" 200 true 1)))))))
 
 ;; (deftest rbac-with-contains-relationship
 ;;   (reset-events!)

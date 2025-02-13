@@ -368,6 +368,27 @@
     (chkes 2 (fn [e] (some #{(:S e)} #{"a" "c"})) (tu/fetch-result {:QO/FindEByS {:Values ["a" "c"]}}))
     (chkes 3 (fn [e] (some #{(:I e)} #{2 3 4})) (tu/fetch-result {:QO/FindEByI {:Start 2 :End 4}}))))
 
+(deftest handle-cases
+  (defcomponent :HC
+    (entity
+     :HC/E
+     {:Id {:type :Int :id true}})
+    (record :HC/R {:Id :Int})
+    (dataflow
+     :HC/FindE
+     {:HC/E {:Id? :HC/FindE.Id}
+      li/except-tag
+      {:not-found {:HC/R {:Id :HC/FindE.Id}}}}))
+  (let [r1 (tu/fetch-result
+            {:HC/Create_E {:Instance {:HC/E {:Id 10}}}})
+        e? (partial cn/instance-of? :HC/E)
+        find-e #(tu/fetch-result {:HC/FindE {:Id %}})]
+    (is (e? r1))
+    (is (cn/same-instance? r1 (first (find-e 10))))
+    (let [r (find-e 20)]
+      (is (cn/instance-of? :HC/R r))
+      (is (= 20 (:Id r))))))
+
 ;; (deftest compound-attributes
 ;;   (defcomponent :Df04
 ;;     (entity {:Df04/E1 {:A :Int}})

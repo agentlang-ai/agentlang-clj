@@ -492,9 +492,23 @@
     [pat]))
 
 (defn evaluate-pattern [env pat]
-  (let [[pat sub-pats] (maybe-preprocecss-pattern env pat)]
+  (let [[condition-handlers pat]
+        (if (map? pat)
+          [(li/except-tag pat) (dissoc pat li/except-tag)]
+          [nil pat])
+        [pat sub-pats] (maybe-preprocecss-pattern env pat)]
     (if-let [handler (pattern-handler pat)]
-      (handler env pat sub-pats)
+      (try
+        (let [r (handler env pat sub-pats)
+              res (:result r)
+              no-data (or (nil? res) (and (seqable? res) (not (seq res))))]
+          (if-let [on-not-found (and no-data (:not-found condition-handlers))]
+            (evaluate-pattern env on-not-found)
+            r))
+        (catch #?(:clj Exception :cljs js/Error) ex
+          (if-let [on-error (:error condition-handlers)]
+            (evaluate-pattern env on-error)
+            (throw ex))))
       (u/throw-ex (str "Cannot handle invalid pattern " pat)))))
 
 (defn evaluate-dataflow

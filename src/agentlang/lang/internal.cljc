@@ -12,6 +12,7 @@
 (def id-attr? :__Id__?)
 (def id-attr-s (str id-attr))
 (def with-types-tag :with-types)
+(def except-tag :case)
 
 (def path-attr :__path__)
 (def path-attr? :__path__?)
