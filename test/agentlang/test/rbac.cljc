@@ -2,6 +2,7 @@
   (:require #?(:clj  [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [clojure.string :as s]
+            [agentlang.util :as u]
             [agentlang.component :as cn]
             [agentlang.auth]
             [agentlang.intercept.rbac.internal :as rbac]
@@ -48,10 +49,10 @@
   (let [[r1 r2 r3 r4]
         (mapv tu/fetch-result [:RoleMgmt/CreateUsers :RoleMgmt/CreateRoles
                                :RoleMgmt/AssignPrivileges :RoleMgmt/AssignRoles])]
-    (is (cn/instance-of? :Agentlang.Kernel.Identity/User (first r1)))
-    (is (cn/instance-of? :Agentlang.Kernel.Rbac/Role (first r2)))
-    (is (cn/instance-of? :Agentlang.Kernel.Rbac/PrivilegeAssignment (first r3)))
-    (is (cn/instance-of? :Agentlang.Kernel.Rbac/RoleAssignment (first r4)))
+    (is (cn/instance-of? :Agentlang.Kernel.Identity/User r1))
+    (is (cn/instance-of? :Agentlang.Kernel.Rbac/Role r2))
+    (is (cn/instance-of? :Agentlang.Kernel.Rbac/PrivilegeAssignment r3))
+    (is (cn/instance-of? :Agentlang.Kernel.Rbac/RoleAssignment r4))
     (let [ps1 (rbac/privileges "abc@abc.com")
           ps2 (rbac/privileges "xyz@xyz.com")
           p2 (first ps2)]

@@ -16,7 +16,7 @@
 (def ^:private lookup-superuser
   (memoize
    (fn []
-     (when-let [r (gs/evaluate-dataflow (find-su-event))]
+     (when-let [r (:result (gs/evaluate-dataflow (find-su-event)))]
        (first r)))))
 
 (defn superuser? [user]
@@ -47,17 +47,19 @@
     (when (seq role-names)
       (or (cached role-names)
           (cache role-names
-                 (gs/evaluate-dataflow-internal
-                  {:Agentlang.Kernel.Rbac/FindPrivilegeAssignments
-                   {:RoleNames role-names}}))))))
+                 (:result
+                  (gs/evaluate-dataflow-internal
+                   {:Agentlang.Kernel.Rbac/FindPrivilegeAssignments
+                    {:RoleNames role-names}})))))))
 
 (def ^:private role-assignments
   (fn [user-name]
     (or (cached user-name)
         (cache user-name
-               (gs/evaluate-dataflow-internal
-                {:Agentlang.Kernel.Rbac/FindRoleAssignments
-                 {:Assignee user-name}})))))
+               (:result
+                (gs/evaluate-dataflow-internal
+                 {:Agentlang.Kernel.Rbac/FindRoleAssignments
+                  {:Assignee user-name}}))))))
 
 (def ^:private admin-priv [{:Resource [:*] :Actions [:*]}])
 
@@ -72,9 +74,10 @@
             (when (seq names)
               (or (cached names)
                   (cache names
-                         (gs/evaluate-dataflow-internal
-                          {:Agentlang.Kernel.Rbac/FindPrivileges
-                           {:Names names}}))))))))))
+                         (:result
+                          (gs/evaluate-dataflow-internal
+                           {:Agentlang.Kernel.Rbac/FindPrivileges
+                            {:Names names}})))))))))))
 
 (defn- has-priv-on-resource? [resource priv-resource]
   (or (if (or (= :* priv-resource)

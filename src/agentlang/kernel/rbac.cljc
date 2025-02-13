@@ -40,7 +40,7 @@
  [xs]
  (let
   [xs (mapv u/string-as-keyword xs)]
-  (every? (fn* [p1__416#] (some #{p1__416#} oprs)) (set xs))))
+  (every? (fn* [p1__392#] (some #{p1__392#} oprs)) (set xs))))
 (entity
  :Agentlang.Kernel.Rbac/Privilege
  {:Name
@@ -80,8 +80,9 @@
 (dataflow
  :Agentlang.Kernel.Rbac/DeleteRoleAssignments
  [:delete
-  :Agentlang.Kernel.Rbac/RoleAssignment
-  {:Assignee :Agentlang.Kernel.Rbac/DeleteRoleAssignments.Assignee}])
+  #:Agentlang.Kernel.Rbac{:RoleAssignment
+                          {:Assignee?
+                           :Agentlang.Kernel.Rbac/DeleteRoleAssignments.Assignee}}])
 (dataflow
  :Agentlang.Kernel.Rbac/FindPrivilegeAssignments
  #:Agentlang.Kernel.Rbac{:PrivilegeAssignment
@@ -107,4 +108,4 @@
                           :Assignee {:type :String, :indexed true}}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "317215f3-54f9-44ca-99cf-32f857ee9be2")
+ "0eb2854e-c1fe-4a25-9397-2d5e0e0906ec")

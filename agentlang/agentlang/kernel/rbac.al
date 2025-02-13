@@ -58,7 +58,7 @@
 
 (dataflow
  :DeleteRoleAssignments
- [:delete :RoleAssignment {:Assignee :DeleteRoleAssignments.Assignee}])
+ [:delete {:RoleAssignment {:Assignee? :DeleteRoleAssignments.Assignee}}])
 
 (dataflow
  :FindPrivilegeAssignments

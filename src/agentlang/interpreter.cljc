@@ -499,28 +499,29 @@
 
 (defn evaluate-dataflow
   ([store env event-instance is-internal]
-   (binding [gs/active-event-context (:EventContext event-instance)]
-     (let [env0 (or env (env/bind-instance (env/make store nil) event-instance))
-           env (if is-internal
-                 (env/block-interceptors env0)
-                 (env/assoc-active-event env0 event-instance))]
-       (store/call-in-transaction
-        store
-        (fn [txn]
-          (let [txn-set? (when (and txn (not (gs/get-active-txn)))
-                           (gs/set-active-txn! txn)
-                           true)]
-            (try
-              (loop [df-patterns (cn/fetch-dataflow-patterns event-instance),
-                     pat-count 0, env env, result nil]
-                (if-let [pat (first df-patterns)]
-                  (let [pat-count (inc pat-count)
-                        env (env/bind-eval-state env pat pat-count)
-                        {env1 :env r :result} (evaluate-pattern env pat)]
-                    (recur (rest df-patterns) pat-count env1 r))
-                  (make-result env result)))
-              (finally
-                (when txn-set? (gs/set-active-txn! nil))))))))))
+   (let [event-instance (if (cn/an-instance? event-instance) event-instance (cn/make-instance event-instance))]
+     (binding [gs/active-event-context (:EventContext event-instance)]
+       (let [env0 (or env (env/bind-instance (env/make store nil) event-instance))
+             env (if is-internal
+                   (env/block-interceptors env0)
+                   (env/assoc-active-event env0 event-instance))]
+         (store/call-in-transaction
+          store
+          (fn [txn]
+            (let [txn-set? (when (and txn (not (gs/get-active-txn)))
+                             (gs/set-active-txn! txn)
+                             true)]
+              (try
+                (loop [df-patterns (cn/fetch-dataflow-patterns event-instance),
+                       pat-count 0, env env, result nil]
+                  (if-let [pat (first df-patterns)]
+                    (let [pat-count (inc pat-count)
+                          env (env/bind-eval-state env pat pat-count)
+                          {env1 :env r :result} (evaluate-pattern env pat)]
+                      (recur (rest df-patterns) pat-count env1 r))
+                    (make-result env result)))
+                (finally
+                  (when txn-set? (gs/set-active-txn! nil)))))))))))
   ([store event-instance] (evaluate-dataflow store nil event-instance false))
   ([event-instance] (evaluate-dataflow (store/get-default-store) nil event-instance false)))
 
