@@ -459,9 +459,6 @@
           (mapv (fn [opr] [:= (opr ipa-flag-cols) true]) oprs))]]
     (assoc sql-pat :join (concat join inv-privs-join))))
 
-(defn- maybe-add-owner-query [attrs user]
-  (assoc attrs li/owner-attr? user))
-
 (defn- query-by-attributes [datasource {entity-name :entity-name
                                         attrs :query-attributes
                                         sub-query :sub-query
@@ -487,11 +484,6 @@
         entity-name (if select-all?
                       (li/normalize-name entity-name)
                       entity-name)
-        attrs (if rbac-enabled?
-                (if can-read-all
-                  attrs
-                  (maybe-add-owner-query attrs user))
-                attrs)
         sql-pat0
         (merge
          {:select (entity-column-names entity-name :t0) :from [[(as-table-name entity-name) :t0]]}

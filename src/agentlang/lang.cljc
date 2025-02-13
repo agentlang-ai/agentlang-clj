@@ -1020,8 +1020,7 @@
   (assoc
    attrs
    li/parent-attr li/parent-attr-spec
-   li/path-attr li/path-attr-spec
-   li/owner-attr li/owner-attr-spec))
+   li/path-attr li/path-attr-spec))
 
 (def ^:private audit-entity-attrs
   (preproc-attrs {:InstanceId :String

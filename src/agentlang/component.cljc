@@ -555,14 +555,14 @@
     (set ks)))
 
 (def ^:private system-attribute-names #{li/id-attr li/path-attr
-                                        li/parent-attr li/owner-attr
-                                        li/meta-attr li/event-context})
+                                        li/parent-attr li/meta-attr
+                                        li/event-context})
 
 (defn user-attribute-names [schema]
   (set/difference (attribute-names schema) system-attribute-names))
 
 (defn query-attribute-names [entity-name]
-  (concat (user-attribute-names (find-entity-schema entity-name)) [li/path-attr li/parent-attr li/owner-attr]))
+  (concat (user-attribute-names (find-entity-schema entity-name)) [li/path-attr li/parent-attr]))
 
 (defn user-attributes [schema] (apply dissoc schema system-attribute-names))
 
