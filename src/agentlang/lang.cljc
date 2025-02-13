@@ -18,6 +18,7 @@
             [agentlang.subs :as subs]
             [agentlang.rule :as rule]
             [agentlang.util :as u]
+            [agentlang.store.util :as stu]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
             [agentlang.util.seq :as us]))
@@ -1035,11 +1036,27 @@
       (serializable-entity n audit-entity-attrs))
     entity-name))
 
+(defn- instance-privilege-entity [n]
+  (when-not (serializable-entity
+             (stu/inst-priv-entity n)
+             (assoc-system-attrs
+              {:Name {:type :Agentlang.Kernel.Lang/String
+                      :default u/uuid-string
+                      li/path-identity true}
+               :CanRead {:type :Agentlang.Kernel.Lang/Boolean :default false}
+               :CanUpdate {:type :Agentlang.Kernel.Lang/Boolean :default false}
+               :CanDelete {:type :Agentlang.Kernel.Lang/Boolean :default false}
+               :ResourcePath {:type :Agentlang.Kernel.Lang/String :indexed true}
+               :Assignee {:type :Agentlang.Kernel.Lang/String :indexed true}}))
+    (u/throw-ex (str "Failed to define instance-privilege-entity for " n))
+    n))
+
 (defn entity
   "A record that can be persisted with a unique id."
   ([n attrs raw-attrs]
    (let [attrs (if raw-attrs (assoc-system-attrs attrs) attrs)]
      (when-let [r (serializable-entity n (preproc-attrs attrs))]
+       (instance-privilege-entity n)
        (let [result (and (if raw-attrs (raw/entity r raw-attrs) true) r)]
          (and (audit-entity r raw-attrs) result)))))
   ([n attrs]

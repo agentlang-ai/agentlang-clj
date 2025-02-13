@@ -294,12 +294,16 @@
     (make-result env2 result)))
 
 (defn- handle-entity-create-pattern [env recname attrs alias]
-  (let [_ (rbac/can-create? recname)
-        inst (cn/make-instance recname (realize-attribute-values env recname attrs))
+  (when-not (rbac/can-create? recname)
+    (u/throw-ex (str "No permission to create instance of " recname)))
+  (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))
         resolver (rr/resolver-for-path recname)
+        store (env/get-store env)
         final-inst (if resolver
                      (r/call-resolver-create resolver env inst)
-                     (store/create-instance (env/get-store env) inst))
+                     (store/create-instance store inst))
+        _ (when (and (gs/rbac-enabled?) (cn/instance-of? recname final-inst))
+            (store/assign-owner store recname final-inst))
         env0 (env/bind-instance env recname final-inst)
         env1 (if alias (env/bind-variable env0 alias final-inst) env0)]
     (make-result env1 final-inst)))

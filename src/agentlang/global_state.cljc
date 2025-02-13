@@ -92,7 +92,7 @@
 (defn rbac-enabled? []
   (if kernel-mode
     false
-    (:rbac @app-config)))
+    (:rbac-enabled @app-config)))
 
 (def ^:private evaluate-dataflow-fn (atom nil))
 (def ^:private evaluate-dataflow-internal-fn (atom nil))

@@ -182,21 +182,13 @@
         (.printStackTrace ex)))
     view-name))
 
-(defn- inst-priv-table [entity-name]
-  (let [[c n] (li/split-path entity-name)]
-    (stu/entity-table-name (li/make-path c (str (name n) "_ipa")))))
-
 (defn create-schema
   "Create the schema, tables and indexes for the component."
   ([datasource component-name post-init]
    (let [scmname (stu/db-schema-for-component component-name)
          table-data (atom nil)
          create-views (atom nil)
-         component-meta-table (stu/component-meta-table-name component-name)
-         [inst-priv-schema ip-indexed ip-uq ip-cuq]
-          (when (gs/rbac-enabled?)
-            (let [scm (stu/find-record-schema :Agentlang.Kernel.Rbac/InstancePrivilegeAssignment)]
-              [scm (cn/indexed-attributes scm) (cn/unique-attributes scm) (cn/compound-unique-attributes scm)]))]
+         component-meta-table (stu/component-meta-table-name component-name)]
      (execute-fn!
       datasource
       (fn [txn]
@@ -213,10 +205,6 @@
                    (cn/unique-attributes schema)
                    (cn/compound-unique-attributes ename)
                    table-data)
-                  (when inst-priv-schema
-                    (create-relational-table
-                     txn inst-priv-schema (inst-priv-table ename)
-                     ip-indexed ip-uq ip-cuq table-data))
                   (execute-sql!
                    txn [(insert-entity-meta-sql
                          component-meta-table tabname
@@ -259,8 +247,11 @@
     (execute-fn!
      datasource
      #(do (when create-mode
-            (let [id-attr-name (cn/identity-attribute-name entity-name)
-                  id-val (id-attr-name instance)
+            (let [id-val (li/path-attr instance)
+                  [id-attr-name id-val] (if id-val
+                                          [li/path-attr id-val]
+                                          (let [n (cn/identity-attribute-name entity-name)]
+                                            [n (n instance)]))
                   [pstmt params] (purge-by-id-statement % tabname id-attr-name id-val)]
               (execute-stmt-once! % pstmt params)))
           (let [[pstmt params] (upsert-inst-statement % tabname nil [entity-name inst])]
@@ -451,7 +442,7 @@
 (defn- maybe-add-rbac-joins [oprs user entity-name sql-pat]
   (let [join (:join sql-pat)
         inv-privs-join
-        [[(keyword (inst-priv-table entity-name)) ipa-alias]
+        [[(keyword (stu/inst-priv-table entity-name)) ipa-alias]
          (concat
           [:and
            [:like (li/make-ref :t0 path-col) ipa-path]

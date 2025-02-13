@@ -2512,3 +2512,6 @@
 
 (defn full-path-from-references [_ _ _]
   (u/raise-not-implemented 'full-path-from-references))
+
+(defn force-cast-instance-type [new-type inst]
+  (assoc inst type-key new-type))

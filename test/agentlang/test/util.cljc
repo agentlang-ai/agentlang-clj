@@ -281,12 +281,6 @@
 (defn make-path [component-name record-name]
   (li/make-path [component-name record-name]))
 
-(defn not-found? [r]
-  (cond
-    (map? r) (= :not-found (:status r))
-    (vector? r) (not-found? (first r))
-    :else false))
-
 (defn sort-by-attr [attr xs]
   (sort #(compare (attr %1) (attr %2)) xs))
 
@@ -295,7 +289,7 @@
 
 (defn call-with-rbac [f]
   (let [old-config (gs/get-app-config)]
-    (gs/merge-app-config! old-config {:rbac-enabled true})
+    (gs/merge-app-config! {:rbac-enabled true})
     (try
       (f)
       (finally
