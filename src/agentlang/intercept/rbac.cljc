@@ -48,3 +48,14 @@
 
 (defn make [_] ; config is not used
   {:name :rbac :fn run})
+
+(defn- can-do? [predic arg]
+  (cond
+    gs/audit-trail-mode true
+    (gs/rbac-enabled?) (predic (gs/active-user) arg)
+    :else true))
+
+(def can-create? (partial can-do? ri/can-create?))
+(def can-read? (partial can-do? ri/can-read?))
+(def can-update? (partial can-do? ri/can-update?))
+(def can-delete? (partial can-do? ri/can-delete?))

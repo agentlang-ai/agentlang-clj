@@ -448,21 +448,39 @@
    :update (li/make-ref ipa-alias :CanUpdate)
    :delete (li/make-ref ipa-alias :CanDelete)})
 
-(defn- maybe-add-rbac-joins [opr user entity-name sql-pat]
+(defn- maybe-add-rbac-joins [oprs user entity-name sql-pat]
   (let [join (:join sql-pat)
         inv-privs-join
         [[(keyword (inst-priv-table entity-name)) ipa-alias]
-         [:and
-          [:like (li/make-ref :t0 path-col) ipa-path]
-          [:= ipa-user user]
-          [:= (opr ipa-flag-cols) true]]]]
+         (concat
+          [:and
+           [:like (li/make-ref :t0 path-col) ipa-path]
+           [:= ipa-user user]]
+          (mapv (fn [opr] [:= (opr ipa-flag-cols) true]) oprs))]]
     (assoc sql-pat :join (concat join inv-privs-join))))
 
 (defn- maybe-add-owner-query [attrs user]
   (assoc attrs li/owner-attr? user))
 
-(defn- query-by-attributes [datasource [entity-name attrs sub-query can-read-all]]
+(defn- query-by-attributes [datasource {entity-name :entity-name
+                                        attrs :query-attributes
+                                        sub-query :sub-query
+                                        rbac :rbac}]
   (let [rbac-enabled? (gs/rbac-enabled?)
+        [can-read-all can-update-all can-delete-all update-delete-tag]
+        (when rbac-enabled?
+          [(:can-read-all? rbac)
+           (:can-update-all? rbac)
+           (:can-delete-all? rbac)
+           (:follow-up-operation rbac)])
+        update-delete-tag
+        (when update-delete-tag
+          (cond
+            (and (= :update update-delete-tag)
+                 can-update-all) nil
+            (and (= :delete update-delete-tag)
+                 can-delete-all) nil
+            :else update-delete-tag))
         user (when rbac-enabled? (gs/active-user))
         select-all? (and (li/query-pattern? entity-name)
                          (not (seq attrs)))
@@ -485,8 +503,10 @@
         sql-pat0 (merge (assoc sql-pat0 :where w1) (when sub-query (generate-relationship-joins entity-name sub-query)))
         sql-pat (if rbac-enabled?
                   (if can-read-all
-                    sql-pat0
-                    (maybe-add-rbac-joins :read user entity-name sql-pat0))
+                    (if update-delete-tag
+                      (maybe-add-rbac-joins [update-delete-tag] user entity-name sql-pat0)
+                      sql-pat0)
+                    (maybe-add-rbac-joins (concat [:read] update-delete-tag) user entity-name sql-pat0))
                   sql-pat0)
         sql-params (sql/raw-format-sql sql-pat)]
     (execute-fn!

@@ -83,7 +83,16 @@
 
 (def fire-post-events (atom nil))
 
-(defn rbac-enabled? [] (:rbac @app-config))
+(def ^:dynamic kernel-mode nil)
+
+(defn kernel-call [f]
+  (binding [kernel-mode true]
+    (f)))
+
+(defn rbac-enabled? []
+  (if kernel-mode
+    false
+    (:rbac @app-config)))
 
 (def ^:private evaluate-dataflow-fn (atom nil))
 (def ^:private evaluate-dataflow-internal-fn (atom nil))

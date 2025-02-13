@@ -8,7 +8,7 @@
             [agentlang.env :as env]
             [agentlang.store :as store]
             [agentlang.store.util :as su]
-            [agentlang.intercept :as intercept]
+            [agentlang.intercept.rbac :as rbac]
             [agentlang.global-state :as gs]
             [agentlang.lang.internal :as li]
             [agentlang.resolver.registry :as rr]
@@ -20,47 +20,47 @@
 (declare evaluate-dataflow-in-environment evaluate-pattern
          evaluate-attr-expr)
 
-(def ^:private resolve-reference env/lookup)
+(def ^:private follow-reference env/lookup)
 
-(defn- resolve-references-in-attributes-helper [env attrs]
+(defn- follow-references-in-attributes-helper [env attrs]
   (into
    {}
    (mapv (fn [[k v]]
            [k (cond
-                (keyword? v) (resolve-reference env v)
-                (vector? v) (mapv #(resolve-reference env %) v)
+                (keyword? v) (follow-reference env v)
+                (vector? v) (mapv #(follow-reference env %) v)
                 (list? v) (evaluate-attr-expr env nil k v)
                 :else v)])
          attrs)))
 
-(defn- resolve-references-in-attributes [env pat]
+(defn- follow-references-in-attributes [env pat]
   (if-let [recname (li/record-name pat)]
     (let [alias (:as pat)
           attrs (li/record-attributes pat)
-          new-attrs (resolve-references-in-attributes-helper env attrs)]
+          new-attrs (follow-references-in-attributes-helper env attrs)]
       (merge {recname (into {} new-attrs)}
              (when alias {:as alias})))
     pat))
 
-(defn- resolve-references-in-map [env m]
+(defn- follow-references-in-map [env m]
   (let [res (mapv (fn [[k v]]
                     [k (cond
                          (= k :as) v
                          (map? v)
                          (if (li/instance-pattern? v)
-                           (resolve-references-in-attributes env v)
-                           (resolve-references-in-attributes-helper env v))
-                         (keyword? v) (resolve-reference env v)
+                           (follow-references-in-attributes env v)
+                           (follow-references-in-attributes-helper env v))
+                         (keyword? v) (follow-reference env v)
                          :else v)])
                   m)]
     (into {} res)))
 
 (defn- resolve-all-references [env pat]
   (if (keyword? pat)
-    (resolve-reference env pat)
+    (follow-reference env pat)
     (w/postwalk
      #(if (map? %)
-        (resolve-references-in-map env %)
+        (follow-references-in-map env %)
         %)
      pat)))
 
@@ -81,7 +81,7 @@
   (let [final-exp (mapv #(if (keyword? %)
                            (if (= % attr-name)
                              (u/throw-ex (str "Unqualified self-reference " % " not allowed in " exp))
-                             (or (% attrs) (resolve-reference env %)))
+                             (or (% attrs) (follow-reference env %)))
                            %)
                         exp)]
     (li/evaluate (seq final-exp))))
@@ -148,7 +148,7 @@
                  {}
                  (mapv (fn [[k v]]
                          [k (if (keyword? v)
-                              (resolve-reference env v)
+                              (follow-reference env v)
                               v)])
                        attrs))
          new-attrs
@@ -177,14 +177,14 @@
 
 (defn- resolve-query-value [env v]
   (cond
-    (keyword? v) (resolve-reference env v)
+    (keyword? v) (follow-reference env v)
     (vector? v) `[~(first v) ~@(mapv (partial resolve-query-value env) (rest v))]
     :else v))
 
 (defn- parse-query-value [env k v]
   (let [k (as-column-name k)]
     (cond
-      (keyword? v) [:= k (resolve-reference env v)]
+      (keyword? v) [:= k (follow-reference env v)]
       (vector? v) (normalize-query-comparison k (vec (concat [(first v)] (mapv (partial resolve-query-value env) (rest v)))))
       :else [:= k v])))
 
@@ -198,7 +198,7 @@
                      %
                      (if (some #{%} attr-names)
                        (as-column-name %)
-                       (resolve-reference env %)))
+                       (follow-reference env %)))
                    %)
                 clause)))
 
@@ -211,8 +211,7 @@
 
 (defn- handle-upsert [env resolver recname update-attrs instances]
   (when (seq instances)
-    (let [can-update-all (intercept/call-interceptors-for-update env recname)
-          updated-instances (mapv #(resolve-instance-values env recname (merge % update-attrs)) instances)
+    (let [updated-instances (mapv #(resolve-instance-values env recname (merge % update-attrs)) instances)
           rs
           (if resolver
             (every? identity (mapv #(r/call-resolver-update resolver env %) updated-instances))
@@ -250,8 +249,7 @@
       args))
 
 (defn- handle-query-pattern [env recname [attrs sub-pats] alias]
-  (let [can-read-all (intercept/call-interceptors-for-read env recname)
-        select-clause (:? attrs)
+  (let [select-clause (:? attrs)
         [update-attrs query-attrs] (when-not select-clause (lift-attributes-for-update attrs))
         attrs (if query-attrs query-attrs attrs)
         attrs0 (when (seq attrs)
@@ -264,9 +262,21 @@
         bet-rels-query (when-let [rels (:bet-rels sub-pats)] (resolve-all-references env rels))
         rels-query {:cont-rels cont-rels-query
                     :bet-rels bet-rels-query}
+        qfordel? (:*query-for-delete* env)
+        can-read-all (rbac/can-read? recname)
+        can-update-all (when update-attrs (rbac/can-update? recname))
+        can-delete-all (:*can-delete-all* env)
+        qparams {:entity-name recname
+                 :query-attributes attrs0
+                 :sub-query rels-query
+                 :rbac {:can-read-all? can-read-all
+                        :can-update-all? can-update-all
+                        :can-delete-all? can-delete-all
+                        :follow-up-operation (or (when qfordel? :delete)
+                                                 (when update-attrs :update))}}
         result0 (if resolver
-                  (r/call-resolver-query resolver env [recname attrs0 rels-query can-read-all])
-                  (store/do-query (env/get-store env) nil [recname attrs0 rels-query can-read-all]))
+                  (r/call-resolver-query resolver env qparams)
+                  (store/do-query (env/get-store env) nil qparams))
         env0 (if (seq result0) (env/bind-instances env recname result0) env)
         result (if update-attrs (handle-upsert env0 resolver recname update-attrs result0) result0)
         env1 (if (seq result) (env/bind-instances env0 recname result) env0)
@@ -274,7 +284,7 @@
     (make-result env2 result)))
 
 (defn- handle-entity-create-pattern [env recname attrs alias]
-  (let [_ (intercept/call-interceptors-for-create env recname)
+  (let [_ (rbac/can-create? recname)
         inst (cn/make-instance recname (resolve-attribute-values env recname attrs))
         resolver (rr/resolver-for-path recname)
         final-inst (if resolver
@@ -301,7 +311,7 @@
 
 (defn- resolve-pattern [env pat]
   (if (keyword? pat)
-    (resolve-reference env pat)
+    (follow-reference env pat)
     (first (:result (evaluate-pattern env (as-query-pattern pat))))))
 
 (defn- maybe-set-parent [env relpat recname recattrs]
@@ -384,17 +394,22 @@
       (when-not (and (keyword? pattern)
                      (cn/entity? pattern))
         (u/throw-ex (str "Second element must be a valid entity name - [:delete " pattern " " params "]"))))
-    (let [can-delete-all (intercept/call-interceptors-for-delete env (if (keyword? pattern) pattern (extract-entity-name pattern)))]
+    (let [ent-name (if (keyword? pattern) pattern (extract-entity-name pattern))
+          can-delete-all (rbac/can-delete? ent-name)]
       (if (or purge? delall?)
-        (or (call-resolver-delete pattern params) (store/delete-all store pattern purge?))
-        (let [r (evaluate-pattern env pattern)
+        (if can-delete-all
+          (or (call-resolver-delete pattern params) (store/delete-all store pattern purge?))
+          (u/throw-ex (str "No permission to delete all instances of " ent-name)))
+        (let [enriched-env (if can-delete-all
+                             (assoc env :*can-delete-all* true)
+                             (assoc env :*query-for-delete* true))
+              r (evaluate-pattern enriched-env pattern)
               env (:env r), insts (:result r)]
           (when-let [entity-name (and (seq insts) (cn/instance-type-kw (first insts)))]
-            (let [insts (if can-delete-all insts (intercept/call-interceptors-for-delete env insts))]
-              (or (call-resolver-delete entity-name insts)
-                  (doseq [inst insts]
-                    (store/delete-by-id store entity-name li/path-attr (li/path-attr inst)))
-                  insts))))))))
+            (or (call-resolver-delete entity-name insts)
+                (doseq [inst insts]
+                  (store/delete-by-id store entity-name li/path-attr (li/path-attr inst)))
+                insts)))))))
 
 (defn- parse-expr-pattern [pat]
   (let [[h t] (split-with #(not= % :as) pat)]
@@ -419,7 +434,7 @@
     (make-result env result)))
 
 (defn- ref-handler [env pat _]
-  (make-result env (resolve-reference env pat)))
+  (make-result env (follow-reference env pat)))
 
 (defn- pattern-handler [pat]
   (cond
@@ -446,7 +461,7 @@
     (if-let [from (:from pat)]
       (let [alias (:as pat)
             pat (dissoc pat :from :alias)
-            data0 (if (keyword? from) (resolve-reference env from) from)
+            data0 (if (keyword? from) (follow-reference env from) from)
             data1 (if (map? data0) data0 (u/throw-ex (str "Failed to resolve " from " in " pat)))
             data (if (cn/an-instance? data1) (cn/instance-attributes data1) data1)
             k (first (keys pat))
@@ -493,7 +508,8 @@
   (evaluate-dataflow nil env event-instance false))
 
 (defn evaluate-dataflow-internal [event-instance]
-  (evaluate-dataflow (store/get-default-store) nil event-instance true))
+  (gs/kernel-call
+   #(evaluate-dataflow (store/get-default-store) nil event-instance true)))
 
 (gs/set-evaluate-dataflow-fn! evaluate-dataflow)
 (gs/set-evaluate-dataflow-internal-fn! evaluate-dataflow-internal)
