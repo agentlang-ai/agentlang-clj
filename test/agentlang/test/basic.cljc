@@ -978,43 +978,42 @@
 ;;     (is (cn/instance-of? :MultiInheritsMeta/E e2))
 ;;     (is (= [1 2 "hi" nil 200 300] [(:X e2) (:Y e2) (:S e2) (:A e2) (:B e2) (:C e1)]))))
 
-;; (deftest edn-attribute
-;;   (defcomponent :EdnAttr
-;;     (entity :EdnAttr/Form {:Title :String
-;;                            :X :Int
-;;                            :Y {:type :Int
-;;                                :expr '(+ :X 10)}
-;;                            :View :Edn})
-;;     (event :EdnAttr/RenderLoginForm {:Title :String
-;;                                      :X :Int
-;;                                      :Y :Int})
-;;     (dataflow :EdnAttr/RenderLoginForm
-;;               {:EdnAttr/Form
-;;                {:Title :EdnAttr/RenderLoginForm.Title
-;;                 :X :EdnAttr/RenderLoginForm.X
-;;                 :View [:q#
-;;                        [:div [:p [:b [:uq# :EdnAttr/RenderLoginForm.Title]]]
-;;                         [:div
-;;                          [:label "Username: "]
-;;                          [:textinput [:size [:uq# '(* :EdnAttr/RenderLoginForm.Y 10)]]]]
-;;                         [:div
-;;                          [:label "Password: "]
-;;                          [:password [:size 40]]]
-;;                         [:div
-;;                          [:submit [:text "Login"]]]]]}}))
-;;   (let [result (first
-;;                 (tu/fresult
-;;                  (e/eval-all-dataflows
-;;                   {:EdnAttr/RenderLoginForm
-;;                    {:Title "Login" :X 150 :Y 12}})))]
-;;     (is (cn/instance-of? :EdnAttr/Form result))
-;;     (is (= 160 (:Y result)))
-;;     (is (= [:div [:p [:b "Login"]]]
-;;            [(first (:View result))
-;;             (second (:View result))]))
-;;     (is (= 120 (-> (nthrest (:View result) 2)
-;;                    first
-;;                    (nth 2) second second)))))
+#_(deftest edn-attribute
+  (defcomponent :EdnAttr
+    (entity :EdnAttr/Form {:Title :String
+                           :X :Int
+                           :Y {:type :Int
+                               :expr '(+ :X 10)}
+                           :View :Edn})
+    (event :EdnAttr/RenderLoginForm {:Title :String
+                                     :X :Int
+                                     :Y :Int})
+    (dataflow :EdnAttr/RenderLoginForm
+              {:EdnAttr/Form
+               {:Title :EdnAttr/RenderLoginForm.Title
+                :X :EdnAttr/RenderLoginForm.X
+                :View [:q#
+                       [:div [:p [:b [:uq# :EdnAttr/RenderLoginForm.Title]]]
+                        [:div
+                         [:label "Username: "]
+                         [:textinput [:size [:uq# '(* :EdnAttr/RenderLoginForm.Y 10)]]]]
+                        [:div
+                         [:label "Password: "]
+                         [:password [:size 40]]]
+                        [:div
+                         [:submit [:text "Login"]]]]]}}))
+  (let [result (tu/fetch-result
+                {:EdnAttr/RenderLoginForm
+                 {:Title "Login" :X 150 :Y 12}})]
+    (u/pprint result)
+    (is (cn/instance-of? :EdnAttr/Form result))
+    (is (= 160 (:Y result)))
+    (is (= [:div [:p [:b "Login"]]]
+           [(first (:View result))
+            (second (:View result))]))
+    (is (= 120 (-> (nthrest (:View result) 2)
+                   first
+                   (nth 2) second second)))))
 
 ;; (deftest patterns-in-attributes
 ;;   (defcomponent :PA

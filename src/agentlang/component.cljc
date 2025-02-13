@@ -889,8 +889,12 @@
                  (if-let [ascm (find-attribute-schema
                                 component (when-not (contains? icns component) recversion)
                                 aref)]
-                   (apply-attribute-validation
-                    aname ascm (preproc-attribute-value attributes aname typname))
+                   (try
+                     (apply-attribute-validation
+                      aname ascm (preproc-attribute-value attributes aname typname))
+                     (catch #?(:clj Exception :cljs :default) ex
+                       (u/throw-ex (str "Validation failed for " (li/make-path recname) " - "
+                                        #?(:clj (.getMessage ex) :cljs ex)))))
                    (ensure-attribute-is-instance-of typname aname attributes)))))
             attributes)))))
 

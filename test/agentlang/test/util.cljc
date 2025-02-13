@@ -1,25 +1,26 @@
 (ns agentlang.test.util
-  (:require [agentlang.intercept :as ec]
-            [agentlang.interpreter :as intrp]
-            [agentlang.component :as cn]
-            [agentlang.lang.internal :as li]
-            #?(:clj  [clojure.test :refer [is]]
-               :cljs [cljs.test :refer-macros [is]])
-            [agentlang.util :as u]
-            [agentlang.store :as store]
-            [clojure.spec.gen.alpha :as gen]
+  (:require [clojure.spec.gen.alpha :as gen]
             [clojure.spec.alpha :as s]
             [cljc.java-time.local-date-time :as local-date-time]
             [cljc.java-time.local-date :as local-date]
             [cljc.java-time.local-time :as local-time]
             [cljc.java-time.zone-offset :refer [utc]]
-            [cljc.java-time.month :as month]))
+            [cljc.java-time.month :as month]
+            [agentlang.component :as cn]
+            [agentlang.lang.internal :as li]
+            [agentlang.interpreter :as intrp]
+            #?(:clj  [clojure.test :refer [is]]
+               :cljs [cljs.test :refer-macros [is]])
+            [agentlang.util :as u]
+            [agentlang.store :as store]
+            [agentlang.global-state :as gs]))
 
 (defn interpret-dataflow [event-instance]
   (intrp/evaluate-dataflow (store/get-default-store) event-instance))
 
 (defn fetch-result [event]
-  (:result (interpret-dataflow (cn/make-instance event))))
+  (let [event (if (map? event) event {event {}})]
+    (:result (interpret-dataflow (cn/make-instance event)))))
 
 (defn- report-expected-ex [ex]
   (println (str "Expected exception in test: "
@@ -292,14 +293,13 @@
 (defn type-check [t]
   (partial cn/instance-of? t))
 
-(defn call-with-rbac
-  ([f finalize]
-   (is (= [:rbac] (ec/init-interceptors [:rbac])))
-   (try
-     (f)
-     (finally
-       (finalize))))
-  ([f] (call-with-rbac f ec/reset-interceptors!)))
+(defn call-with-rbac [f]
+  (let [old-config (gs/get-app-config)]
+    (gs/merge-app-config! old-config {:rbac-enabled true})
+    (try
+      (f)
+      (finally
+        (gs/set-app-config! old-config)))))
 
 (defn with-user [email event]
   (cn/assoc-event-context-user

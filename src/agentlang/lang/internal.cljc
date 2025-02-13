@@ -131,8 +131,8 @@
 (defn parsed-path? [x]
   (and (coll? x) (not (map? x))))
 
-(def ^:private quote-tag :q#)
-(def ^:private unquote-tag :uq#)
+(def quote-tag :q#)
+(def unquote-tag :uq#)
 
 (defn quoted? [x]
   (and (vector? x)
@@ -144,6 +144,9 @@
 
 (defn as-quoted [x]
   [quote-tag x])
+
+(def quoted-value second)
+(def unquoted-value second)
 
 (defn special-form? [x]
   (and (vector? x)

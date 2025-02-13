@@ -20,18 +20,24 @@
 (declare evaluate-dataflow-in-environment evaluate-pattern
          evaluate-attr-expr)
 
-(def ^:private follow-reference env/lookup)
+(defn- follow-reference [env k]
+  (let [v (env/lookup env k)]
+    (if (li/quoted? v)
+      (li/quoted-value v)
+      v)))
+
+(defn- evaluate-attribute-value [env k v]
+  (cond
+    (keyword? v) (follow-reference env v)
+    (li/quoted? v) (:result (evaluate-pattern env v))
+    (vector? v) (mapv #(evaluate-attribute-value env k %) v)
+    (list? v) (evaluate-attr-expr env nil k v)
+    :else v))
 
 (defn- follow-references-in-attributes-helper [env attrs]
   (into
    {}
-   (mapv (fn [[k v]]
-           [k (cond
-                (keyword? v) (follow-reference env v)
-                (vector? v) (mapv #(follow-reference env %) v)
-                (list? v) (evaluate-attr-expr env nil k v)
-                :else v)])
-         attrs)))
+   (mapv (fn [[k v]] [k (evaluate-attribute-value env k v)]) attrs)))
 
 (defn- follow-references-in-attributes [env pat]
   (if-let [recname (li/record-name pat)]
@@ -55,7 +61,7 @@
                   m)]
     (into {} res)))
 
-(defn- resolve-all-references [env pat]
+(defn- realize-all-references [env pat]
   (if (keyword? pat)
     (follow-reference env pat)
     (w/postwalk
@@ -141,7 +147,7 @@
                ordered-deps (build-ordered-deps attrs-deps)]
            (mapv (fn [k] [k (get exp-attrs k)]) ordered-deps))))))
 
-(defn- resolve-attribute-values
+(defn- realize-attribute-values
   ([env recname attrs compute-compound-attributes?]
    (let [has-exp? (first (filter (fn [[_ v]] (list? v)) attrs))
          attrs1 (into
@@ -159,15 +165,19 @@
                  (recur (rest exp-attrs) (assoc attrs k newv)))
                attrs))
            attrs1)]
-     (if compute-compound-attributes?
-       (if-let [[efns _] (cn/all-computed-attribute-fns recname nil)]
-         (assoc-fn-attributes env new-attrs efns)
-         new-attrs)
-       new-attrs)))
-  ([env recname attrs] (resolve-attribute-values env recname attrs true)))
+     (into
+      {}
+      (mapv (fn [[k v]]
+              [k (evaluate-attribute-value env k v)])
+            (if compute-compound-attributes?
+              (if-let [[efns _] (cn/all-computed-attribute-fns recname nil)]
+                (assoc-fn-attributes env new-attrs efns)
+                new-attrs)
+              new-attrs)))))
+  ([env recname attrs] (realize-attribute-values env recname attrs true)))
 
-(defn- resolve-instance-values [env recname inst]
-  (let [attrs (resolve-attribute-values env recname (cn/instance-attributes inst))]
+(defn- realize-instance-values [env recname inst]
+  (let [attrs (realize-attribute-values env recname (cn/instance-attributes inst))]
     (cn/make-instance recname attrs false)))
 
 (defn- normalize-query-comparison [k v] `[~(first v) ~k ~@(rest v)])
@@ -175,17 +185,17 @@
 (defn- as-column-name [k]
   (keyword (su/attribute-column-name (li/normalize-name k))))
 
-(defn- resolve-query-value [env v]
+(defn- realize-query-value [env v]
   (cond
     (keyword? v) (follow-reference env v)
-    (vector? v) `[~(first v) ~@(mapv (partial resolve-query-value env) (rest v))]
+    (vector? v) `[~(first v) ~@(mapv (partial realize-query-value env) (rest v))]
     :else v))
 
 (defn- parse-query-value [env k v]
   (let [k (as-column-name k)]
     (cond
       (keyword? v) [:= k (follow-reference env v)]
-      (vector? v) (normalize-query-comparison k (vec (concat [(first v)] (mapv (partial resolve-query-value env) (rest v)))))
+      (vector? v) (normalize-query-comparison k (vec (concat [(first v)] (mapv (partial realize-query-value env) (rest v)))))
       :else [:= k v])))
 
 (defn- process-query-attribute-value [env [k v]]
@@ -211,7 +221,7 @@
 
 (defn- handle-upsert [env resolver recname update-attrs instances]
   (when (seq instances)
-    (let [updated-instances (mapv #(resolve-instance-values env recname (merge % update-attrs)) instances)
+    (let [updated-instances (mapv #(realize-instance-values env recname (merge % update-attrs)) instances)
           rs
           (if resolver
             (every? identity (mapv #(r/call-resolver-update resolver env %) updated-instances))
@@ -257,9 +267,9 @@
                    {:? (preprocess-select-clause env recname select-clause)}
                    (into {} (mapv (partial process-query-attribute-value env) attrs))))
         resolver (rr/resolver-for-path recname)
-        cont-rels-query0 (when-let [rels (:cont-rels sub-pats)] (resolve-all-references env rels))
+        cont-rels-query0 (when-let [rels (:cont-rels sub-pats)] (realize-all-references env rels))
         [recname attrs0 cont-rels-query] (maybe-merge-cont-rels-query-to-attributes [recname attrs0 cont-rels-query0])
-        bet-rels-query (when-let [rels (:bet-rels sub-pats)] (resolve-all-references env rels))
+        bet-rels-query (when-let [rels (:bet-rels sub-pats)] (realize-all-references env rels))
         rels-query {:cont-rels cont-rels-query
                     :bet-rels bet-rels-query}
         qfordel? (:*query-for-delete* env)
@@ -285,7 +295,7 @@
 
 (defn- handle-entity-create-pattern [env recname attrs alias]
   (let [_ (rbac/can-create? recname)
-        inst (cn/make-instance recname (resolve-attribute-values env recname attrs))
+        inst (cn/make-instance recname (realize-attribute-values env recname attrs))
         resolver (rr/resolver-for-path recname)
         final-inst (if resolver
                      (r/call-resolver-create resolver env inst)
@@ -295,7 +305,7 @@
     (make-result env1 final-inst)))
 
 (defn- handle-event-pattern [env recname attrs alias]
-  (let [inst (cn/make-instance recname (resolve-attribute-values env recname attrs))
+  (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))
         resolver (rr/resolver-for-path recname)
         final-result (if resolver
                        (r/call-resolver-eval resolver env inst)
@@ -305,11 +315,11 @@
     (make-result env1 final-result)))
 
 (defn- handle-record-pattern [env recname attrs alias]
-  (let [inst (cn/make-instance recname (resolve-attribute-values env recname attrs))
+  (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))
         env0 (if alias (env/bind-variable env alias inst) env)]
     (make-result env0 inst)))
 
-(defn- resolve-pattern [env pat]
+(defn- realize-pattern [env pat]
   (if (keyword? pat)
     (follow-reference env pat)
     (first (:result (evaluate-pattern env (as-query-pattern pat))))))
@@ -320,7 +330,7 @@
       (u/throw-ex (str "Relationship name " k " should be a query in " relpat)))
     (let [relname (li/normalize-name k)
           parent (fetch-parent relname recname relpat)]
-      (if-let [result (resolve-pattern env (k relpat))]
+      (if-let [result (realize-pattern env (k relpat))]
         (do (when-not (cn/instance-of? parent result)
               (u/throw-ex (str "Result of " relpat " is not of type " parent)))
             (let [ppath (li/path-attr result)]
@@ -336,7 +346,7 @@
                         (u/throw-ex (str "Cannot create relationship " recname " for " inst)))
                       inst))]
     (doseq [[relname relspec] bet-rels]
-      (let [other-inst (resolve-pattern env relspec)
+      (let [other-inst (realize-pattern env relspec)
             _ (when-not (cn/an-instance? other-inst)
                 (u/throw-ex (str "Cannot create between-relationship " relname ". "
                                  "Query failed - " relspec)))
@@ -411,6 +421,13 @@
                   (store/delete-by-id store entity-name li/path-attr (li/path-attr inst)))
                 insts)))))))
 
+(defn- handle-quote [env pat]
+  (w/prewalk
+   #(if (li/unquoted? %)
+      (:result (evaluate-pattern env (li/unquoted-value %)))
+      %)
+   pat))
+
 (defn- parse-expr-pattern [pat]
   (let [[h t] (split-with #(not= % :as) pat)]
     (if (seq t)
@@ -424,11 +441,13 @@
 
 (defn- expr-handler [env pat _]
   (let [[pat alias] (parse-expr-pattern pat)
+        tag (first pat)
         result
         (apply
-         (case (first pat)
-           :delete delete-instances
-           (u/throw-ex (str "Invalid expression - " pat)))
+         (cond
+           (= :delete tag) delete-instances
+           (= li/quote-tag tag) handle-quote
+           :else (u/throw-ex (str "Invalid expression - " pat)))
          env (rest pat))
         env (if alias (env/bind-variable env alias result) env)]
     (make-result env result)))
@@ -480,27 +499,28 @@
 
 (defn evaluate-dataflow
   ([store env event-instance is-internal]
-   (let [env0 (or env (env/bind-instance (env/make store nil) event-instance))
-         env (if is-internal
-               (env/block-interceptors env0)
-               (env/assoc-active-event env0 event-instance))]
-     (store/call-in-transaction
-      store
-      (fn [txn]
-        (let [txn-set? (when (and txn (not (gs/get-active-txn)))
-                         (gs/set-active-txn! txn)
-                         true)]
-          (try
-            (loop [df-patterns (cn/fetch-dataflow-patterns event-instance),
-                   pat-count 0, env env, result nil]
-              (if-let [pat (first df-patterns)]
-                (let [pat-count (inc pat-count)
-                      env (env/bind-eval-state env pat pat-count)
-                      {env1 :env r :result} (evaluate-pattern env pat)]
-                  (recur (rest df-patterns) pat-count env1 r))
-                (make-result env result)))
-            (finally
-              (when txn-set? (gs/set-active-txn! nil)))))))))
+   (binding [gs/active-event-context (:EventContext event-instance)]
+     (let [env0 (or env (env/bind-instance (env/make store nil) event-instance))
+           env (if is-internal
+                 (env/block-interceptors env0)
+                 (env/assoc-active-event env0 event-instance))]
+       (store/call-in-transaction
+        store
+        (fn [txn]
+          (let [txn-set? (when (and txn (not (gs/get-active-txn)))
+                           (gs/set-active-txn! txn)
+                           true)]
+            (try
+              (loop [df-patterns (cn/fetch-dataflow-patterns event-instance),
+                     pat-count 0, env env, result nil]
+                (if-let [pat (first df-patterns)]
+                  (let [pat-count (inc pat-count)
+                        env (env/bind-eval-state env pat pat-count)
+                        {env1 :env r :result} (evaluate-pattern env pat)]
+                    (recur (rest df-patterns) pat-count env1 r))
+                  (make-result env result)))
+              (finally
+                (when txn-set? (gs/set-active-txn! nil))))))))))
   ([store event-instance] (evaluate-dataflow store nil event-instance false))
   ([event-instance] (evaluate-dataflow (store/get-default-store) nil event-instance false)))
 
