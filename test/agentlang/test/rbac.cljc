@@ -248,12 +248,17 @@
            check-cba check-ba
            lookup-cba (fn [with-user c] (tu/invoke (with-user {:Rwc/LookupCBA {:C c}})))
            lookup-all-a (fn [with-user] (tu/invoke (with-user {:Rwc/LookupAll_A {}})))
-           check-as (fn [aids res]
-                      (is (= (count aids) (count res)))
-                      (is (every? a? res))
-                      (is (= (set aids) (set (mapv :Id res)))))
+           check-ids (fn [t? ids res]
+                       (is (= (count ids) (count res)))
+                       (is (every? t? res))
+                       (is (= (set ids) (set (mapv :Id res)))))
+           check-as (partial check-ids a?)
            delete-a (fn [with-user id]
-                      (tu/invoke (with-user {:Rwc/Delete_A {:path (li/vec-to-path [:Rwc/A id])}})))]
+                      (tu/invoke (with-user {:Rwc/Delete_A {:path (li/vec-to-path [:Rwc/A id])}})))
+           lookup-all-b (fn [with-user] (tu/invoke (with-user {:Rwc/LookupAll_B {}})))
+           check-bs-ids (partial check-ids b?)
+           lookup-all-c (fn [with-user] (tu/invoke (with-user {:Rwc/LookupAll_C {}})))
+           check-cs-ids (partial check-ids c?)]
        (is (a? (tu/invoke (with-u1 {:Rwc/Create_A {:Instance {:Rwc/A {:Id 1 :X 100}}}}))))
        (is (a? (tu/invoke (with-u2 {:Rwc/Create_A {:Instance {:Rwc/A {:Id 2 :X 300}}}}))))
        (is (b? (tu/invoke (with-u1 {:Rwc/CreateB {:Id 101 :Y 10 :A 1}}))))
@@ -305,15 +310,13 @@
        (check-as [1] (delete-a with-u1 1))
        (check-as [2] (lookup-all-a with-u1))
        (check-as [2] (lookup-all-a with-u2))
-       #_(do
-       (let [bs (tu/invoke {:Rwc/LookupAll_B {}})]
-         (is (= 1 (count bs)))
-         (is (every? b? bs)))
-       (let [cs (tu/invoke {:Rwc/LookupAll_C {}})]
-         (is (= 1 (count cs)))
-         (is (every? c? cs)))
-       (is (nil? (seq (lookup-bs 1))))
-       (check-bs 2 (lookup-bs 2)))))))
+       (check-bs-ids [103] (lookup-all-b with-u2))
+       (check-bs-ids [103] (lookup-all-b with-u1))
+       (check-cs-ids [207] (lookup-all-c with-u2))
+       (check-cs-ids [206 207] (lookup-all-c with-u1))
+       (is (nil? (seq (lookup-bs with-u1 1))))
+       (check-bs-ids [103] (lookup-bs with-u2 2))
+       (check-bs-ids [103] (lookup-bs with-u1 2))))))
 
 ;; (deftest instance-privs
 ;;   (reset-events!)
