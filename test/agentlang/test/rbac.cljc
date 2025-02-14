@@ -14,6 +14,14 @@
             #?(:clj  [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
 
+(defn- with-rbac [defcomponent-fn]
+  (lr/reset-events!)
+  (let [cname (defcomponent-fn)]
+    (is (lr/finalize-events))
+    (is (cn/instance-of?
+         :Agentlang.Kernel.Rbac/RoleAssignment
+         (tu/invoke {(li/make-path cname :InitUsers) {}})))))
+
 (deftest role-management
   (defcomponent :RoleMgmt
     (dataflow
@@ -62,35 +70,27 @@
       (is (= [:C] (:Resource p2))))))
 
 (def ^:private call-with-rbac tu/call-with-rbac)
-(def ^:private finalize-events lr/finalize-events)
-(def ^:private reset-events! lr/reset-events!)
 (def ^:private with-user tu/with-user)
 
 (deftest basic-rbac-dsl
-  (reset-events!)
-  (defcomponent :Brd
-    (entity
-     :Brd/E
-     {:rbac [{:roles ["brd-user"] :allow [:create]}
-             {:roles ["brd-manager"] :allow [:create :update :read]}]
-      :Id {:type :Int :id true}
-      :X :Int})
-    (dataflow
-     :Brd/InitUsers
-     {:Agentlang.Kernel.Identity/User
-      {:Email "u1@brd.com"}}
-     {:Agentlang.Kernel.Identity/User
-      {:Email "u2@brd.com"}}
-     {:Agentlang.Kernel.Identity/User
-      {:Email "u3@brd.com"}}
-     {:Agentlang.Kernel.Rbac/RoleAssignment
-      {:Role "brd-user" :Assignee "u2@brd.com"}}
-     {:Agentlang.Kernel.Rbac/RoleAssignment
-      {:Role "brd-manager" :Assignee "u1@brd.com"}}))
-  (is (finalize-events))
-  (is (cn/instance-of?
-       :Agentlang.Kernel.Rbac/RoleAssignment
-       (tu/invoke {:Brd/InitUsers {}})))
+  (with-rbac
+    #(defcomponent :Brd
+      (entity
+       :Brd/E
+       {:rbac [{:roles ["brd-user"] :allow [:create]}
+               {:roles ["brd-manager"] :allow [:create :update :read]}]
+        :Id {:type :Int :id true}
+        :X :Int})
+      (dataflow
+       :Brd/InitUsers
+       {:Agentlang.Kernel.Identity/User
+        {:Email "u1@brd.com"}}
+       {:Agentlang.Kernel.Identity/User
+        {:Email "u2@brd.com"}}
+       {:Agentlang.Kernel.Rbac/RoleAssignment
+        {:Role "brd-user" :Assignee "u2@brd.com"}}
+       {:Agentlang.Kernel.Rbac/RoleAssignment
+        {:Role "brd-manager" :Assignee "u1@brd.com"}})))
   (let [e? (partial cn/instance-of? :Brd/E)]
     (call-with-rbac
      (fn []
@@ -145,68 +145,175 @@
          (check-es 1 (tu/invoke (with-u1 (lookup-all-es))))
          (check-es 1 (tu/invoke (with-u2 (lookup-all-es)))))))))
 
-;; (deftest rbac-with-contains-relationship
-;;   (reset-events!)
-;;   (defcomponent :Wcr
-;;     (entity
-;;      :Wcr/E
-;;      {:rbac [{:roles ["wcr-user"] :allow [:create :update :read]}]
-;;       :Id {:type :Int tu/guid true}
-;;       :X :Int})
-;;     (entity
-;;      :Wcr/F
-;;      {:Id {:type :Int tu/guid true}
-;;       :Y :Int})
-;;     (relationship
-;;      :Wcr/R
-;;      {:meta {:contains [:Wcr/E :Wcr/F]}})
-;;     (dataflow
-;;      :Wcr/InitUsers
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u1@wcr.com"}}
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u2@wcr.com"}}
-;;      {:Agentlang.Kernel.Rbac/RoleAssignment
-;;       {:Role "wcr-user" :Assignee "u1@wcr.com"}}))
-;;   (is (finalize-events))
-;;   (is (cn/instance-of?
-;;        :Agentlang.Kernel.Rbac/RoleAssignment
-;;        (tu/first-result {:Wcr/InitUsers {}})))
-;;   (let [e? (partial cn/instance-of? :Wcr/E)]
-;;     (call-with-rbac
-;;      (fn []
-;;        (let [fq (partial pi/as-fully-qualified-path :Wcr)
-;;              e? (partial cn/instance-of? :Wcr/E)
-;;              f? (partial cn/instance-of? :Wcr/F)
-;;              create-e (fn [id]
-;;                         {:Wcr/Create_E
-;;                          {:Instance
-;;                           {:Wcr/E {:Id id :X (* id 100)}}}})
-;;              delete-e (fn [id]
-;;                         {:Wcr/Delete_E {:Id id}})
-;;              create-f (fn [e id]
-;;                         {:Wcr/Create_F
-;;                          {:Instance
-;;                           {:Wcr/F
-;;                            {:Id id
-;;                             :Y (* 5 id)}}
-;;                           li/path-attr (str "/E/" e "/R")}})
-;;              lookup-fs (fn [e]
-;;                          {:Wcr/LookupAll_F
-;;                           {li/path-attr (fq (str "path://E/" e "/R/F/%"))}})
-;;              with-u1 (partial with-user "u1@wcr.com")
-;;              e1 (tu/first-result (with-u1 (create-e 1)))
-;;              [f1 f2 :as fs] (mapv #(tu/first-result (with-u1 (create-f 1 %))) [10 20])]
-;;          (is (e? e1))
-;;          (is (= 2 (count fs)))
-;;          (is (every? f? fs))
-;;          (is (every? (fn [f] (some #{"u1@wcr.com"} (cn/owners f))) fs))
-;;          (is (tu/is-error #(tu/eval-all-dataflows (with-user "u2@wcr.com" (create-e 2)))))
-;;          (let [fs (tu/result (with-u1 (lookup-fs 1)))]
-;;            (is (= 2 (count fs)))
-;;            (is (every? f? fs)))
-;;          (is (e? (tu/first-result (with-u1 (delete-e 1)))))
-;;          (is (tu/not-found? (tu/eval-all-dataflows (with-u1 (lookup-fs 1))))))))))
+(deftest rbac-with-contains
+  (with-rbac
+    #(defcomponent :Rwc
+       (dataflow
+        :Rwc/InitUsers
+        {:Agentlang.Kernel.Identity/User
+         {:Email "u1@rwc.com"}}
+        {:Agentlang.Kernel.Identity/User
+         {:Email "u2@rwc.com"}}
+        {:Agentlang.Kernel.Rbac/RoleAssignment
+         {:Role "rwc-user" :Assignee "u2@rwc.com"}}
+        {:Agentlang.Kernel.Rbac/RoleAssignment
+         {:Role "rwc-manager" :Assignee "u1@rwc.com"}})
+       (entity :Rwc/A {:Id {:type :Int :id true} :X :Int
+                       :rbac [{:roles ["rwc-user"] :allow [:create]}
+                              {:roles ["rwc-manager"] :allow [:create :update :read]}]})
+       (entity :Rwc/B {:Id {:type :Int :id true} :Y :Int})
+       (entity :Rwc/C {:Id {:type :Int :id true} :Z :Int})
+       (relationship :Rwc/AB {:meta {:contains [:Rwc/A :Rwc/B]}})
+       (relationship :Rwc/BC {:meta {:contains [:Rwc/B :Rwc/C]}})
+       (dataflow
+        :Rwc/CreateB
+        {:Rwc/B {:Id :Rwc/CreateB.Id
+                 :Y :Rwc/CreateB.Y}
+         :Rwc/AB {:Rwc/A {:Id? :Rwc/CreateB.A}}})
+       (dataflow
+        :Rwc/LookupAB
+        {:Rwc/B? {}
+         :Rwc/AB? {:Rwc/A {:Id :Rwc/LookupAB.A}}})
+       (dataflow
+        :Rwc/LookupABbyX
+        {:Rwc/B? {}
+         :Rwc/AB? {:Rwc/A {:X :Rwc/LookupABbyX.X}}})
+       (dataflow
+        :Rwc/CreateC
+        {:Rwc/C {:Id :Rwc/CreateC.Id
+                 :Z :Rwc/CreateC.Z}
+         :Rwc/BC {:Rwc/B {:Id :Rwc/CreateC.B}
+                  :Rwc/AB? {:Rwc/A {:Id :Rwc/CreateC.A}}}})
+       (dataflow
+        :Rwc/LookupABC
+        {:Rwc/C? {}
+         :Rwc/BC? {:Rwc/B {:Id :Rwc/LookupABC.B}
+                   :Rwc/AB {:Rwc/A {:Id :Rwc/LookupABC.A}}}})
+       (dataflow
+        :Rwc/UpdateC
+        {:Rwc/C {:Id? :Rwc/UpdateC.C
+                 :Z '(* 10 :Rwc/C.Z)}
+         :Rwc/BC? {:Rwc/B {:Id :Rwc/UpdateC.B}
+                   :Rwc/AB {:Rwc/A {:Id :Rwc/UpdateC.A}}}})
+       (dataflow
+        :Rwc/LookupABCbyZ
+        {:Rwc/C {:Z? :Rwc/LookupABCbyZ.Z}
+         :Rwc/BC? {:Rwc/B {:Id :Rwc/LookupABCbyZ.B}
+                   :Rwc/AB {:Rwc/A {:Id :Rwc/LookupABCbyZ.A}}}})
+       (dataflow
+        :Rwc/LookupBA
+        {:Rwc/A? {}
+         :Rwc/AB? {:Rwc/B {:Id :Rwc/LookupBA.B}}})
+       (dataflow
+        :Rwc/LookupCBA
+        {:Rwc/A? {}
+         :Rwc/AB? {:Rwc/B {}
+                   :Rwc/BC {:Rwc/C {:Id :Rwc/LookupCBA.C}}}})))
+  (call-with-rbac
+   (fn []
+     (let [a? (partial cn/instance-of? :Rwc/A)
+           b? (partial cn/instance-of? :Rwc/B)
+           c? (partial cn/instance-of? :Rwc/C)
+           with-u1 (partial with-user "u1@rwc.com")
+           with-u2 (partial with-user "u2@rwc.com")
+           lookup-bs (fn [with-user id] (tu/invoke (with-user {:Rwc/LookupAB {:A id}})))
+           lookup-bs-by-x (fn [with-user x] (tu/invoke (with-user {:Rwc/LookupABbyX {:X x}})))
+           check-paths (fn [aid b]
+                         (is (b? b))
+                         (is (= (cn/instance-path b)
+                                (li/vec-to-path (vec (concat [:Rwc/A aid :Rwc/AB :Rwc/B] [(:Id b)]))))))
+           check-bs (fn [aid bs]
+                      (is (seq bs))
+                      (is (every? b? bs))
+                      (doseq [b bs] (check-paths aid b)))
+           create-c (fn [with-user id z b a]
+                      (tu/invoke
+                       (with-user
+                         {:Rwc/CreateC {:Id id :Z z :B b :A a}})))
+           lookup-cs (fn [with-user b a] (tu/invoke (with-user {:Rwc/LookupABC {:B b :A a}})))
+           check-cs (fn [n s cs]
+                      (is (count cs) n)
+                      (is (every? c? cs))
+                      (is (= s (apply + (mapv :Z cs)))))
+           lookup-all-cs (fn [with-user z b a]
+                           (tu/invoke (with-user {:Rwc/LookupABCbyZ {:Z z :B b :A a}})))
+           check-a (fn [id inst]
+                     (is (a? inst))
+                     (is (= id (:Id inst))))
+           update-c (fn [with-user c b a] (tu/invoke (with-user {:Rwc/UpdateC {:C c :B b :A a}})))
+           lookup-ba (fn [with-user b] (tu/invoke (with-user {:Rwc/LookupBA {:B b}})))
+           check-ba (fn [aid res]
+                      (is (= 1 (count res)))
+                      (check-a aid (first res)))
+           check-cba check-ba
+           lookup-cba (fn [with-user c] (tu/invoke (with-user {:Rwc/LookupCBA {:C c}})))
+           lookup-all-a (fn [with-user] (tu/invoke (with-user {:Rwc/LookupAll_A {}})))
+           check-as (fn [aids res]
+                      (is (= (count aids) (count res)))
+                      (is (every? a? res))
+                      (is (= (set aids) (set (mapv :Id res)))))
+           delete-a (fn [with-user id]
+                      (tu/invoke (with-user {:Rwc/Delete_A {:path (li/vec-to-path [:Rwc/A id])}})))]
+       (is (a? (tu/invoke (with-u1 {:Rwc/Create_A {:Instance {:Rwc/A {:Id 1 :X 100}}}}))))
+       (is (a? (tu/invoke (with-u2 {:Rwc/Create_A {:Instance {:Rwc/A {:Id 2 :X 300}}}}))))
+       (is (b? (tu/invoke (with-u1 {:Rwc/CreateB {:Id 101 :Y 10 :A 1}}))))
+       (tu/is-error #(tu/invoke (with-u2 {:Rwc/CreateB {:Id 102 :Y 11 :A 1}})))
+       (is (b? (tu/invoke (with-u1 {:Rwc/CreateB {:Id 102 :Y 11 :A 1}}))))
+       (is (b? (tu/invoke (with-u2 {:Rwc/CreateB {:Id 103 :Y 12 :A 2}}))))
+       (is (not (seq (lookup-bs with-u2 1))))
+       (check-bs 1 (lookup-bs with-u1 1))
+       (check-bs 2 (lookup-bs with-u2 2))
+       (check-bs 2 (lookup-bs with-u1 2))
+       (is (not (seq (lookup-bs-by-x with-u2 1))))
+       (check-bs 1 (lookup-bs-by-x with-u1 100))
+       (check-bs 2 (lookup-bs-by-x with-u2 300))
+       (check-bs 2 (lookup-bs-by-x with-u1 300))
+       (tu/is-error #(create-c with-u2 201 30 101 1))
+       (is (c? (create-c with-u1 201 30 101 1)))
+       (is (c? (create-c with-u1 202 40 101 1)))
+       (is (c? (create-c with-u1 203 40 101 1)))
+       (is (c? (create-c with-u1 204 50 102 1)))
+       (is (c? (create-c with-u1 205 60 102 1)))
+       (is (c? (create-c with-u1 206 70 103 2)))
+       (is (c? (create-c with-u2 207 80 103 2)))
+       (tu/is-error #(lookup-cs with-u2 101 1))
+       (check-cs 3 (+ 40 40 30) (lookup-cs with-u1 101 1))
+       (tu/is-error #(lookup-cs with-u2 102 1))
+       (check-cs 2 (+ 50 60) (lookup-cs with-u1 102 1))
+       (check-cs 2 (+ 70 80) (lookup-cs with-u1 103 2))
+       (check-cs 1 80 (lookup-cs with-u2 103 2))
+       (tu/is-error #(lookup-all-cs with-u2 40 101 1))
+       (check-cs 2 80 (lookup-all-cs with-u1 40 101 1))
+       (check-cs 1 30 (lookup-all-cs with-u1 30 101 1))
+       (check-cs 1 60 (lookup-all-cs with-u1 60 102 1))
+       (is (not (seq (lookup-all-cs with-u2 60 102 1))))
+       (check-cs 1 70 (lookup-all-cs with-u1 70 103 2))
+       (is (not (seq (lookup-all-cs with-u2 70 103 2))))
+       (check-cs 1 80  (lookup-all-cs with-u2 80 103 2))
+       (is (not (update-c with-u2 201 101 1)))
+       (check-cs 1 300 (update-c with-u1 201 101 1))
+       (check-cs 3 (+ 40 40 300) (lookup-cs with-u1 101 1))
+       (is (nil? (seq (lookup-ba with-u2 101))))
+       (check-ba 1 (lookup-ba with-u1 101))
+       (is (not (seq (lookup-ba with-u2 102))))
+       (check-ba 1 (lookup-ba with-u1 102))
+       (check-cba 2 (lookup-cba with-u1 206))
+       (check-cba 2 (lookup-cba with-u2 206))
+       (check-as [1 2] (lookup-all-a with-u1))
+       (check-as [2] (lookup-all-a with-u2))
+       (is (not (delete-a with-u2 1)))
+       (check-as [1] (delete-a with-u1 1))
+       (check-as [2] (lookup-all-a with-u1))
+       (check-as [2] (lookup-all-a with-u2))
+       #_(do
+       (let [bs (tu/invoke {:Rwc/LookupAll_B {}})]
+         (is (= 1 (count bs)))
+         (is (every? b? bs)))
+       (let [cs (tu/invoke {:Rwc/LookupAll_C {}})]
+         (is (= 1 (count cs)))
+         (is (every? c? cs)))
+       (is (nil? (seq (lookup-bs 1))))
+       (check-bs 2 (lookup-bs 2)))))))
 
 ;; (deftest instance-privs
 ;;   (reset-events!)

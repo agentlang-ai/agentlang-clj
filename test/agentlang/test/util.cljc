@@ -53,7 +53,8 @@
 
 (defn finalize-component [component]
   (finalize-kernel-components)
-  (store/force-init-schema (store/get-default-store) component))
+  (store/force-init-schema (store/get-default-store) component)
+  component)
 
 (defmacro defcomponent [component & body]
   `(do (agentlang.lang/component ~component)

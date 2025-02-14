@@ -342,7 +342,7 @@
               (assoc recattrs
                      li/parent-attr ppath
                      li/path-attr (str ppath "," (li/vec-to-path [relname recname li/id-attr])))))
-        (u/throw-ex (str "Query " relpat " failed to lookup " parent " for " recname))))))
+        (u/throw-ex (str "Failed to lookup " parent " for " recname))))))
 
 (defn- create-between-relationships [env bet-rels recname result]
   (when-let [inst (when-let [r (:result result)]
