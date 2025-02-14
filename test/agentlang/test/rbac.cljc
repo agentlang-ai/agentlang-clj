@@ -94,16 +94,16 @@
   (let [e? (partial cn/instance-of? :Brd/E)]
     (call-with-rbac
      (fn []
-       (let [create-e (fn [id]
+       (let [as-path (fn [id] (li/vec-to-path [:Brd/E id]))
+             create-e (fn [id]
                         {:Brd/Create_E
                          {:Instance
                           {:Brd/E {:Id id :X (* id 100)}}}})
-             update-e (fn [id]
+             update-e (fn [id new-x]
                         {:Brd/Update_E
-                         {:Id id :Data {:X (* id 200)}}})
+                         {:path (as-path id) :Data {:X new-x}}})
              lookup-all-es (constantly {:Brd/LookupAll_E {}})
-             lookup-e (fn [id]
-                        {:Brd/Lookup_E {:Id id}})
+             lookup-e (fn [id] {:Brd/Lookup_E {:path (as-path id)}})
              check-es (fn [n es]
                         (is (= n (count es)))
                         (is (every? e? es)))
@@ -111,19 +111,39 @@
                        (is (e? e))
                        (is (= x (:X e)))
                        (is (= id (:Id e))))
-             delete-e (fn [id] (tu/invoke {:Brd/Delete_E {:Id id}}))
+             delete-e (fn [id] {:Brd/Delete_E {:path (as-path id)}})
              with-u1 (partial with-user "u1@brd.com")
              with-u2 (partial with-user "u2@brd.com")]
          (tu/is-error #(tu/invoke (create-e 1)))
          (is (e? (tu/invoke (with-u1 (create-e 1)))))
          (is (e? (tu/invoke (with-u2 (create-e 2)))))
+         (is (e? (tu/invoke (with-u2 (create-e 3)))))
          (is (not (seq (tu/invoke (lookup-all-es)))))
-         (check-es 2 (tu/invoke (with-u1 (lookup-all-es))))
-         (check-es 1 (tu/invoke (with-u2 (lookup-all-es))))
-         (is (nil? (tu/invoke (with-u2 (update-e 1)))))
+         (check-es 3 (tu/invoke (with-u1 (lookup-all-es))))
+         (check-es 2 (tu/invoke (with-u2 (lookup-all-es))))
+         (is (nil? (seq (tu/invoke (with-u2 (lookup-e 1))))))
+         (check-e 2 200 (first (tu/invoke (with-u2 (lookup-e 2)))))
+         (check-e 3 300 (first (tu/invoke (with-u2 (lookup-e 3)))))
          (check-e 1 100 (first (tu/invoke (with-u1 (lookup-e 1)))))
-         (check-e 1 200 (first (tu/invoke (with-u1 (update-e 1)))))
-         (check-e 1 200 (first (tu/invoke (with-u1 (lookup-e 1))))))))))
+         (check-e 2 200 (first (tu/invoke (with-u1 (lookup-e 2)))))
+         (check-e 3 300 (first (tu/invoke (with-u1 (lookup-e 3)))))
+         (is (nil? (tu/invoke (with-u2 (update-e 1 200)))))
+         (check-e 1 100 (first (tu/invoke (with-u1 (lookup-e 1)))))
+         (check-e 1 200 (first (tu/invoke (with-u1 (update-e 1 200)))))
+         (check-e 1 200 (first (tu/invoke (with-u1 (lookup-e 1)))))
+         (check-e 2 400 (first (tu/invoke (with-u2 (update-e 2 400)))))
+         (check-e 2 400 (first (tu/invoke (with-u2 (lookup-e 2)))))
+         (check-e 2 600 (first (tu/invoke (with-u1 (update-e 2 600)))))
+         (check-e 2 600 (first (tu/invoke (with-u2 (lookup-e 2)))))
+         (is (nil? (seq (tu/invoke (with-u2 (delete-e 1))))))
+         (check-e 1 200 (first (tu/invoke (with-u1 (lookup-e 1)))))
+         (check-e 1 200 (first (tu/invoke (with-u1 (delete-e 1)))))
+         (is (nil? (seq (tu/invoke (with-u1 (lookup-e 1))))))
+         (check-e 2 600 (first (tu/invoke (with-u2 (delete-e 2)))))
+         (is (nil? (seq (tu/invoke (with-u2 (lookup-e 2))))))
+         (check-e 3 300 (first (tu/invoke (with-u1 (lookup-all-es)))))
+         (check-es 1 (tu/invoke (with-u1 (lookup-all-es))))
+         (check-es 1 (tu/invoke (with-u2 (lookup-all-es)))))))))
 
 ;; (deftest rbac-with-contains-relationship
 ;;   (reset-events!)

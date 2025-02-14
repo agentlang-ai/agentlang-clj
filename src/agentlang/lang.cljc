@@ -857,15 +857,13 @@
         (:type t)))))
 
 (defn- crud-event-delete-pattern [evtname entity-name]
-  (let [id-attr (identity-attribute-name entity-name)]
-    [:delete entity-name
-     {id-attr (direct-id-accessor evtname id-attr)}]))
+  [:delete
+   {entity-name
+    {li/path-attr? (direct-id-accessor evtname :path)}}])
 
 (defn- crud-event-lookup-pattern [evtname entity-name]
-  (let [id-attr (identity-attribute-name entity-name)]
-    {entity-name
-     {(keyword (str (name id-attr) "?"))
-      (direct-id-accessor evtname id-attr)}}))
+  {entity-name
+   {li/path-attr? (direct-id-accessor evtname :path)}})
 
 (defn- implicit-entity-event-dfexp
   "Construct a dataflow expressions for an implicit dataflow
@@ -956,14 +954,11 @@
              result)
            (let [ev (partial crud-evname rec-name)
                  ctx-aname (k/event-context-attribute-name)
-                 id-attr (identity-attribute-name rec-name)
-                 id-attr-type (or (identity-attribute-type id-attr attrs)
-                                  :Agentlang.Kernel.Lang/Any)
-                 id-evattrs {id-attr id-attr-type
+                 id-attr-type :Agentlang.Kernel.Lang/String
+                 id-evattrs {:path id-attr-type
                              li/event-context ctx-aname}
                  cr-evattrs {:Instance n li/event-context ctx-aname}
-                 up-id-attr id-attr
-                 up-evattrs {up-id-attr id-attr-type
+                 up-evattrs {:path id-attr-type
                              :Data :Agentlang.Kernel.Lang/Map}
                  ;; Define CRUD events and dataflows:
                  crevt (ev :Create)
@@ -999,7 +994,7 @@
                 upevt
                 (concat (when (seq up-ref-pats) [up-ref-pats])
                         [{rec-name
-                          {(li/name-as-query-pattern id-attr) (crud-event-attr-accessor upevt (name up-id-attr))}
+                          {li/path-attr? (crud-event-attr-accessor upevt (name :path))}
                           :from (crud-event-attr-accessor upevt "Data")}])))
              (cn/register-dataflow lookupevt-internal [(crud-event-lookup-pattern lookupevt-internal rec-name)])
              (cn/register-dataflow lookupevt [(crud-event-lookup-pattern lookupevt rec-name)])
