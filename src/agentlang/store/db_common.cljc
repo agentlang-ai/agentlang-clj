@@ -489,7 +489,7 @@
                     (if update-delete-tag
                       (maybe-add-rbac-joins [update-delete-tag] user entity-name sql-pat0)
                       sql-pat0)
-                    (maybe-add-rbac-joins (concat [:read] update-delete-tag) user entity-name sql-pat0))
+                    (maybe-add-rbac-joins (concat [:read] (when update-delete-tag [update-delete-tag])) user entity-name sql-pat0))
                   sql-pat0)
         sql-params (sql/raw-format-sql sql-pat)]
     (execute-fn!

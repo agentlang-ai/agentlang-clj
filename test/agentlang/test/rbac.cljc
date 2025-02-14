@@ -107,6 +107,10 @@
              check-es (fn [n es]
                         (is (= n (count es)))
                         (is (every? e? es)))
+             check-e (fn [id x e]
+                       (is (e? e))
+                       (is (= x (:X e)))
+                       (is (= id (:Id e))))
              delete-e (fn [id] (tu/invoke {:Brd/Delete_E {:Id id}}))
              with-u1 (partial with-user "u1@brd.com")
              with-u2 (partial with-user "u2@brd.com")]
@@ -115,7 +119,11 @@
          (is (e? (tu/invoke (with-u2 (create-e 2)))))
          (is (not (seq (tu/invoke (lookup-all-es)))))
          (check-es 2 (tu/invoke (with-u1 (lookup-all-es))))
-         (check-es 1 (tu/invoke (with-u2 (lookup-all-es)))))))))
+         (check-es 1 (tu/invoke (with-u2 (lookup-all-es))))
+         (is (nil? (tu/invoke (with-u2 (update-e 1)))))
+         (check-e 1 100 (first (tu/invoke (with-u1 (lookup-e 1)))))
+         (check-e 1 200 (first (tu/invoke (with-u1 (update-e 1)))))
+         (check-e 1 200 (first (tu/invoke (with-u1 (lookup-e 1))))))))))
 
 ;; (deftest rbac-with-contains-relationship
 ;;   (reset-events!)

@@ -997,7 +997,7 @@
                     (crud-event-inst-accessor crevt)}])
                (cn/register-dataflow
                 upevt
-                (concat [up-ref-pats]
+                (concat (when (seq up-ref-pats) [up-ref-pats])
                         [{rec-name
                           {(li/name-as-query-pattern id-attr) (crud-event-attr-accessor upevt (name up-id-attr))}
                           :from (crud-event-attr-accessor upevt "Data")}])))
