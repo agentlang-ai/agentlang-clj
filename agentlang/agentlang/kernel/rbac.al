@@ -74,6 +74,7 @@
   {:Name {:type :String
           :default u/uuid-string
           li/path-identity true}
+   :IsOwner {:type :Boolean :default true}
    :CanRead {:type :Boolean :default false}
    :CanUpdate {:type :Boolean :default false}
    :CanDelete {:type :Boolean :default false}

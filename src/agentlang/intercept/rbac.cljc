@@ -2,52 +2,10 @@
   (:require [clojure.set :as set]
             [agentlang.component :as cn]
             [agentlang.util :as u]
+            [agentlang.store.util :as stu]
+            [agentlang.lang.internal :as li]
             [agentlang.global-state :as gs]
-            [agentlang.intercept.rbac.internal :as ri]
-            #?(:clj [agentlang.util.logger :as log]
-               :cljs [agentlang.util.jslogger :as log])))
-
-(defn- handle-read-permission-checks [_ user arg]
-  )
-
-(defn- handle-delete-permission-checks [_ user arg]
-  )
-
-(defn- handle-create-permission-checks [_ user arg]
-  (if (ri/can-create? user arg)
-    arg
-    (u/throw-ex (str user " has no create permission on " arg))))
-
-(defn- handle-ownership-for-update [user arg]
-  )
-
-(defn- handle-update-permission-checks [_ user arg]
-  (if (keyword? arg)
-    (when (ri/can-update? user arg)
-      arg)
-    (if (map? arg)
-      (handle-ownership-for-update user arg)
-      (mapv (partial handle-ownership-for-update user) arg))))
-
-(def ^:private handlers
-  {:create handle-create-permission-checks
-   :update handle-update-permission-checks
-   :read handle-read-permission-checks
-   :delele handle-delete-permission-checks})
-
-(defn- run [env opr arg]
-  (if gs/audit-trail-mode
-    arg
-    (if-let [user (gs/active-user)]
-      (if (ri/superuser? user)
-        arg
-        (if-let [handler (opr handlers)]
-          (handler env user arg)
-          (u/throw-ex (str "rbac-interceptor cannot handle operation " opr))))
-      arg)))
-
-(defn make [_] ; config is not used
-  {:name :rbac :fn run})
+            [agentlang.intercept.rbac.internal :as ri]))
 
 (defn- can-do? [predic arg]
   (cond
@@ -59,3 +17,23 @@
 (def can-read? (partial can-do? ri/can-read?))
 (def can-update? (partial can-do? ri/can-update?))
 (def can-delete? (partial can-do? ri/can-delete?))
+
+(defn find-owners [env inst-priv-entity respath]
+  (mapv :Assignee (:result
+                   (gs/evaluate-pattern {inst-priv-entity
+                                         {:IsOwner? true
+                                          :ResourcePath? respath}}))))
+
+(defn handle-instance-privilege-assignment [env inst]
+  (let [path (:ResourcePath inst)
+        entity-name (li/entity-name-from-path path)
+        inst-priv-entity (stu/inst-priv-entity entity-name)
+        owners (find-owners env inst-priv-entity path)
+        current-user (gs/active-user)]
+    (if (some #{current-user} owners)
+      (let [attrs0 (cn/instance-attributes inst)
+            attrs (if (:IsOwner attrs0)
+                    (assoc attrs0 :CanRead true :CanUpdate true :CanDelete true)
+                    attrs0)]
+        (gs/evaluate-pattern env {inst-priv-entity attrs})
+        (u/throw-ex (str "Only an owner can assign instance-privileges to " path))))))

@@ -1038,6 +1038,7 @@
               {:Name {:type :Agentlang.Kernel.Lang/String
                       :default u/uuid-string
                       li/path-identity true}
+               :IsOwner {:type :Agentlang.Kernel.Lang/Boolean :default true}
                :CanRead {:type :Agentlang.Kernel.Lang/Boolean :default false}
                :CanUpdate {:type :Agentlang.Kernel.Lang/Boolean :default false}
                :CanDelete {:type :Agentlang.Kernel.Lang/Boolean :default false}

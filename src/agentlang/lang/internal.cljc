@@ -621,3 +621,15 @@
 
 (defn vec-to-path [v] (s/join "," v))
 (defn path-to-vec [s] (s/split s #","))
+
+(defn entity-name-from-path [path]
+  (let [n (second
+           (take
+            2
+            (reverse
+             (if (string? path)
+               (path-to-vec path)
+               path))))]
+    (if (string? n)
+      (keyword (subs n 1))
+      n)))

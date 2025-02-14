@@ -100,4 +100,4 @@
  [:delete :Agentlang.Kernel.Rbac/RoleAssignment :purge])
 (def
  Agentlang_Kernel_Identity___COMPONENT_ID__
- "c099927b-0dbb-4f3a-838b-6a7170adbecd")
+ "a1700aa9-ced8-4152-b568-7205ae2b25c7")

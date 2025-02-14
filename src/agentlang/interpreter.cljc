@@ -322,6 +322,8 @@
 (defn- handle-record-pattern [env recname attrs alias]
   (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))
         env0 (if alias (env/bind-variable env alias inst) env)]
+    (when (cn/instance-of? :Agentlang.Kernel.Rbac/InstancePrivilegeAssignment inst)
+      (rbac/handle-instance-privilege-assignment env inst))
     (make-result env0 inst)))
 
 (defn- realize-pattern [env pat]
@@ -559,3 +561,4 @@
 
 (gs/set-evaluate-dataflow-fn! evaluate-dataflow)
 (gs/set-evaluate-dataflow-internal-fn! evaluate-dataflow-internal)
+(gs/set-evaluate-pattern-fn! evaluate-pattern)

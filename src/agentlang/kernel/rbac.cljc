@@ -40,7 +40,7 @@
  [xs]
  (let
   [xs (mapv u/string-as-keyword xs)]
-  (every? (fn* [p1__392#] (some #{p1__392#} oprs)) (set xs))))
+  (every? (fn* [p1__603#] (some #{p1__603#} oprs)) (set xs))))
 (entity
  :Agentlang.Kernel.Rbac/Privilege
  {:Name
@@ -101,6 +101,7 @@
                           {:type :String,
                            :default u/uuid-string,
                            li/path-identity true},
+                          :IsOwner {:type :Boolean, :default true},
                           :CanRead {:type :Boolean, :default false},
                           :CanUpdate {:type :Boolean, :default false},
                           :CanDelete {:type :Boolean, :default false},
@@ -108,4 +109,4 @@
                           :Assignee {:type :String, :indexed true}}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "0eb2854e-c1fe-4a25-9397-2d5e0e0906ec")
+ "b64e01b9-ffa7-4ce0-ab32-1cc8d915e9a9")
