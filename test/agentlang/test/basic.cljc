@@ -56,7 +56,7 @@
      :BasicEval/DeleteAll
      [:delete :BasicEval/E :* :as :R]
      :R))
-  (let [ev tu/fetch-result
+  (let [ev tu/invoke
         cre #(ev {:BasicEval/MakeE {:X %}})
         result (cre 100)
         e? (partial cn/instance-of? :BasicEval/E)
@@ -101,7 +101,7 @@
                       :Y '(* :X 10)}})
   (let [r (cn/make-instance :Df03/R {:A 100})
         evt {:Df03/PostE {:R r}}
-        result (tu/fetch-result evt)]
+        result (tu/invoke evt)]
     (is (cn/instance-of? :Df03/E result))
     (is (u/uuid-from-string (cn/id-attr result)))
     (is (= 100 (:X result)))
@@ -121,13 +121,13 @@
             {:Bool/E {:X :Bool/PostE2.B
                       :Y false}})
   (let [evt (cn/make-instance :Bool/PostE1 {:B true})
-        result (tu/fetch-result evt)]
+        result (tu/invoke evt)]
     (is (cn/instance-of? :Bool/E result))
     (is (u/uuid-from-string (cn/id-attr result)))
     (is (= true (:X result)))
     (is (= true (:Y result))))
   (let [evt (cn/make-instance :Bool/PostE2 {:B false})
-        result (tu/fetch-result evt)]
+        result (tu/invoke evt)]
     (is (cn/instance-of? :Bool/E result))
     (is (u/uuid-from-string (cn/id-attr result)))
     (is (= false (:X result)))
@@ -150,7 +150,7 @@
                 :Z 1}})
   (let [e (cn/make-instance :SelfRef/E {:X 100 :Y 200 :Z 300})
         evt (cn/make-instance :SelfRef/Create_E {:Instance e})
-        result (tu/fetch-result evt)]
+        result (tu/invoke evt)]
     (is (cn/instance-of? :SelfRef/E result))
     (is (u/uuid-from-string (:Id result)))
     (is (= 100 (:X result)))
@@ -158,7 +158,7 @@
     (is (= 300 (:Z result)))
     (let [id (:Id result)
           addevt (cn/make-instance :SelfRef/AddToX {:EId id :Y 10})
-          inst (first (tu/fetch-result addevt))]
+          inst (first (tu/invoke addevt))]
       (is (cn/instance-of? :SelfRef/E inst))
       (is (u/uuid-from-string (:Id inst)))
       (is (= 110 (:X inst)))
@@ -235,30 +235,30 @@
                       (is (b? b))
                       (is (= (cn/instance-path b)
                              (li/vec-to-path (vec (concat [:BC01/A aid :BC01/AB :BC01/B] [(:Id b)]))))))
-        lookup-bs #(tu/fetch-result {:BC01/LookupAllB {:A %}})
-        lookup-bs-by-x #(tu/fetch-result {:BC01/LookupAllBByX {:X %}})
+        lookup-bs #(tu/invoke {:BC01/LookupAllB {:A %}})
+        lookup-bs-by-x #(tu/invoke {:BC01/LookupAllBByX {:X %}})
         check-bs (fn [aid bs]
                    (is (seq bs))
                    (is (every? b? bs))
                    (doseq [b bs] (check-paths aid b)))
         create-c (fn [id z b a]
-                   (tu/fetch-result
+                   (tu/invoke
                     {:BC01/CreateC {:Id id :Z z :B b :A a}}))
-        lookup-cs #(tu/fetch-result {:BC01/LookupAllC {:B %1 :A %2}})
+        lookup-cs #(tu/invoke {:BC01/LookupAllC {:B %1 :A %2}})
         check-cs (fn [n s cs]
                    (is (count cs) n)
                    (is (every? c? cs))
                    (is (= s (apply + (mapv :Z cs)))))
-        lookup-all-cs #(tu/fetch-result {:BC01/LookupAllCByZ {:Z %1 :B %2 :A %3}})
+        lookup-all-cs #(tu/invoke {:BC01/LookupAllCByZ {:Z %1 :B %2 :A %3}})
         check-a (fn [id inst]
                   (is (a? inst))
                   (is (= id (:Id inst))))
-        update-c #(tu/fetch-result {:BC01/UpdateC {:C %1 :B %2 :A %3}})]
-    (is (a? (tu/fetch-result {:BC01/Create_A {:Instance {:BC01/A {:Id 1 :X 100}}}})))
-    (is (a? (tu/fetch-result {:BC01/Create_A {:Instance {:BC01/A {:Id 2 :X 300}}}})))
-    (is (b? (tu/fetch-result {:BC01/CreateB {:Id 101 :Y 10 :A 1}})))
-    (is (b? (tu/fetch-result {:BC01/CreateB {:Id 102 :Y 11 :A 1}})))
-    (is (b? (tu/fetch-result {:BC01/CreateB {:Id 103 :Y 12 :A 2}})))
+        update-c #(tu/invoke {:BC01/UpdateC {:C %1 :B %2 :A %3}})]
+    (is (a? (tu/invoke {:BC01/Create_A {:Instance {:BC01/A {:Id 1 :X 100}}}})))
+    (is (a? (tu/invoke {:BC01/Create_A {:Instance {:BC01/A {:Id 2 :X 300}}}})))
+    (is (b? (tu/invoke {:BC01/CreateB {:Id 101 :Y 10 :A 1}})))
+    (is (b? (tu/invoke {:BC01/CreateB {:Id 102 :Y 11 :A 1}})))
+    (is (b? (tu/invoke {:BC01/CreateB {:Id 103 :Y 12 :A 2}})))
     (check-bs 1 (lookup-bs 1))
     (check-bs 2 (lookup-bs 2))
     (check-bs 1 (lookup-bs-by-x 100))
@@ -278,28 +278,28 @@
     (check-cs 1 70 (lookup-all-cs 70 103 2))
     (check-cs 1 300 (update-c 201 101 1))
     (check-cs 3 (+ 40 40 300) (lookup-cs 101 1))
-    (let [res (tu/fetch-result {:BC01/LookupAFromB {:B 101}})]
+    (let [res (tu/invoke {:BC01/LookupAFromB {:B 101}})]
       (is (= 1 (count res)))
       (check-a 1 (first res)))
-    (let [res (tu/fetch-result {:BC01/LookupAFromB {:B 102}})]
+    (let [res (tu/invoke {:BC01/LookupAFromB {:B 102}})]
       (is (= 1 (count res)))
       (check-a 1 (first res)))
-    (let [res (tu/fetch-result {:BC01/LookupAFromC {:C 206}})]
+    (let [res (tu/invoke {:BC01/LookupAFromC {:C 206}})]
       (is (= 1 (count res)))
       (check-a 2 (first res)))
-    (let [as (tu/fetch-result {:BC01/LookupAllA {}})]
+    (let [as (tu/invoke {:BC01/LookupAllA {}})]
       (is (= 2 (count as)))
       (is (every? a? as)))
-    (let [as (tu/fetch-result {:BC01/DeleteA {:Id 1}})]
+    (let [as (tu/invoke {:BC01/DeleteA {:Id 1}})]
       (is (= 1 (count as)))
       (is (= 1 (:Id (first as)))))
-    (let [as (tu/fetch-result {:BC01/LookupAllA {}})]
+    (let [as (tu/invoke {:BC01/LookupAllA {}})]
       (is (= 1 (count as)))
       (is (every? a? as)))
-    (let [bs (tu/fetch-result {:BC01/LookupEveryB {}})]
+    (let [bs (tu/invoke {:BC01/LookupEveryB {}})]
       (is (= 1 (count bs)))
       (is (every? b? bs)))
-    (let [cs (tu/fetch-result {:BC01/LookupEveryC {}})]
+    (let [cs (tu/invoke {:BC01/LookupEveryC {}})]
       (is (= 1 (count cs)))
       (is (every? c? cs)))
     (is (nil? (seq (lookup-bs 1))))
@@ -318,11 +318,11 @@
      :BB01/LookupB
      {:BB01/B? {}
       :BB01/AB? {:BB01/A {:Id :BB01/LookupB.A}}}))
-  (let [create-a #(tu/fetch-result {:BB01/Create_A
+  (let [create-a #(tu/invoke {:BB01/Create_A
                                     {:Instance
                                      {:BB01/A {:Id %1 :X %2}}}})
-        create-b #(tu/fetch-result {:BB01/CreateB {:Id %1 :Y %2 :A %3}})
-        lookup-b #(tu/fetch-result {:BB01/LookupB {:A %}})
+        create-b #(tu/invoke {:BB01/CreateB {:Id %1 :Y %2 :A %3}})
+        lookup-b #(tu/invoke {:BB01/LookupB {:A %}})
         a? (partial cn/instance-of? :BB01/A)
         b? (partial cn/instance-of? :BB01/B)
         check-bs (fn [ids bs]
@@ -353,7 +353,7 @@
      :QO/FindEByI
      {:QO/E
       {:I? [:between :QO/FindEByI.Start :QO/FindEByI.End]}}))
-  (let [cre #(tu/fetch-result
+  (let [cre #(tu/invoke
               {:QO/Create_E
                {:Instance
                 {:QO/E {:S %1 :I %2}}}})
@@ -365,8 +365,8 @@
                 (when predic?
                   (is (every? identity (mapv predic? es)))))]
     (chkes 5 nil es)
-    (chkes 2 (fn [e] (some #{(:S e)} #{"a" "c"})) (tu/fetch-result {:QO/FindEByS {:Values ["a" "c"]}}))
-    (chkes 3 (fn [e] (some #{(:I e)} #{2 3 4})) (tu/fetch-result {:QO/FindEByI {:Start 2 :End 4}}))))
+    (chkes 2 (fn [e] (some #{(:S e)} #{"a" "c"})) (tu/invoke {:QO/FindEByS {:Values ["a" "c"]}}))
+    (chkes 3 (fn [e] (some #{(:I e)} #{2 3 4})) (tu/invoke {:QO/FindEByI {:Start 2 :End 4}}))))
 
 (deftest handle-cases
   (defcomponent :HC
@@ -379,10 +379,10 @@
      {:HC/E {:Id? :HC/FindE.Id}
       li/except-tag
       {:not-found {:HC/R {:Id :HC/FindE.Id}}}}))
-  (let [r1 (tu/fetch-result
+  (let [r1 (tu/invoke
             {:HC/Create_E {:Instance {:HC/E {:Id 10}}}})
         e? (partial cn/instance-of? :HC/E)
-        find-e #(tu/fetch-result {:HC/FindE {:Id %}})]
+        find-e #(tu/invoke {:HC/FindE {:Id %}})]
     (is (e? r1))
     (is (cn/same-instance? r1 (first (find-e 10))))
     (let [r (find-e 20)]
@@ -402,12 +402,12 @@
 ;;                        :X 500}})
 ;;   (let [e (cn/make-instance :Df04/E1 {:A 100})
 ;;         evt (cn/make-instance :Df04/Create_E1 {:Instance e})
-;;         e1 (tu/fetch-result evt)
+;;         e1 (tu/invoke evt)
 ;;         id (cn/id-attr e1)
 ;;         e2 (cn/make-instance :Df04/E2 {:AId (cn/id-attr e1)
 ;;                                        :X 20})
 ;;         evt (cn/make-instance :Df04/PostE2 {:E1 e1})
-;;         result (tu/fetch-result evt)]
+;;         result (tu/invoke evt)]
 ;;     (is (cn/instance-of? :Df04/E2 result))
 ;;     (is (u/uuid-from-string (cn/id-attr result)))
 ;;     (is (= (:AId result) id))
@@ -1023,7 +1023,7 @@
                          [:password [:size 40]]]
                         [:div
                          [:submit [:text "Login"]]]]]}}))
-  (let [result (tu/fetch-result
+  (let [result (tu/invoke
                 {:EdnAttr/RenderLoginForm
                  {:Title "Login" :X 150 :Y 12}})]
     (u/pprint result)

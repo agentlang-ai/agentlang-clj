@@ -47,7 +47,7 @@
      {:Agentlang.Kernel.Rbac/RoleAssignment
       {:Role "r2" :Assignee "xyz@xyz.com"}}))
   (let [[r1 r2 r3 r4]
-        (mapv tu/fetch-result [:RoleMgmt/CreateUsers :RoleMgmt/CreateRoles
+        (mapv tu/invoke [:RoleMgmt/CreateUsers :RoleMgmt/CreateRoles
                                :RoleMgmt/AssignPrivileges :RoleMgmt/AssignRoles])]
     (is (cn/instance-of? :Agentlang.Kernel.Identity/User r1))
     (is (cn/instance-of? :Agentlang.Kernel.Rbac/Role r2))
@@ -90,7 +90,7 @@
   (is (finalize-events))
   (is (cn/instance-of?
        :Agentlang.Kernel.Rbac/RoleAssignment
-       (tu/fetch-result {:Brd/InitUsers {}})))
+       (tu/invoke {:Brd/InitUsers {}})))
   (let [e? (partial cn/instance-of? :Brd/E)]
     (call-with-rbac
      (fn []
@@ -103,10 +103,10 @@
                          {:Id id :Data {:X (* id 200)}}})
              lookup-e (fn [id]
                         {:Brd/Lookup_E {:Id id}})
-             delete-e (fn [id] (tu/fetch-result {:Brd/Delete_E {:Id id}}))]
-         (tu/is-error #(tu/fetch-result (create-e 1)))
-         (is (e? (tu/fetch-result (with-user "u1@brd.com" (create-e 1)))))
-         (is (e? (tu/fetch-result (with-user "u2@brd.com" (create-e 2))))))))))
+             delete-e (fn [id] (tu/invoke {:Brd/Delete_E {:Id id}}))]
+         (tu/is-error #(tu/invoke (create-e 1)))
+         (is (e? (tu/invoke (with-user "u1@brd.com" (create-e 1)))))
+         (is (e? (tu/invoke (with-user "u2@brd.com" (create-e 2))))))))))
 
 ;; (deftest rbac-with-contains-relationship
 ;;   (reset-events!)

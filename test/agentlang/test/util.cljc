@@ -15,12 +15,12 @@
             [agentlang.store :as store]
             [agentlang.global-state :as gs]))
 
-(defn interpret-dataflow [event-instance]
+(defn evaluate-dataflow [event-instance]
   (intrp/evaluate-dataflow (store/get-default-store) event-instance))
 
-(defn fetch-result [event]
+(defn invoke [event]
   (let [event (if (map? event) event {event {}})]
-    (:result (interpret-dataflow (cn/make-instance event)))))
+    (:result (evaluate-dataflow (cn/make-instance event)))))
 
 (defn- report-expected-ex [ex]
   (println (str "Expected exception in test: "
