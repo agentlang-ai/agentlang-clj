@@ -435,9 +435,9 @@
 (def ^:private ipa-user (li/make-ref ipa-alias (stu/attribute-column-name-kw :Assignee)))
 
 (def ^:private ipa-flag-cols
-  {:read (li/make-ref ipa-alias :CanRead)
-   :update (li/make-ref ipa-alias :CanUpdate)
-   :delete (li/make-ref ipa-alias :CanDelete)})
+  {:read (li/make-ref ipa-alias (stu/attribute-column-name-kw :CanRead))
+   :update (li/make-ref ipa-alias (stu/attribute-column-name-kw :CanUpdate))
+   :delete (li/make-ref ipa-alias (stu/attribute-column-name-kw :CanDelete))})
 
 (defn- maybe-add-rbac-joins [oprs user entity-name sql-pat]
   (let [join (:join sql-pat)

@@ -232,6 +232,6 @@
                    {:CanRead true
                     :CanUpdate true
                     :CanDelete true
-                    :ResourcePath (li/path-attr instance)
+                    :ResourcePath (str (li/path-attr instance) "%")
                     :Assignee (gs/active-user)})]
     (p/create-instance store ownership-entity-name priv-inst)))

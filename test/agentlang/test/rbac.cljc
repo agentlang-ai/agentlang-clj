@@ -101,12 +101,21 @@
              update-e (fn [id]
                         {:Brd/Update_E
                          {:Id id :Data {:X (* id 200)}}})
+             lookup-all-es (constantly {:Brd/LookupAll_E {}})
              lookup-e (fn [id]
                         {:Brd/Lookup_E {:Id id}})
-             delete-e (fn [id] (tu/invoke {:Brd/Delete_E {:Id id}}))]
+             check-es (fn [n es]
+                        (is (= n (count es)))
+                        (is (every? e? es)))
+             delete-e (fn [id] (tu/invoke {:Brd/Delete_E {:Id id}}))
+             with-u1 (partial with-user "u1@brd.com")
+             with-u2 (partial with-user "u2@brd.com")]
          (tu/is-error #(tu/invoke (create-e 1)))
-         (is (e? (tu/invoke (with-user "u1@brd.com" (create-e 1)))))
-         (is (e? (tu/invoke (with-user "u2@brd.com" (create-e 2))))))))))
+         (is (e? (tu/invoke (with-u1 (create-e 1)))))
+         (is (e? (tu/invoke (with-u2 (create-e 2)))))
+         (is (not (seq (tu/invoke (lookup-all-es)))))
+         (check-es 2 (tu/invoke (with-u1 (lookup-all-es))))
+         (check-es 1 (tu/invoke (with-u2 (lookup-all-es)))))))))
 
 ;; (deftest rbac-with-contains-relationship
 ;;   (reset-events!)

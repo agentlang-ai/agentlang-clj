@@ -259,7 +259,8 @@
       args))
 
 (defn- handle-query-pattern [env recname [attrs sub-pats] alias]
-  (let [select-clause (:? attrs)
+  (let [recname (li/normalize-name recname)
+        select-clause (:? attrs)
         [update-attrs query-attrs] (when-not select-clause (lift-attributes-for-update attrs))
         attrs (if query-attrs query-attrs attrs)
         attrs0 (when (seq attrs)
@@ -515,6 +516,11 @@
             (throw ex))))
       (u/throw-ex (str "Cannot handle invalid pattern " pat)))))
 
+(defn- maybe-normalize-pattern [pat]
+  (if (li/query-pattern? pat)
+    {pat {}}
+    pat))
+
 (defn evaluate-dataflow
   ([store env event-instance is-internal]
    (let [event-instance (if (cn/an-instance? event-instance) event-instance (cn/make-instance event-instance))]
@@ -532,8 +538,9 @@
               (try
                 (loop [df-patterns (cn/fetch-dataflow-patterns event-instance),
                        pat-count 0, env env, result nil]
-                  (if-let [pat (first df-patterns)]
-                    (let [pat-count (inc pat-count)
+                  (if-let [pat0 (first df-patterns)]
+                    (let [pat (maybe-normalize-pattern pat0)
+                          pat-count (inc pat-count)
                           env (env/bind-eval-state env pat pat-count)
                           {env1 :env r :result} (evaluate-pattern env pat)]
                       (recur (rest df-patterns) pat-count env1 r))
