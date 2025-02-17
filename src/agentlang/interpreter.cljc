@@ -529,23 +529,27 @@
     pat))
 
 (defn evaluate-dataflow
-  ([store env event-instance is-internal]
-   (let [event-instance (if (cn/an-instance? event-instance) event-instance (cn/make-instance event-instance))]
+  ([store env event-instance-or-patterns]
+   (let [patterns (when (vector? event-instance-or-patterns)
+                    event-instance-or-patterns)
+         event-instance (if-not patterns
+                          (if (cn/an-instance? event-instance-or-patterns)
+                            event-instance-or-patterns
+                            (cn/make-instance event-instance-or-patterns))
+                          {})]
      (binding [gs/active-event-context (:EventContext event-instance)]
        (let [env0 (or env (env/bind-instance (env/make store nil) event-instance))
-             env (if is-internal
-                   (env/block-interceptors env0)
-                   (env/assoc-active-event env0 event-instance))]
+             env (env/assoc-active-event env0 event-instance)]
          (store/call-in-transaction
           store
           (fn [txn]
-            (if (cn/instance-of? :Agentlang.Kernel.Rbac/DeleteInstancePrivilegeAssignment event-instance)
+            (if (and (seq event-instance) (cn/instance-of? :Agentlang.Kernel.Rbac/DeleteInstancePrivilegeAssignment event-instance))
               (rbac/delete-instance-privilege-assignment env event-instance)
               (let [txn-set? (when (and txn (not (gs/get-active-txn)))
                                (gs/set-active-txn! txn)
                                true)]
                 (try
-                  (loop [df-patterns (cn/fetch-dataflow-patterns event-instance),
+                  (loop [df-patterns (or patterns (cn/fetch-dataflow-patterns event-instance))
                          pat-count 0, env env, result nil]
                     (if-let [pat0 (first df-patterns)]
                       (let [pat (maybe-normalize-pattern pat0)
@@ -556,8 +560,8 @@
                       (make-result env result)))
                   (finally
                     (when txn-set? (gs/set-active-txn! nil))))))))))))
-  ([store event-instance] (evaluate-dataflow store nil event-instance false))
-  ([event-instance] (evaluate-dataflow (store/get-default-store) nil event-instance false)))
+  ([store event-instance] (evaluate-dataflow store nil event-instance))
+  ([event-instance] (evaluate-dataflow (store/get-default-store) nil event-instance)))
 
 (defn evaluate-dataflow-in-environment [env event-instance]
   (evaluate-dataflow nil env event-instance false))

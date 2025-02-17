@@ -13,7 +13,6 @@
     view
     pattern
     attribute
-    rule
     relationship
     component
     resolver
@@ -100,4 +99,4 @@
  [:delete :Agentlang.Kernel.Rbac/RoleAssignment :purge])
 (def
  Agentlang_Kernel_Identity___COMPONENT_ID__
- "882bf54f-27dd-4755-a6c9-54d3347eba14")
+ "b934f1eb-2e98-4969-af2c-354205424151")

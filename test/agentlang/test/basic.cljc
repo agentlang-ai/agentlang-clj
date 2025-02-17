@@ -5,14 +5,12 @@
             [agentlang.util.hash :as sh]
             [agentlang.store :as store]
             [agentlang.component :as cn]
-            [agentlang.compiler :as c]
             [agentlang.lang
              :as ln
              :refer [component attribute event relationship
                      entity record dataflow inference]]
             [agentlang.lang.internal :as li]
             [agentlang.api :as api]
-            [agentlang.compiler.context :as ctx]
             [agentlang.lang.datetime :as dt]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))

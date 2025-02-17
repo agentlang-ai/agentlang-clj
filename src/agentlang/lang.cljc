@@ -4,7 +4,6 @@
             [clojure.string :as s]
             [clojure.walk :as w]
             #?(:clj [clojure.core.async :as async])
-            [agentlang.compiler.rule :as rl]
             [agentlang.component :as cn]
             [agentlang.global-state :as gs]
             [agentlang.lang.internal :as li]
@@ -16,7 +15,6 @@
             [agentlang.resolver.registry :as rr]
             [agentlang.resolver.core :as rc]
             [agentlang.subs :as subs]
-            [agentlang.rule :as rule]
             [agentlang.util :as u]
             [agentlang.store.util :as stu]
             #?(:clj [agentlang.util.logger :as log]
@@ -575,35 +573,6 @@
       (into {(first (keys pattern)) (into {} attrs)}))
     pattern))
 
-(defn- extract-on-and-where [match-pat]
-  (if (= (count match-pat) 7)
-    (do
-      (when-not (= :on (nth match-pat 3))
-        (u/throw-ex (str ":on keyword not found - " match-pat)))
-      (when-not (= :where (nth match-pat 5))
-        (u/throw-ex (str ("where clause not found - " match-pat))))
-      [(li/validate-on-clause (nth match-pat 4))
-       (li/validate-where-clause (nth match-pat 6))])
-    (u/throw-ex (str ":on and :where clauses expected - " match-pat))))
-
-(defn- install-event-trigger-pattern [match-pat]
-  (let [event-name (first match-pat)]
-    (when-not (li/name? event-name)
-      (u/throw-ex (str "not a valid event name - " event-name)))
-    (when-not (= :when (second match-pat))
-      (u/throw-ex (str "expected keyword :when not found - " match-pat)))
-    (let [pat (nth match-pat 2)
-          predic (rl/compile-rule-pattern pat)
-          rnames (li/referenced-record-names pat)
-          [on where] (when (> (count rnames) 1)
-                       (extract-on-and-where match-pat))
-          event-attrs (li/references-to-event-attributes rnames)
-          evt-name (event event-name event-attrs)]
-      (cn/install-triggers!
-       (or on rnames)
-       event-name predic where rnames)
-      evt-name)))
-
 (defn- concat-refs [n refs]
   (keyword (str (subs (str n) 1) "."
                 (s/join "." (mapv name refs)))))
@@ -686,64 +655,12 @@
             :else
             (let [match-pat (or (preproc-match-pat match-pat) match-pat)
                   patterns (prepare-dataflow-patterns patterns)]
-              (if (vector? match-pat)
-                (apply
-                 dataflow
-                 (as-preproc (install-event-trigger-pattern match-pat))
-                 patterns)
-                (let [event (normalize-event-pattern match-pat)]
-                  (do (ensure-event! event)
-                      (cn/register-dataflow event nil patterns))))))]
+              (let [event (normalize-event-pattern match-pat)]
+                (do (ensure-event! event)
+                    (cn/register-dataflow event nil patterns)))))]
     (when (and r (not (preproc-match-pat match-pat)))
       (raw/dataflow match-pat patterns))
     r))
-
-(defn- maybe-proc-delete-rule [conds]
-  (let [delete-tag (some #(and (vector? %) (= :delete (first %))) conds)]
-    (if delete-tag
-      (do (when (> (count conds) 1)
-            (u/throw-ex (str "no extra rules allowed with :delete - " conds)))
-          [delete-tag [(second (first conds))]])
-      [false conds])))
-
-(defn- rule-compile-conditionals [cond-pats]
-  (try
-    (rule/compile-conditionals cond-pats)
-    (catch #?(:clj Exception :cljs js/Error) e
-      (log/error (str "rule/compile-conditionals failed: " e)))))
-
-(defn- parse-rules-args [args]
-  (let [not-then (partial not= :then)
-        [cond-pats args] (split-with not-then args)
-        [delete-tag cond-pats] (maybe-proc-delete-rule cond-pats)
-        meta (let [l (last args)] (when (li/rule-meta? l) l))
-        priority (li/rule-meta-value meta :priority ##-Inf)
-        passive (li/rule-meta-value meta :passive)
-        cat (li/rule-meta-value meta :category)
-        conseq-pats (if meta (drop-last (rest args)) (rest args))]
-    {:cond (when-not (li/rule-meta? (first cond-pats)) cond-pats)
-     :c-cond (rule-compile-conditionals cond-pats)
-     :then conseq-pats
-     :priority priority
-     :passive passive
-     :category cat
-     :on-delete delete-tag}))
-
-(defn- rule-event [rule-name conseq]
-  (if conseq
-    (let [revnt-name (li/rule-event-name rule-name)]
-      (event-internal revnt-name {})
-      (cn/register-dataflow revnt-name conseq))
-    (do (log/warn (str rule-name " requires a consequent"))
-        rule-name)))
-
-(defn rule [rule-name & args]
-  (let [s01 (parse-rules-args args)
-        spec (assoc s01 :name rule-name)]
-    (when (rule-event rule-name (:then spec))
-      (and (cn/register-rule rule-name spec)
-           (raw/rule rule-name args)
-           rule-name))))
 
 (defn- preproc-agent-messages [agent]
   (if-let [messages (:Messages agent)]

@@ -4,7 +4,7 @@
             [agentlang.lang :as ln]
             [agentlang.lang.internal :as li]
             [agentlang.env :as env]
-            [agentlang.evaluator :as ev]
+            [agentlang.global-state :as gs]
             [agentlang.component :as cn]
             [agentlang.util :as u]
             [agentlang.util.logger :as log]
@@ -26,7 +26,7 @@
     (let [env (env/bind-instance env/EMPTY context-event)]
       (loop [pats (as-vec agentlang-patterns), env env, result nil]
         (if-let [p (first pats)]
-          (let [r (ev/evaluate-pattern env p)]
+          (let [r (gs/evaluate-pattern env p)]
             (if (u/safe-ok-result r)
               (recur (rest pats) (:env r) r)
               (do (log/error (str "inferred-pattern " p " failed with result " r))

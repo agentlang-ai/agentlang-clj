@@ -125,17 +125,7 @@
 (record :Response {:HTTP {:check http-response? :optional true}})
 
 (r/register-resolvers
- [{:name :meta
-   :type :meta
-   :compose? false
-   :config {:agentlang-api
-            {:component component
-             :entity entity
-             :event event
-             :record record
-             :dataflow dataflow}}
-   :paths [:Agentlang.Kernel.Lang/LoadModelFromMeta]}
-  {:name :timer
+ [{:name :timer
    :type :timer
    :compose? true
    :paths [:Agentlang.Kernel.Lang/Timer]}

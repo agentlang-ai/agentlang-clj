@@ -17,7 +17,6 @@
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
             [agentlang.util.http :as http]
-            [agentlang.evaluator :as e]
             [agentlang.datafmt.json :as json]
             [agentlang.lang.internal :as li]
             [agentlang.global-state :as gs]
@@ -187,16 +186,16 @@
 (defn- eval-event
   ([event callback atomic?]
    (when-let [result (first ((if atomic?
-                               e/eval-all-dataflows-atomic
-                               e/eval-all-dataflows)
+                               gs/evaluate-dataflow-atomic
+                               gs/evaluate-dataflow)
                              event))]
-     (when (= :ok (:status result))
-       (callback (:result result)))))
+     (callback (:result result))))
   ([event callback] (eval-event event callback true))
   ([event] (eval-event event identity)))
 
 (defn- eval-internal-event [event & args]
-  (apply eval-event (e/mark-internal (cn/make-instance event)) args))
+  (gs/kernel-call
+   #(apply eval-event (cn/make-instance event) args)))
 
 (defn- preproc-agent-tools-spec [tools]
   (when tools

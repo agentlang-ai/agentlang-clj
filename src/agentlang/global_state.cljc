@@ -110,5 +110,17 @@
 (defn evaluate-pattern [env pat]
   (@evaluate-pattern-fn env pat))
 
+(def evaluate-patterns evaluate-dataflow)
+
 (defn evaluate-pattern-internal [env pat]
   (kernel-call #(evaluate-pattern env pat)))
+
+(defn evaluate-dataflow-atomic
+  ([evaluator arg]
+   (let [txn (get-active-txn)]
+     (set-active-txn! nil)
+     (try
+       (evaluator arg)
+       (finally
+         (set-active-txn! txn)))))
+  ([event-instance] (evaluate-dataflow-atomic evaluate-dataflow event-instance)))

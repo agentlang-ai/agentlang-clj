@@ -14,7 +14,6 @@
     view
     pattern
     attribute
-    rule
     relationship
     component
     resolver
@@ -34,7 +33,7 @@
 (attribute :Agentlang.Kernel.Lang/String {:check k/kernel-string?})
 (attribute
  :Agentlang.Kernel.Lang/Keyword
- {:check (fn* [p1__606#] (or (keyword? p1__606#) (string? p1__606#)))})
+ {:check (fn* [p1__607#] (or (keyword? p1__607#) (string? p1__607#)))})
 (attribute :Agentlang.Kernel.Lang/Path {:check k/path?})
 (attribute :Agentlang.Kernel.Lang/DateTime {:check k/date-time?})
 (attribute :Agentlang.Kernel.Lang/Date {:check k/date?})
@@ -173,18 +172,7 @@
  :Agentlang.Kernel.Lang/Response
  {:HTTP {:check agentlang.kernel.lang/http-response?, :optional true}})
 (r/register-resolvers
- [{:name :meta,
-   :type :meta,
-   :compose? false,
-   :config
-   {:agentlang-api
-    {:component component,
-     :entity entity,
-     :event event,
-     :record record,
-     :dataflow dataflow}},
-   :paths [:Agentlang.Kernel.Lang/LoadModelFromMeta]}
-  {:name :timer,
+ [{:name :timer,
    :type :timer,
    :compose? true,
    :paths [:Agentlang.Kernel.Lang/Timer]}
@@ -196,4 +184,4 @@
     :paths [:Agentlang.Kernel.Lang/DataSync]})])
 (def
  Agentlang_Kernel_Lang___COMPONENT_ID__
- "131a72c2-3af6-4856-a57f-9b0eb55ef1fd")
+ "696b3073-9d24-485e-8c75-daa926018e78")

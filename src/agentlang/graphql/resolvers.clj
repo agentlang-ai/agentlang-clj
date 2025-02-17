@@ -3,12 +3,11 @@
             [clojure.walk :as walk]
             [agentlang.auth.core :as auth]
             [agentlang.component :as cn]
-            [agentlang.evaluator :as e]
+            [agentlang.global-state :as gs]
             [agentlang.graphql.generator :as gg]
             [agentlang.lang :as lang]
             [agentlang.lang.internal :as fl]
             [agentlang.lang.raw :as lr]
-            [agentlang.evaluator :as ev]
             [agentlang.util :as u]
             [agentlang.util.logger :as log]
             [agentlang.lang.internal :as li]))
@@ -272,7 +271,7 @@
   (let [event (register-event component (as-vec patterns))
         auth-event-context (make-auth-event-context context)]
     (try
-      (let [result (first (ev/eval-all-dataflows {event {:EventContext auth-event-context}}))]
+      (let [result (first (gs/evaluate-dataflow {event {:EventContext auth-event-context}}))]
         (if (= (:status result) :error)
           (u/throw-ex (str "Error: " (:message result)))
           (:result result)))

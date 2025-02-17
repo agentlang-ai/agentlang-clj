@@ -1,13 +1,12 @@
 (ns agentlang.user-session
   (:require [clojure.string :as s]
             [agentlang.util :as u]
-            [agentlang.evaluator :as ev]
             [agentlang.global-state :as gs]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
 (defn session-lookup [user]
-  (let [result (ev/eval-internal
+  (let [result (gs/evaluate-dataflow-internal
                 {:Agentlang.Kernel.Identity/Lookup_UserSession
                  {:User user}})
         r (if (map? result) result (first result))
@@ -28,14 +27,14 @@
   (not (not-found? (session-lookup user))))
 
 (defn session-create [user logged-in]
-  (ev/eval-internal
+  (gs/evaluate-dataflow-internal
    {:Agentlang.Kernel.Identity/Create_UserSession
     {:Instance
      {:Agentlang.Kernel.Identity/UserSession
       {:User user :LoggedIn logged-in}}}}))
 
 (defn session-update [user logged-in]
-  (ev/eval-internal
+  (gs/evaluate-dataflow-internal
    {:Agentlang.Kernel.Identity/Update_UserSession
     {:User user :Data {:LoggedIn logged-in}}}))
 
@@ -51,7 +50,7 @@
     sid))
 
 (defn session-cookie-create [sid user-data]
-  (ev/eval-internal
+  (gs/evaluate-dataflow-internal
    {:Agentlang.Kernel.Identity/Create_SessionCookie
     {:Instance
      {:Agentlang.Kernel.Identity/SessionCookie
@@ -63,7 +62,7 @@
   (first
    (:result
     (first
-     (ev/eval-internal
+     (gs/evaluate-dataflow-internal
       {:Agentlang.Kernel.Identity/Delete_SessionCookie
        {:Id (normalize-sid sid)}})))))
 
@@ -72,7 +71,7 @@
   (session-cookie-create sid user-data))
 
 (defn lookup-session-cookie-user-data [sid]
-  (let [result (ev/eval-internal
+  (let [result (gs/evaluate-dataflow-internal
                 {:Agentlang.Kernel.Identity/Lookup_SessionCookie
                  {:Id (normalize-sid sid)}})
         r (if (map? result) result (first result))
@@ -85,32 +84,32 @@
   (when-let [[user-data _] (lookup-session-cookie-user-data sid)]
     (let [authr (merge (:authentication-result user-data) tokens)
           user-data (assoc user-data :authentication-result authr)]
-      (ev/eval-internal
+      (gs/evaluate-dataflow-internal
        {:Agentlang.Kernel.Identity/Update_SessionCookie
         {:Id (normalize-sid sid) :Data {:UserData user-data}}})
       user-data)))
 
 (defn maybe-assign-roles [email user-roles]
-  (ev/safe-eval-internal
+  (gs/evaluate-dataflow-internal
    {:Agentlang.Kernel.Rbac/DeleteRoleAssignments
     {:Assignee email}})
   (doseq [role (if (string? user-roles)
                  (s/split user-roles #",")
                  user-roles)]
     (let [role-assignment (str role "-" email)]
-      (when-not (ev/safe-eval-internal
+      (when-not (gs/evaluate-dataflow-internal
                  {:Agentlang.Kernel.Rbac/Lookup_Role
                   {:Name role}})
-        (when-not (ev/safe-eval-internal
+        (when-not (gs/evaluate-dataflow-internal
                    {:Agentlang.Kernel.Rbac/Create_Role
                     {:Instance
                      {:Agentlang.Kernel.Rbac/Role
                       {:Name role}}}})
           (u/throw-ex (str "failed to create role " role))))
-      (when-not (ev/safe-eval-internal
+      (when-not (gs/evaluate-dataflow-internal
                  {:Agentlang.Kernel.Rbac/Lookup_RoleAssignment
                   {:Name role-assignment}})
-        (when-not (ev/safe-eval-internal
+        (when-not (gs/evaluate-dataflow-internal
                    {:Agentlang.Kernel.Rbac/Create_RoleAssignment
                     {:Instance
                      {:Agentlang.Kernel.Rbac/RoleAssignment
@@ -121,14 +120,14 @@
   #?(:clj
      (try
        (let [r (first
-                (ev/eval-internal
+                (gs/evaluate-dataflow-internal
                  {:Agentlang.Kernel.Identity/FindUser
                   {:Email email}}))
              user
              (if (and (= :ok (:status r)) (seq (:result r)))
                (first (:result r))
                (let [r (first
-                        (ev/eval-internal
+                        (gs/evaluate-dataflow-internal
                          {:Agentlang.Kernel.Identity/Create_User
                           {:Instance
                            {:Agentlang.Kernel.Identity/User

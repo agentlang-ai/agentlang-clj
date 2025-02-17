@@ -188,7 +188,7 @@
 
 (def ^:private clj-defs #{'def 'defn 'defn-})
 (def ^:private agentlang-defs #{'entity 'dataflow 'event 'record 'relationship
-                                'view 'attribute 'rule 'inference 'resolver 'pattern})
+                                'view 'attribute 'inference 'resolver 'pattern})
 
 (defn- update-local-defs [ns-name component]
   (let [local-defs (set

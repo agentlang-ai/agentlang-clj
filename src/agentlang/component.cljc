@@ -2,7 +2,6 @@
   "Components of a model."
   (:require [clojure.set :as set]
             [clojure.string :as s]
-            [agentlang.compiler.context :as ctx]
             [agentlang.lang.datetime :as dt]
             [agentlang.lang.internal :as li]
             [agentlang.lang.raw :as raw]
@@ -2338,26 +2337,6 @@
       (when-let [env (c env inst)]
         (recur (rest ccs) env))
       env)))
-
-(defn run-rules [make-eval [env env-cleanup] entity-name inst rule-specs]
-  (su/nonils
-   (mapv
-    (fn [rspec]
-      (when-let [ccs (rule-compiled-conditions entity-name rspec)]
-        (let [rn (rule-name rspec)]
-          (when-let [final-env (apply-rule-ccs env inst ccs)]
-            (future
-              (log/info (str "invoking rule " rn " for " inst))
-              (try
-                (binding [ctx/dynamic-context (ctx/from-bindings (env-cleanup final-env))]
-                  (let [r ((make-eval final-env) (make-instance (li/rule-event-name rn) {}))]
-                    (log/info (str "result of applying rule " rn ": " r))
-                    r))
-                (catch #?(:clj Exception :cljs :default) ex
-                  (.printStackTrace ex)
-                  (log/error (str rn " - rule failed"))
-                  (log/error ex))))))))
-    rule-specs)))
 
 (defn- register-llm-construct [tag construct-name spec]
   (u/call-and-set

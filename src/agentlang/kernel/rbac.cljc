@@ -15,7 +15,6 @@
     view
     pattern
     attribute
-    rule
     relationship
     component
     resolver
@@ -40,7 +39,7 @@
  [xs]
  (let
   [xs (mapv u/string-as-keyword xs)]
-  (every? (fn* [p1__610#] (some #{p1__610#} oprs)) (set xs))))
+  (every? (fn* [p1__611#] (some #{p1__611#} oprs)) (set xs))))
 (entity
  :Agentlang.Kernel.Rbac/Privilege
  {:Name
@@ -153,4 +152,4 @@
                           :Agentlang.Kernel.Rbac/AssignOwnership.Assignee}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "63512872-d842-4a32-8384-0c655166a3ef")
+ "0a1de4c7-1356-41ef-8d4d-9a68805ad9bc")

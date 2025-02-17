@@ -1,5 +1,5 @@
 (ns agentlang.auth.core
-  (:require [agentlang.evaluator :as ev]
+  (:require [agentlang.global-state :as gs]
             [agentlang.component :as cn]
             [agentlang.util.logger :as log]))
 
@@ -69,7 +69,7 @@
 (defn on-user-login [user-name]
   #?(:clj
      (try
-       (let [r (ev/eval-internal
+       (let [r (gs/evaluate-dataflow-internal
                 (cn/make-instance
                  :Agentlang.Kernel.Identity/OnUserLogin
                  {:Username user-name}))]
