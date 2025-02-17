@@ -5,7 +5,8 @@
 
 (entity
  :E1
- {:A :Int
+ {:Id {:type :Int :id true}
+  :A :Int
   :B :Int
   :C :Int
   :X {:type :String

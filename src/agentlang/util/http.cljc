@@ -7,6 +7,7 @@
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
             [agentlang.component :as cn]
+            [agentlang.lang.internal :as li]
             [agentlang.datafmt.json :as json]
             [agentlang.datafmt.transit :as t]
             [agentlang.global-state :as gs]
@@ -192,31 +193,20 @@
       (keyword (str c "/" en))
       (keyword (str base-component "/" n)))))
 
-(defn- parse-uri-parts [orig-uri fqn parts]
-  (let [ps (reverse (partition-all 3 parts))
-        f (first ps)
-        c (count f)]
-    (cond
-      (= 1 c) {:entity (fqn (first f))}
-      (= 2 c) {:entity (fqn (first f)) :id (second f)}
-      :else {:entity (fqn (second ps)) :id (nth 2 f)})))
-
 (defn- normalize-path [uri] (s/split uri #"/"))
 
 (defn parse-rest-uri [uri]
   (let [parts (s/split uri #"/")
-        c (count parts)]
-    (when (>= c 2)
-      (let [f (first parts) r (rest parts)
-            fqn (partial fully-qualified-name f)]
-        (merge
-         {:component (keyword f)}
-         (if (<= c 3)
-           {:entity (fqn (first r))
-            :id (when (seq (rest r)) (last r))}
-           (assoc
-            (parse-uri-parts uri fqn r)
-            :path (normalize-path uri))))))))
+        base-component (first parts)
+        fqn (partial fully-qualified-name base-component)]
+    (loop [ss (rest parts), n 2, result []]
+      (if-let [s (first ss)]
+        (if (= n 3)
+          (recur (rest ss) 1 (conj result s))
+          (recur (rest ss) (inc n) (conj result (fqn s))))
+        {:component (keyword base-component)
+         :entity (if (= 3 n) (last result) (last (drop-last result)))
+         :path (vec result)}))))
 
 (defn- add-path-vars [path]
   (mapcat #(vector % (str "{" (s/lower-case (name %)) "}")) path))
@@ -248,3 +238,10 @@
           (for [cookie (.split cookie-string ";")]
             (let [keyval (map #(.trim %) (.split cookie "=" 2))]
               [(first keyval) (second keyval)])))))
+
+(defn create-pattern-from-path [entity-name obj path]
+  (if-let [id-val ((cn/identity-attribute-name entity-name) obj)]
+    (let [path (concat path [id-val])
+          attrs (li/record-attributes obj)]
+      {entity-name (assoc assoc li/path-attr (li/vec-to-path path))})
+    (u/throw-ex (str (cn/identity-attribute-name entity-name) " is required for " entity-name))))

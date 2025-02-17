@@ -156,14 +156,13 @@
          (assoc hdrs "Set-Cookie" (str cookie "; Domain=" (if (= "NULL" cd) "" cd) "; Path=/")))
        hdrs))})
 
-(defn- maybe-assoc-root-type [mode obj result]
-  (if-let [t
-           (case mode
-             :single (cn/instance-type-kw obj)
-             :seq (cn/instance-type-kw (first obj))
-             nil)]
-    (assoc result :type t)
-    result))
+(defn- maybe-assoc-root-type [mode obj]
+  (if-let [t (case mode
+               :single (cn/instance-type-kw obj)
+               :seq (cn/instance-type-kw (first obj))
+               nil)]
+    {:type t :result obj}
+    obj))
 
 (defn- find-data-format [request]
   (let [ct (request-content-type request)]
@@ -175,19 +174,17 @@
        ((uh/decoder data-fmt) (String. (.bytes body)))) data-fmt nil]
     [nil nil (unsupported-media-type request)]))
 
-(defn- cleanup-result [rs]
-  (if-let [result (:result rs)]
-    (let [mode (cond
-                 (cn/an-instance? result) :single
-                 (and (seqable? result) (seq result) (cn/an-instance? (first result))) :seq
-                 :else :none)]
-      (maybe-assoc-root-type
-       mode result
-       (assoc rs :result (case mode
-                           :single (cn/cleanup-inst result)
-                           :seq (mapv cn/cleanup-inst result)
-                           result))))
-    rs))
+(defn- cleanup-result [result]
+  (let [mode (cond
+               (cn/an-instance? result) :single
+               (and (seqable? result) (seq result) (cn/an-instance? (first result))) :seq
+               :else :none)]
+    (maybe-assoc-root-type
+     mode result
+     (case mode
+       :single (cn/cleanup-inst result)
+       :seq (mapv cn/cleanup-inst result)
+       result))))
 
 (defn- cleanup-results [rs]
   (if (map? rs)
@@ -233,43 +230,22 @@
                 (evaluator event-instance))]
     result))
 
-(defn- extract-status [r]
-  (cond
-    (map? r) (:status r)
-    (vector? r) (extract-status (first r))
-    :else nil))
-
 (defn- wrap-result
   ([on-no-perm r data-fmt]
-   (let [status (extract-status r)]
-     (case status
-       nil (bad-request "invalid request" data-fmt "NILL_REQUEST")
-       :ok (ok (cleanup-results r) data-fmt)
-       :error (if (gs/error-no-perm?)
-                (if on-no-perm
-                  (ok on-no-perm data-fmt)
-                  (unauthorized r data-fmt "UNAUTHORIZED"))
-                (internal-error r data-fmt))
-       (ok r data-fmt))))
+   (ok (if (seq r) (cleanup-results r) r) data-fmt))
   ([r data-fmt]
    (wrap-result nil r data-fmt)))
 
 (defn- maybe-ok
-  ([on-no-perm exp data-fmt request]
+  ([on-no-perm data-fmt exp]
    (try
-     (let [r (exp)
-           s (extract-status r)]
-       (when (and s (not= s :ok))
-         (if request
-           (log/error (str "agentlang.http maybe-ok: error: status not ok evaluating http request - "
-                          request " - " (request-object request) " - response: " r))
-           (log/error (str "agentlang.http maybe-ok: error: status not ok - " r))))
+     (let [r (:result (exp))]
        (wrap-result on-no-perm r data-fmt))
      (catch Exception ex
        (log/exception ex)
        (internal-error (.getMessage ex) data-fmt))))
-  ([exp data-fmt request]
-   (maybe-ok nil exp data-fmt request)))
+  ([data-fmt exp]
+   (maybe-ok nil data-fmt exp)))
 
 (defn- assoc-event-context [request auth-config event-instance]
   (if auth-config
@@ -327,7 +303,7 @@
                (bad-request
                 (str "cannot invoke internal event - " (cn/instance-type-kw obj))
                 data-fmt "INTERNAL_EVENT_ERROR")
-               (maybe-ok #(evaluate evaluator obj) data-fmt nil))))
+               (maybe-ok data-fmt #(evaluate evaluator obj)))))
          (unsupported-media-type request))))
   ([evaluator auth-info request]
    (process-dynamic-eval evaluator auth-info nil request)))
@@ -439,7 +415,8 @@
                                  (try
                                    (maybe-ok
                                     (and options (:on-no-perm options))
-                                    #(evaluate evaluator evt) data-fmt request)
+                                    data-fmt
+                                    #(evaluate evaluator evt))
                                    (finally
                                      (when post-fn (post-fn)))))))))
         (bad-request (str "invalid request uri - " (:* (:params request))) "INVALID_REQUEST_URI"))))
@@ -454,18 +431,26 @@
 (defn- as-partial-path [_]
   (u/raise-not-implemented 'as-partial-path))
 
-(def process-post-request
-  (partial
-   process-generic-request
-   (fn [{entity-name :entity component :component path :path} obj]
-     (let [path-attr (when path {li/path-attr (as-partial-path path)})]
-       (if (cn/event? entity-name)
-         [obj nil]
-         (if-let [evt (maybe-generate-multi-post-event obj component path-attr)]
-           [(fn [] [{evt {}} #(cn/remove-event evt)]) nil]
-           [{(cn/crud-event-name component entity-name :Create)
-             (merge {:Instance obj} path-attr)}
-            nil]))))))
+(defn lookup-instance-by-path [path]
+  (let [entity-name (last (drop-last path))]
+    (first
+     (:result
+      (gs/evaluate-pattern
+       {entity-name {li/path-attr? (li/vec-to-path path)}})))))
+
+(defn process-post-request [_ [_ maybe-unauth] request]
+  ;; TODO: support sub-tree creation
+  (or (maybe-unauth request)
+      (let [[obj data-fmt _] (request-object request)]
+        (maybe-ok
+         data-fmt
+         #(when-let [parsed-path (parse-rest-uri request)]
+            (let [path (:path parsed-path)
+                  parent-path (drop-last 2 path)]
+              (if (or (not (seq parent-path)) (lookup-instance-by-path (drop-last 2 parent-path)))
+                (let [pat (uh/create-pattern-from-path (:entity parsed-path) obj path)]
+                  (gs/evaluate-pattern pat))
+                (u/throw-ex (str "Parent not found - " (li/vec-to-path parent-path))))))))))
 
 (def process-put-request
   (partial
@@ -543,7 +528,7 @@
 
 (defn- get-tree [evaluator [auth-config maybe-unauth] request
                  component entity-name id path data-fmt]
-  (if-not id
+  #_(if-not id
     (bad-request (str "identity of " entity-name " required for tree lookup") "IDENTITY_REQUIRED")
     (or (maybe-unauth request)
         (let [evt-context (partial assoc-event-context request auth-config)
@@ -592,36 +577,17 @@
     (when (apply ln/dataflow event-name pats)
       event-name)))
 
-(defn process-get-request [evaluator auth-info request]
-  (process-generic-request
-   (fn [{entity-name :entity id :id component :component path :path
-         suffix :suffix query-params :query-params data-fmt :data-fmt
-         :as p} obj]
-     (cond
-       query-params
-       [(fn []
-          (let [evt (generate-filter-query-event
-                     component entity-name
-                     (merge query-params (when path (maybe-path-attribute (str path "%")))))]
-            [{evt {}} #(cn/remove-event evt)]))
-        nil]
-
-       (= suffix :tree)
-       [nil (get-tree evaluator auth-info request component
-                      entity-name id path data-fmt)]
-
-       (between-rel-path? path)
-       [(fn []
-          (let [evt (generate-query-by-between-rel-event component path)]
-            [{evt {}} #(cn/remove-event evt)]))
-        nil]
-
-       :else
-       [(if id
-          (make-lookup-event component entity-name id path)
-          (make-lookupall-event component entity-name (when path (str path "%"))))
-        nil (when-not id {:on-no-perm []})]))
-   evaluator auth-info request))
+(defn process-get-request [_ [_ maybe-unauth] request]
+  ;; TODO: support __tree, between-paths and query-params
+  (or (maybe-unauth request)
+      (let [[_ data-fmt _] (request-object request)]
+        (maybe-ok
+         data-fmt
+         #(if-let [parsed-path (parse-rest-uri request)]
+            (if (= :tree (:suffix parsed-path))
+              (u/throw-ex "__tree lookup not implemented")
+              (gs/evaluate-dataflow {(cn/crud-event-name (:entity parsed-path) :Lookup)
+                                     {:path (li/vec-to-path (:path parsed-path))}})))))))
 
 (def process-delete-request
   (partial
@@ -679,7 +645,7 @@
               evn (generate-filter-query-event component entity-name (:where q) deleted)
               evt (assoc-event-context request auth-config {evn {}})]
           (try
-            (maybe-ok #(evaluate evaluator evt) data-fmt request)
+            (maybe-ok data-fmt #(evaluate evaluator evt))
             (catch Exception ex
               (log/exception ex)
               (internal-error (get-internal-error-message :query-failure (.getMessage ex))))
