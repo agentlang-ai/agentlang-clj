@@ -318,85 +318,94 @@
        (check-bs-ids [103] (lookup-bs with-u2 2))
        (check-bs-ids [103] (lookup-bs with-u1 2))))))
 
-;; (deftest instance-privs
-;;   (reset-events!)
-;;   (defcomponent :Ipv
-;;     (entity
-;;      :Ipv/E
-;;      {:rbac [{:roles ["ipv-user"] :allow [:create :update :read]}
-;;              {:roles ["ipv-guest"] :allow [:read]}]
-;;       :Id {:type :Int tu/guid true}
-;;       :X :Int})
-;;     (dataflow
-;;      :Ipv/InitUsers
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u1@ipv.com"}}
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u2@ipv.com"}}
-;;      {:Agentlang.Kernel.Rbac/RoleAssignment
-;;       {:Role "ipv-user" :Assignee "u1@ipv.com"}})
-;;     {:Agentlang.Kernel.Rbac/RoleAssignment
-;;      {:Role "ipv-guest" :Assignee "u2@ipv.com"}})
-;;   (is (finalize-events))
-;;   (is (cn/instance-of?
-;;        :Agentlang.Kernel.Rbac/RoleAssignment
-;;        (tu/first-result {:Ipv/InitUsers {}})))
-;;   (call-with-rbac
-;;    (fn []
-;;      (let [e? (partial cn/instance-of? :Ipv/E)
-;;            create-e (fn [user id]
-;;                       (tu/first-result
-;;                        (with-user
-;;                          user
-;;                          {:Ipv/Create_E
-;;                           {:Instance
-;;                            {:Ipv/E {:Id id :X (* id 100)}}}})))
-;;            update-e (fn [user id x]
-;;                       (tu/first-result
-;;                        (with-user
-;;                          user
-;;                          {:Ipv/Update_E
-;;                           {:Id id
-;;                            :Data {:X x}}})))
-;;            lookup-e (fn [user id]
-;;                       (tu/first-result
-;;                        (with-user
-;;                          user
-;;                          {:Ipv/Lookup_E
-;;                           {:Id id}})))
-;;            inst-priv (fn [owner assignee actions id]
-;;                        (tu/first-result
-;;                         (with-user
-;;                           owner
-;;                           {:Agentlang.Kernel.Rbac/Create_InstancePrivilegeAssignment
-;;                            {:Instance
-;;                             {:Agentlang.Kernel.Rbac/InstancePrivilegeAssignment
-;;                              {:Resource :Ipv/E
-;;                               :ResourceId id
-;;                               :Assignee assignee
-;;                               :Actions actions}}}})))
-;;            del-inst-priv (fn [owner assignee id] (inst-priv owner assignee nil id))
-;;            ip? (partial cn/instance-of? :Agentlang.Kernel.Rbac/InstancePrivilegeAssignment)
-;;            e1 (create-e "u1@ipv.com" 1)]
-;;        (is (e? e1))
-;;        (is (not (create-e "u2@ipv.com" 2)))
-;;        (is (cn/same-instance? e1 (lookup-e "u1@ipv.com" 1)))
-;;        (is (not (lookup-e "u2@ipv.com" 1)))
-;;        (is (e? (update-e "u1@ipv.com" 1 3000)))
-;;        (is (not (update-e "u2@ipv.com" 1 5000)))
-;;        (is (ip? (inst-priv "u1@ipv.com" "u2@ipv.com" [:read :update] 1)))
-;;        (let [e (lookup-e "u1@ipv.com" 1)]
-;;          (is (= 3000 (:X e)))
-;;          (is (= [:read :update] (cn/instance-privileges-for-user e "u2@ipv.com")))
-;;          (is (cn/same-instance? e (lookup-e "u2@ipv.com" 1)))
-;;          (is (e? (update-e "u2@ipv.com" 1 5000)))
-;;          (is (ip? (del-inst-priv "u1@ipv.com" "u2@ipv.com" 1)))
-;;          (let [e (lookup-e "u1@ipv.com" 1)]
-;;            (is (= 5000 (:X e)))
-;;            (is (not (cn/instance-privileges-for-user e "u2@ipv.com")))
-;;            (is (not (update-e "u2@ipv.com" 1 8000)))
-;;            (is (not (lookup-e "u2@ipv.com" 1)))
-;;            (is (cn/same-instance? e (lookup-e "u1@ipv.com" 1)))))))))
+(deftest instance-privs
+  (with-rbac
+    #(defcomponent :Ipv
+       (entity
+        :Ipv/E
+        {:rbac [{:roles ["ipv-user"] :allow [:create :update :read]}
+                {:roles ["ipv-guest"] :allow [:read]}]
+         :Id {:type :Int :id true}
+         :X :Int})
+       (dataflow
+        :Ipv/InitUsers
+        {:Agentlang.Kernel.Identity/User
+         {:Email "u1@ipv.com"}}
+        {:Agentlang.Kernel.Identity/User
+         {:Email "u2@ipv.com"}}
+        {:Agentlang.Kernel.Rbac/RoleAssignment
+         {:Role "ipv-user" :Assignee "u1@ipv.com"}})
+       {:Agentlang.Kernel.Rbac/RoleAssignment
+        {:Role "ipv-guest" :Assignee "u2@ipv.com"}}))
+  (call-with-rbac
+   (fn []
+     (let [e? (partial cn/instance-of? :Ipv/E)
+           as-path (fn [id] (li/vec-to-path [:Ipv/E id]))
+           create-e (fn [user id]
+                      (tu/invoke
+                       (with-user
+                         user
+                         {:Ipv/Create_E
+                          {:Instance
+                           {:Ipv/E {:Id id :X (* id 100)}}}})))
+           update-e (fn [user id x]
+                      (first
+                       (tu/invoke
+                        (with-user
+                          user
+                          {:Ipv/Update_E
+                           {:path (as-path id)
+                            :Data {:X x}}}))))
+           lookup-e (fn [user id]
+                      (first
+                       (tu/invoke
+                        (with-user
+                          user
+                          {:Ipv/Lookup_E
+                           {:path (as-path id)}}))))
+           has-action? (fn [actions action]
+                         (if (some #{action} actions)
+                           true
+                           false))
+           inst-priv (fn [owner assignee actions id]
+                       (tu/invoke
+                        (with-user
+                          owner
+                          {:Agentlang.Kernel.Rbac/AssignInstancePrivilege
+                           {:ResourcePath (as-path id)
+                            :Assignee assignee
+                            :CanRead (has-action? actions :read)
+                            :CanUpdate (has-action? actions :update)
+                            :CanDelete (has-action? actions :delete)}})))
+           del-inst-priv (fn [owner assignee id]
+                           (first
+                            (tu/invoke
+                             (with-user
+                               owner
+                               {:Agentlang.Kernel.Rbac/DeleteInstancePrivilegeAssignment
+                                {:ResourcePath (as-path id)
+                                 :Assignee assignee}}))))
+           ip? #(string? (:ResourcePath %))
+           e1 (create-e "u1@ipv.com" 1)]
+       (is (e? e1))
+       (tu/is-error #(create-e "u2@ipv.com" 2))
+       (is (cn/same-instance? e1 (lookup-e "u1@ipv.com" 1)))
+       (is (not (lookup-e "u2@ipv.com" 1)))
+       (is (e? (update-e "u1@ipv.com" 1 3000)))
+       (is (not (update-e "u2@ipv.com" 1 5000)))
+       (is (ip? (inst-priv "u1@ipv.com" "u2@ipv.com" [:read :update] 1)))
+       (tu/is-error #(inst-priv "u2@ipv.com" "u2@ipv.com" [:read :update] 1))
+       (let [e (lookup-e "u1@ipv.com" 1)]
+         (is (= 3000 (:X e)))
+         (is (cn/same-instance? e (lookup-e "u2@ipv.com" 1)))
+         (is (e? (update-e "u2@ipv.com" 1 5000)))
+         (tu/is-error #(del-inst-priv "u2@ipv.com" "u2@ipv.com" 1))
+         (is (ip? (del-inst-priv "u1@ipv.com" "u2@ipv.com" 1)))
+         (let [e (lookup-e "u1@ipv.com" 1)]
+           (is (= 5000 (:X e)))
+           (is (not (update-e "u2@ipv.com" 1 8000)))
+           (is (not (lookup-e "u2@ipv.com" 1)))
+           (is (cn/same-instance? e (lookup-e "u1@ipv.com" 1)))))))))
 
 ;; (deftest creator-and-parent-as-owners
 ;;   (reset-events!)

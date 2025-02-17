@@ -16,7 +16,7 @@
 (def ^:private lookup-superuser
   (memoize
    (fn []
-     (when-let [r (:result (gs/evaluate-dataflow (find-su-event)))]
+     (when-let [r (:result (gs/evaluate-dataflow-internal (find-su-event)))]
        (first r)))))
 
 (defn superuser? [user]
@@ -102,11 +102,11 @@
     privs)))
 
 (defn- has-priv? [action userid arg]
-  ;; Assumes - (not (superuser-email? userid))
-  (let [resource arg
-        privs (privileges userid)
-        predic (partial filter-privs privs action true)]
-    (predic resource)))
+  (or (superuser-email? userid)
+      (let [resource arg
+            privs (privileges userid)
+            predic (partial filter-privs privs action true)]
+        (predic resource))))
 
 (def can-read? (partial has-priv? :read))
 (def can-create? (partial has-priv? :create))

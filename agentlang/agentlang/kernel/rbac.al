@@ -80,3 +80,42 @@
    :CanDelete {:type :Boolean :default false}
    :ResourcePath {:type :String :indexed true}
    :Assignee {:type :String :indexed true}}})
+
+(event
+ {:AssignInstancePrivilege
+  {:Name {:type :String :default u/uuid-string}
+   :CanRead {:type :Boolean :default false}
+   :CanUpdate {:type :Boolean :default false}
+   :CanDelete {:type :Boolean :default false}
+   :ResourcePath :String
+   :Assignee :String}})
+
+(dataflow
+ :AssignInstancePrivilege
+ {:InstancePrivilegeAssignment
+  {:Name :AssignInstancePrivilege.Name
+   :IsOwner false
+   :CanRead :AssignInstancePrivilege.CanRead
+   :CanUpdate :AssignInstancePrivilege.CanUpdate
+   :CanDelete :AssignInstancePrivilege.CanDelete
+   :ResourcePath :AssignInstancePrivilege.ResourcePath
+   :Assignee :AssignInstancePrivilege.Assignee}})
+
+(event
+ :DeleteInstancePrivilegeAssignment
+ {:ResourcePath :String
+  :Assignee :String})
+
+(event
+ {:AssignOwnership
+  {:Name {:type :String :default u/uuid-string}
+   :ResourcePath :String
+   :Assignee :String}})
+
+(dataflow
+ :AssignOwnership
+ {:InstancePrivilegeAssignment
+  {:Name :AssignOwnership.Name
+   :IsOwner true
+   :ResourcePath :AssignOwnership.ResourcePath
+   :Assignee :AssignOwnership.Assignee}})

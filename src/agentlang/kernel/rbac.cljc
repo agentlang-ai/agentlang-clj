@@ -40,7 +40,7 @@
  [xs]
  (let
   [xs (mapv u/string-as-keyword xs)]
-  (every? (fn* [p1__603#] (some #{p1__603#} oprs)) (set xs))))
+  (every? (fn* [p1__610#] (some #{p1__610#} oprs)) (set xs))))
 (entity
  :Agentlang.Kernel.Rbac/Privilege
  {:Name
@@ -107,6 +107,50 @@
                           :CanDelete {:type :Boolean, :default false},
                           :ResourcePath {:type :String, :indexed true},
                           :Assignee {:type :String, :indexed true}}})
+(event
+ #:Agentlang.Kernel.Rbac{:AssignInstancePrivilege
+                         {:Name
+                          {:type :String, :default u/uuid-string},
+                          :CanRead {:type :Boolean, :default false},
+                          :CanUpdate {:type :Boolean, :default false},
+                          :CanDelete {:type :Boolean, :default false},
+                          :ResourcePath :String,
+                          :Assignee :String}})
+(dataflow
+ :Agentlang.Kernel.Rbac/AssignInstancePrivilege
+ #:Agentlang.Kernel.Rbac{:InstancePrivilegeAssignment
+                         {:Name
+                          :Agentlang.Kernel.Rbac/AssignInstancePrivilege.Name,
+                          :IsOwner false,
+                          :CanRead
+                          :Agentlang.Kernel.Rbac/AssignInstancePrivilege.CanRead,
+                          :CanUpdate
+                          :Agentlang.Kernel.Rbac/AssignInstancePrivilege.CanUpdate,
+                          :CanDelete
+                          :Agentlang.Kernel.Rbac/AssignInstancePrivilege.CanDelete,
+                          :ResourcePath
+                          :Agentlang.Kernel.Rbac/AssignInstancePrivilege.ResourcePath,
+                          :Assignee
+                          :Agentlang.Kernel.Rbac/AssignInstancePrivilege.Assignee}})
+(event
+ :Agentlang.Kernel.Rbac/DeleteInstancePrivilegeAssignment
+ {:ResourcePath :String, :Assignee :String})
+(event
+ #:Agentlang.Kernel.Rbac{:AssignOwnership
+                         {:Name
+                          {:type :String, :default u/uuid-string},
+                          :ResourcePath :String,
+                          :Assignee :String}})
+(dataflow
+ :Agentlang.Kernel.Rbac/AssignOwnership
+ #:Agentlang.Kernel.Rbac{:InstancePrivilegeAssignment
+                         {:Name
+                          :Agentlang.Kernel.Rbac/AssignOwnership.Name,
+                          :IsOwner true,
+                          :ResourcePath
+                          :Agentlang.Kernel.Rbac/AssignOwnership.ResourcePath,
+                          :Assignee
+                          :Agentlang.Kernel.Rbac/AssignOwnership.Assignee}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "b64e01b9-ffa7-4ce0-ab32-1cc8d915e9a9")
+ "63512872-d842-4a32-8384-0c655166a3ef")

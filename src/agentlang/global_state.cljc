@@ -109,4 +109,4 @@
   (@evaluate-dataflow-internal-fn event-instance))
 
 (defn evaluate-pattern [env pat]
-  (@evaluate-pattern env pat))
+  (@evaluate-pattern-fn env pat))

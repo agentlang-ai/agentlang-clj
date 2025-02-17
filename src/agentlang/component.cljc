@@ -2182,45 +2182,12 @@
         v)
       v)))
 
-(defn owners [inst]
-  (when (an-instance? inst)
-    (let [owners (:owners (li/meta-attr inst))]
-      (when (seq owners)
-        (set (s/split owners #","))))))
-
 (defn- get-meta-attr [inst]
   (when-let [ma (li/meta-attr inst)]
     (if (string? ma)
       (when (seq ma)
         (#?(:clj read-string :cljs cljs.reader/read-string) ma))
       ma)))
-
-(defn- update-owners [opr inst users]
-  (let [xs (owners inst)]
-    (if-let [ys (seq (opr xs users))]
-      (let [ma (get-meta-attr inst)
-            meta (assoc ma :owners (s/join "," ys))]
-        (assoc inst li/meta-attr meta))
-      inst)))
-
-(def concat-owners (partial update-owners set/union))
-(def remove-owners (partial update-owners set/difference))
-
-(defn user-is-owner? [user inst]
-  (some #{user} (owners inst)))
-
-(defn instance-privileges-for-user [inst user]
-  (when (an-instance? inst)
-    (seq (get (:instprivs (li/meta-attr inst)) user))))
-
-(defn assign-instance-privileges [inst user privs]
-  (assoc-in inst [li/meta-attr :instprivs user] privs))
-
-(defn remove-instance-privileges [inst user]
-  (let [path [li/meta-attr :instprivs]]
-    (if-let [ps (get-in inst path)]
-      (assoc-in inst path (dissoc ps user))
-      inst)))
 
 (defn between-relationship-instance? [inst]
   (when-let [t (instance-type-kw inst)]
