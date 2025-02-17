@@ -14,10 +14,8 @@
    [agentlang.store.db-common :as dbc]
    [agentlang.resolver.timer :as timer]
    [agentlang.resolver.registry :as rr]
-   [agentlang.compiler :as c]
    [agentlang.component :as cn]
-   [agentlang.interpreter :as intrp]
-   [agentlang.evaluator :as e]
+   [agentlang.interpreter :as ev]
    [agentlang.intercept :as ei]
    [agentlang.global-state :as gs]
    [agentlang.lang :as ln]
@@ -47,9 +45,19 @@
         mp
         [mp])))))
 
-(defn store-from-config [config]
-  (or (:store-handle config)
-      (e/store-from-config (:store config))))
+(defn store-from-config [store-or-store-config]
+  (cond
+    (or (nil? store-or-store-config)
+        (map? store-or-store-config))
+    (or (:store-handle store-or-store-config)
+        (store/open-default-store store-or-store-config))
+
+    (and (keyword? store-or-store-config)
+         (= store-or-store-config :none))
+    nil
+
+    :else
+    store-or-store-config))
 
 (defn load-components [components model-root config]
   (loader/load-components components model-root))
@@ -148,8 +156,23 @@
           (catch InterruptedException _ nil))
         (recur)))))
 
+(defn- maybe-delete-model-config-instance [entity-name]
+  (let [evt-name (cn/crud-event-name entity-name :Delete)]
+    (gs/evaluate-dataflow-internal {evt-name {:Id 1}})))
+
+(defn save-model-config-instance [app-config model-name]
+  (when-let [ent (cn/model-config-entity model-name)]
+    (when-let [attrs (ent app-config)]
+      (maybe-delete-model-config-instance ent)
+      (let [evt-name (cn/crud-event-name ent :Create)]
+        (gs/evaluate-dataflow-internal {evt-name {:Instance {ent attrs}}})))))
+
+(defn save-model-config-instances []
+  (when-let [app-config (gs/get-app-config)]
+    (mapv (partial save-model-config-instance app-config) (cn/model-names))))
+
 (defn run-appinit-tasks! [evaluator init-data]
-  (e/save-model-config-instances)
+  (save-model-config-instances)
   (run-configuration-patterns! evaluator (gs/get-app-config))
   (run-standalone-patterns! evaluator)
   (trigger-appinit-event! evaluator init-data)
@@ -202,7 +225,7 @@
 
 (defn init-runtime [model config]
   (let [store (store-from-config config)
-        ev (partial intrp/evaluate-dataflow store)
+        ev (partial ev/evaluate-dataflow store)
         ins (:interceptors config)
         embeddings-config (:embeddings config)]
     (when embeddings-config (ec/init embeddings-config))
@@ -236,7 +259,7 @@
   ([args [[model model-root] config :as abc]]
    (or @runtime-inited
        (let [config (finalize-config model config)
-             store (e/store-from-config (:store config))
+             store (store-from-config (:store config))
              config (assoc config :store-handle store)
              components (or
                          (if model
@@ -371,12 +394,11 @@
 
 (defn invoke-migrations-event []
   (try
-    (let
-     [r (e/eval-all-dataflows
-         (cn/make-instance
-          {:Agentlang.Kernel.Lang/Migrations {}}))]
+    (let [r (ev/evaluate-dataflow
+             (cn/make-instance
+              {:Agentlang.Kernel.Lang/Migrations {}}))]
       (log/info (str "migrations result: " r))
-      r)
+      (:result r))
     (catch Exception ex
       (log/error (str "migrations event failed: " (.getMessage ex)))
       (throw ex))))

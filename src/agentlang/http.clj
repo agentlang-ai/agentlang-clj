@@ -11,9 +11,7 @@
             [clojure.edn :as edn]
             [agentlang.auth.core :as auth]
             [agentlang.auth.jwt :as jwt]
-            [agentlang.compiler :as compiler]
             [agentlang.component :as cn]
-            [agentlang.evaluator :as ev]
             [agentlang.global-state :as gs]
             [agentlang.gpt.core :as gpt]
             [agentlang.graphql.generator :as gg]
@@ -25,13 +23,13 @@
             [agentlang.util.errors :refer [get-internal-error-message]]
             [agentlang.util.http :as uh]
             [agentlang.util.logger :as log]
+            [agentlang.interpreter :as ev]
             [org.httpkit.server :as h]
             [org.httpkit.client :as hc]
             [agentlang.datafmt.json :as json]
             [ring.util.codec :as codec]
             [ring.middleware.cors :as cors]
             [agentlang.util.errors :refer [get-internal-error-message]]
-            [agentlang.evaluator :as ev]
             [com.walmartlabs.lacinia :refer [execute]]
             [agentlang.graphql.core :as graphql]
             [ring.middleware.params :refer [wrap-params] :as params]
@@ -371,10 +369,9 @@
                    :Content (if (string? desc)
                               desc
                               (:content desc))})
-            result (first
-                    (ev/eval-all-dataflows
-                     (cn/make-instance {:Selfservice.Core/ProcessWebhook
-                                        {:Tickets [inst]}})))
+            result (ev/evaluate-dataflow
+                    (cn/make-instance {:Selfservice.Core/ProcessWebhook
+                                       {:Tickets [inst]}}))
             final-result (dissoc result :env)]
         (if (= :ok (:status final-result))
           (ok final-result)
@@ -452,9 +449,7 @@
 
 (defn- maybe-generate-multi-post-event [obj component path-attr]
   (when (multi-post-request? obj)
-    (let [event-name (li/temp-event-name component)]
-      (and (apply ln/dataflow event-name (compiler/parse-relationship-tree path-attr obj))
-           event-name))))
+    (u/throw-ex (str "Multiple object POST - not implemented"))))
 
 (defn- as-partial-path [_]
   (u/raise-not-implemented 'as-partial-path))
@@ -690,33 +685,6 @@
               (internal-error (get-internal-error-message :query-failure (.getMessage ex))))
             (finally (cn/remove-event evn))))
         (unsupported-media-type request))))
-
-(defn- process-start-debug-session [evaluator [auth-config maybe-unauth] request]
-  (log-request "Start debug request received" request)
-  (or (maybe-unauth request)
-      (if-let [data-fmt (find-data-format request)]
-        (let [[obj _ err-response] (request-object request)]
-          (or err-response
-              (ok-html (ev/debug-dataflow obj))))
-        (unsupported-media-type request))))
-
-(defn- process-debug-step [evaluator [auth-config maybe-unauth] request]
-  (log-request "Debug-step request received" request)
-  (or (maybe-unauth request)
-      (let [id (get-in request [:params :id])]
-        (ok (ev/debug-step id)))))
-
-(defn- process-debug-continue [evaluator [auth-config maybe-unauth] request]
-  (log-request "Debug-continue request received" request)
-  (or (maybe-unauth request)
-      (let [id (get-in request [:params :id])]
-        (ok (ev/debug-continue id)))))
-
-(defn- process-delete-debug-session [evaluator [auth-config maybe-unauth] request]
-  (log-request "Debug-delete request received" request)
-  (or (maybe-unauth request)
-      (let [id (get-in request [:params :id])]
-        (ok (ev/debug-cancel id)))))
 
 (defn- eval-ok-result [eval-result]
   (if (vector? eval-result)
@@ -1146,7 +1114,7 @@
             operation (:operation decoded-token)
             payload (:payload decoded-token)]
         (if (and operation payload)
-          (let [result (ev/eval-all-dataflows (cn/make-instance {operation payload}))]
+          (let [result (ev/evaluate-dataflow (cn/make-instance {operation payload}))]
             (ok (dissoc (first result) :env)))
           (bad-request (str "bad token") "BAD_TOKEN")))
       (bad-request (str "token not specified") "ID_TOKEN_REQUIRED"))))
@@ -1324,10 +1292,6 @@
    :post-request             (partial process-post-request evaluator auth-info)
    :get-request              (partial process-get-request evaluator auth-info)
    :delete-request           (partial process-delete-request evaluator auth-info)
-   :start-debug-session      (partial process-start-debug-session evaluator auth-info)
-   :debug-step               (partial process-debug-step evaluator auth-info)
-   :debug-continue           (partial process-debug-continue evaluator auth-info)
-   :delete-debug-session     (partial process-delete-debug-session evaluator auth-info)
    :query                    (partial process-query evaluator auth-info)
    :eval                     (partial process-dynamic-eval evaluator auth-info nil)
    :ai                       (partial process-gpt-chat auth-info)

@@ -99,14 +99,16 @@
 (def ^:private evaluate-pattern-fn (atom nil))
 
 (defn set-evaluate-dataflow-fn! [f] (reset! evaluate-dataflow-fn f))
-(defn set-evaluate-dataflow-internal-fn! [f] (reset! evaluate-dataflow-internal-fn f))
 (defn set-evaluate-pattern-fn! [f] (reset! evaluate-pattern-fn f))
 
 (defn evaluate-dataflow [event-instance]
   (@evaluate-dataflow-fn event-instance))
 
 (defn evaluate-dataflow-internal [event-instance]
-  (@evaluate-dataflow-internal-fn event-instance))
+  (kernel-call #(evaluate-dataflow event-instance)))
 
 (defn evaluate-pattern [env pat]
   (@evaluate-pattern-fn env pat))
+
+(defn evaluate-pattern-internal [env pat]
+  (kernel-call #(evaluate-pattern env pat)))

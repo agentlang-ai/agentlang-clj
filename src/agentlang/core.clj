@@ -32,8 +32,7 @@
             [agentlang.swagger.docindex :as docindex]
             [agentlang.graphql.generator :as gg]
             [agentlang.util.runtime :as ur]
-            [agentlang.lang.tools.nrepl.core :as nrepl]
-            [agentlang.evaluator :as ev])
+            [agentlang.lang.tools.nrepl.core :as nrepl])
   (:import [java.util Properties]
            [java.io File]
            [org.apache.commons.exec CommandLine Executor DefaultExecutor])

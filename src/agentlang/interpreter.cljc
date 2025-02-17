@@ -1,6 +1,7 @@
 (ns agentlang.interpreter
   (:require [clojure.set :as set]
             [clojure.walk :as w]
+            [clojure.core.async :as async]
             #?(:clj [clojure.core.cache.wrapped :as cache])
             [agentlang.model]
             [agentlang.util :as u]
@@ -12,7 +13,9 @@
             [agentlang.global-state :as gs]
             [agentlang.lang.internal :as li]
             [agentlang.resolver.registry :as rr]
-            [agentlang.resolver.core :as r]))
+            [agentlang.resolver.core :as r]
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])))
 
 (defn- make-result [env result]
   {:env env :result result})
@@ -498,25 +501,27 @@
         (maybe-lift-relationship-patterns pat)))
     [pat]))
 
-(defn evaluate-pattern [env pat]
-  (let [[condition-handlers pat]
-        (if (map? pat)
-          [(li/except-tag pat) (dissoc pat li/except-tag)]
-          [nil pat])
-        [pat sub-pats] (maybe-preprocecss-pattern env pat)]
-    (if-let [handler (pattern-handler pat)]
-      (try
-        (let [r (handler env pat sub-pats)
-              res (:result r)
-              no-data (or (nil? res) (and (seqable? res) (not (seq res))))]
-          (if-let [on-not-found (and no-data (:not-found condition-handlers))]
-            (evaluate-pattern env on-not-found)
-            r))
-        (catch #?(:clj Exception :cljs js/Error) ex
-          (if-let [on-error (:error condition-handlers)]
-            (evaluate-pattern env on-error)
-            (throw ex))))
-      (u/throw-ex (str "Cannot handle invalid pattern " pat)))))
+(defn evaluate-pattern
+  ([env pat]
+   (let [[condition-handlers pat]
+         (if (map? pat)
+           [(li/except-tag pat) (dissoc pat li/except-tag)]
+           [nil pat])
+         [pat sub-pats] (maybe-preprocecss-pattern env pat)]
+     (if-let [handler (pattern-handler pat)]
+       (try
+         (let [r (handler env pat sub-pats)
+               res (:result r)
+               no-data (or (nil? res) (and (seqable? res) (not (seq res))))]
+           (if-let [on-not-found (and no-data (:not-found condition-handlers))]
+             (evaluate-pattern env on-not-found)
+             r))
+         (catch #?(:clj Exception :cljs js/Error) ex
+           (if-let [on-error (:error condition-handlers)]
+             (evaluate-pattern env on-error)
+             (throw ex))))
+       (u/throw-ex (str "Cannot handle invalid pattern " pat)))))
+  ([pat] (evaluate-pattern (env/make (store/get-default-store) nil) pat)))
 
 (defn- maybe-normalize-pattern [pat]
   (if (li/query-pattern? pat)
@@ -557,10 +562,26 @@
 (defn evaluate-dataflow-in-environment [env event-instance]
   (evaluate-dataflow nil env event-instance false))
 
-(defn evaluate-dataflow-internal [event-instance]
-  (gs/kernel-call
-   #(evaluate-dataflow (store/get-default-store) nil event-instance true)))
+#?(:clj
+   (defn async-evaluate-pattern [op-code pat result-chan]
+     (async/go
+       (try
+         (let [evaluation-result (case op-code
+                                   "eval" (cond
+                                            (map? pat) (evaluate-pattern pat)
+                                            (list? pat) (eval pat)
+                                            :else (println "Cannot evaluate this pattern: " pat))
+                                   "add" (eval pat)
+                                   (println "Wrong op-code for the pattern - op-code: " op-code))]
+           (log/info (str "Evaluation result from async-evaluate-pattern is: " evaluation-result))
+           (async/>! result-chan evaluation-result))
+         (catch Exception e
+           (do
+             (log/warn (str "Exception during evaluation on async-evaluate-pattern: " (.getMessage e)))
+             (async/>! result-chan
+                       (str "Error during evaluation:"
+                            (.getMessage e))))))
+       (async/close! result-chan))))
 
 (gs/set-evaluate-dataflow-fn! evaluate-dataflow)
-(gs/set-evaluate-dataflow-internal-fn! evaluate-dataflow-internal)
 (gs/set-evaluate-pattern-fn! evaluate-pattern)
