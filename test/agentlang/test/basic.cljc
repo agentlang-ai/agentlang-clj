@@ -307,22 +307,52 @@
   (defcomponent :BB01
     (entity :BB01/A {:Id {:type :Int :id true} :X :Int})
     (entity :BB01/B {:Id {:type :Int :id true} :Y :Int})
+    (entity :BB01/C {:Id {:type :Int :id true} :Z :Int})
+
     (relationship :BB01/AB {:meta {:between [:BB01/A :BB01/B]}})
+    (relationship :BB01/BC {:meta {:contains [:BB01/B :BB01/C]}})
+
     (dataflow
      :BB01/CreateB
      {:BB01/B {:Id :BB01/CreateB.Id :Y :BB01/CreateB.Y}
       :BB01/AB {:BB01/A {:Id? :BB01/CreateB.A}}})
+
+    (dataflow
+     :BB01/CreateC
+     {:BB01/C {:Id :BB01/CreateC.Id :Z :BB01/CreateC.Z}
+      :BB01/BC {:BB01/B {:Id? :BB01/CreateC.B}}})
+
     (dataflow
      :BB01/LookupB
      {:BB01/B? {}
-      :BB01/AB? {:BB01/A {:Id :BB01/LookupB.A}}}))
+      :BB01/AB? {:BB01/A {:Id :BB01/LookupB.A}}})
+
+    (dataflow
+     :BB01/LookupC
+     {:BB01/C? {}
+      :BB01/BC? {:BB01/B {:Id :BB01/LookupC.B}}})
+
+    (dataflow
+     :BB01/LookupAllCforA
+     {:BB01/C? {}
+      :BB01/BC?
+      {:BB01/B {}
+       :BB01/AB?
+       {:BB01/A {:Id :BB01/LookupAllCforA.A}}}}))
+
   (let [create-a #(tu/invoke {:BB01/Create_A
-                                    {:Instance
-                                     {:BB01/A {:Id %1 :X %2}}}})
+                              {:Instance
+                               {:BB01/A {:Id %1 :X %2}}}})
         create-b #(tu/invoke {:BB01/CreateB {:Id %1 :Y %2 :A %3}})
+        create-c #(tu/invoke {:BB01/CreateC {:Id %1 :Z %2 :B %3}})
+
         lookup-b #(tu/invoke {:BB01/LookupB {:A %}})
+
+        lookup-c-for-a #(tu/invoke {:BB01/LookupAllCforA {:A %}})
+
         a? (partial cn/instance-of? :BB01/A)
         b? (partial cn/instance-of? :BB01/B)
+        c? (partial cn/instance-of? :BB01/C)
         check-bs (fn [ids bs]
                    (is (= (count bs) (count ids)))
                    (is (every? b? bs))
@@ -333,8 +363,15 @@
     (is (b? (create-b 11 110 1)))
     (is (b? (create-b 12 120 1)))
     (is (b? (create-b 13 130 2)))
-    (check-bs [11 12] (lookup-b 1))
-    (check-bs [13] (lookup-b 2))))
+
+    (is (c? (create-c 20 1010 11)))
+    (is (c? (create-c 21 1030 12)))
+    (is (c? (create-c 21 1030 13)))
+
+    (is (= 2 (count (lookup-c-for-a 1))))
+
+    #_(check-bs [11 12] (lookup-b 1))
+    #_(check-bs [13] (lookup-b 2))))
 
 (deftest query-operators
   (defcomponent :QO

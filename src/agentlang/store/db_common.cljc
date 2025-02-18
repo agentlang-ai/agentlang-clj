@@ -450,6 +450,48 @@
           (mapv (fn [opr] [:= (opr ipa-flag-cols) true]) oprs))]]
     (assoc sql-pat :join (concat join inv-privs-join))))
 
+(defn- contains-join [src-entity alias-counter relname [target-entity attrs]]
+  (let [traverse-up? (not (cn/child-in? (li/normalize-name relname) src-entity))
+        src-alias (keyword (str "t" alias-counter))
+        target-alias (keyword (str "t" (inc alias-counter)))
+        join-pat
+        (concat
+         [[(as-table-name target-entity) target-alias]
+          (vec
+           (concat
+            [:and [:= (li/make-ref target-alias stu/deleted-flag-col-kw) false]]
+            [(if traverse-up?
+               [:= (li/make-ref target-alias parent-col) (li/make-ref src-alias path-col)]
+               [:= (li/make-ref src-alias parent-col) (li/make-ref target-alias path-col)])]
+            (entity-attributes-as-queries attrs target-alias)))])]
+    join-pat))
+
+(defn- handle-joins-for-contains [entity-name alias-counter cjs]
+  (mapv
+   (fn [[relname spec]]
+     (let [[target-entity _ :as sel] (:select spec)
+           r0 (contains-join entity-name alias-counter relname sel)]
+       (if-let [cjs (:contains-join spec)]
+         (apply concat r0 (handle-joins-for-contains target-entity (inc alias-counter) cjs))
+         r0)))
+   cjs))
+
+(defn- query-from-abstract [abstract-query]
+  (let [[entity-name attrs] (:select abstract-query)
+        q0 (merge
+            {:select (entity-column-names entity-name :t0)
+             :from [[(as-table-name entity-name) :t0]]}
+            (or (:? attrs)
+                (when (seq attrs)
+                  {:where (vec (concat [:and] (fix-refs :t0 (vals attrs))))})))
+        cont-joins
+        (when-let [cjs (:contains-join abstract-query)]
+          (vec (first (handle-joins-for-contains entity-name 0 cjs))))
+        q (if (seq cont-joins)
+            (assoc q0 :join cont-joins)
+            q0)]
+    q))
+
 (defn- query-by-attributes [datasource {entity-name :entity-name
                                         attrs :query-attributes
                                         sub-query :sub-query
@@ -475,15 +517,10 @@
         entity-name (if select-all?
                       (li/normalize-name entity-name)
                       entity-name)
-        sql-pat0
-        (merge
-         {:select (entity-column-names entity-name :t0) :from [[(as-table-name entity-name) :t0]]}
-         (or (:? attrs)
-             (when (seq attrs)
-               {:where (vec (concat [:and] (fix-refs :t0 (vals attrs))))})))
+        sql-pat0 (query-from-abstract (:abstract-query sub-query))
         w0 (:where sql-pat0)
         w1 (if w0 (insert-deleted-clause w0 :t0) [:= (li/make-ref :t0 stu/deleted-flag-col-kw) false])
-        sql-pat0 (merge (assoc sql-pat0 :where w1) (when sub-query (generate-relationship-joins entity-name sub-query)))
+        sql-pat0 (assoc sql-pat0 :where w1)
         sql-pat (if rbac-enabled?
                   (if can-read-all
                     (if update-delete-tag

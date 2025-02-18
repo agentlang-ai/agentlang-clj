@@ -65,13 +65,13 @@
     (into {} res)))
 
 (defn- realize-all-references [env pat]
-  (if (keyword? pat)
-    (follow-reference env pat)
-    (w/postwalk
-     #(if (map? %)
-        (follow-references-in-map env %)
-        %)
-     pat)))
+   (if (keyword? pat)
+     (follow-reference env pat)
+     (w/postwalk
+      #(if (map? %)
+         (follow-references-in-map env %)
+         %)
+      pat)))
 
 (defn- as-query-pattern [pat]
   (let [alias (:as pat)
@@ -275,7 +275,8 @@
         [recname attrs0 cont-rels-query] (maybe-merge-cont-rels-query-to-attributes [recname attrs0 cont-rels-query0])
         bet-rels-query (when-let [rels (:bet-rels sub-pats)] (realize-all-references env rels))
         rels-query {:cont-rels cont-rels-query
-                    :bet-rels bet-rels-query}
+                    :bet-rels bet-rels-query
+                    :abstract-query (:abstract-query sub-pats)}
         qfordel? (:*query-for-delete* env)
         can-read-all (rbac/can-read? recname)
         can-update-all (when update-attrs (rbac/can-update? recname))
@@ -478,12 +479,35 @@
 (def ^:private filter-between-relationships (partial filter-relationships cn/between-relationship?))
 (def ^:private filter-contains-relationships (partial filter-relationships cn/contains-relationship?))
 
-(defn- maybe-lift-relationship-patterns [pat]
-  (let [bet-rels (filter-between-relationships pat)
+(defn- filter-query-attributes [attrs]
+  (when-let [xs (seq (filter (fn [[k _]] (li/query-pattern? k)) attrs))]
+    (into {} xs)))
+
+(defn- walk-query-pattern [env pat qmode]
+  (let [ks (keys pat)
+        names (mapv li/normalize-name ks)
+        entity-name (first (filter cn/entity? names))
+        cont-rels (filter cn/contains-relationship? names)
+        bet-rels (filter cn/between-relationship? names)
+        rf (partial realize-all-references env)
+        f (fn [r] [r (walk-query-pattern env (rf (or (get pat r)
+                                                     (get pat (li/name-as-query-pattern r)))) true)])]
+    {:select [entity-name
+              (let [attrs ((if qmode identity filter-query-attributes) (get pat entity-name))]
+                (if-let [select-clause (:? attrs)]
+                  {:? (preprocess-select-clause env entity-name select-clause)}
+                  (into {} (mapv (partial process-query-attribute-value env) attrs))))]
+     :contains-join (mapv f cont-rels)
+     :between-join (mapv f bet-rels)}))
+
+(defn- maybe-lift-relationship-patterns [env pat]
+  (let [q (walk-query-pattern env pat false)
+        bet-rels (filter-between-relationships pat)
         cont-rels (filter-contains-relationships pat)]
     [(apply dissoc pat (keys (merge bet-rels cont-rels)))
      {:cont-rels (when (seq cont-rels) cont-rels)
-      :bet-rels (when (seq bet-rels) bet-rels)}]))
+      :bet-rels (when (seq bet-rels) bet-rels)
+      :abstract-query q}]))
 
 (defn- maybe-preprocecss-pattern [env pat]
   (if (map? pat)
@@ -498,7 +522,7 @@
         [(merge {k attrs} (when alias {:as alias}))])
       (if (cn/between-relationship? (li/record-name pat))
         [pat]
-        (maybe-lift-relationship-patterns pat)))
+        (maybe-lift-relationship-patterns env pat)))
     [pat]))
 
 (defn evaluate-pattern
