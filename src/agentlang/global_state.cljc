@@ -107,8 +107,9 @@
 (defn evaluate-dataflow-internal [event-instance]
   (kernel-call #(evaluate-dataflow event-instance)))
 
-(defn evaluate-pattern [env pat]
-  (@evaluate-pattern-fn env pat))
+(defn evaluate-pattern
+  ([env pat] (@evaluate-pattern-fn env pat))
+  ([pat] (evaluate-pattern nil pat)))
 
 (def evaluate-patterns evaluate-dataflow)
 

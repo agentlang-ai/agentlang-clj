@@ -302,7 +302,7 @@
         store (env/get-store env)
         final-inst (if resolver
                      (r/call-resolver-create resolver env inst)
-                     (store/create-instance store inst))
+                     (and (store/create-instance store inst) inst))
         _ (when (and (gs/rbac-enabled?) (cn/instance-of? recname final-inst))
             (store/assign-owner store recname final-inst))
         env0 (env/bind-instance env recname final-inst)
@@ -529,7 +529,8 @@
 
 (defn evaluate-pattern
   ([env pat]
-   (let [[condition-handlers pat]
+   (let [env (or env (env/make (store/get-default-store) nil))
+         [condition-handlers pat]
          (if (map? pat)
            [(li/except-tag pat) (dissoc pat li/except-tag)]
            [nil pat])
@@ -547,7 +548,7 @@
              (evaluate-pattern env on-error)
              (throw ex))))
        (u/throw-ex (str "Cannot handle invalid pattern " pat)))))
-  ([pat] (evaluate-pattern (env/make (store/get-default-store) nil) pat)))
+  ([pat] (evaluate-pattern nil pat)))
 
 (defn- maybe-normalize-pattern [pat]
   (if (li/query-pattern? pat)

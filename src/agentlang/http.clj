@@ -156,12 +156,12 @@
          (assoc hdrs "Set-Cookie" (str cookie "; Domain=" (if (= "NULL" cd) "" cd) "; Path=/")))
        hdrs))})
 
-(defn- maybe-assoc-root-type [mode obj]
+(defn- maybe-assoc-root-type [mode orig-obj obj]
   (if-let [t (case mode
-               :single (cn/instance-type-kw obj)
-               :seq (cn/instance-type-kw (first obj))
+               :single (cn/instance-type-kw orig-obj)
+               :seq (cn/instance-type-kw (first orig-obj))
                nil)]
-    {:type t :result obj}
+    {:result {:type t :instances (if (= mode :single) [obj] obj)}}
     obj))
 
 (defn- find-data-format [request]
@@ -180,11 +180,10 @@
                (and (seqable? result) (seq result) (cn/an-instance? (first result))) :seq
                :else :none)]
     (maybe-assoc-root-type
-     mode result
-     (case mode
-       :single (cn/cleanup-inst result)
-       :seq (mapv cn/cleanup-inst result)
-       result))))
+     mode result (case mode
+                   :single (cn/cleanup-inst result)
+                   :seq (mapv cn/cleanup-inst result)
+                   result))))
 
 (defn- cleanup-results [rs]
   (if (map? rs)
@@ -192,17 +191,9 @@
     (mapv cleanup-result rs)))
 
 (defn- maybe-non-ok-result [rs]
-  (if rs
-    (if (map? rs)
-      (case (:status rs)
-        :ok 200
-        :not-found 404
-        :error 500
-        nil 200
-        ;; TODO: handle other cases, like :timeout
-        500)
-      (maybe-non-ok-result (first rs)))
-    500))
+  (cond
+    (or (and (seqable? rs) (seq rs)) rs) 200
+    :else 404))
 
 (defn- ok
   ([obj data-fmt]
@@ -408,7 +399,7 @@
       (gs/evaluate-pattern
        {entity-name {li/path-attr? (li/vec-to-path path)}})))))
 
-(defn process-post-request [_ [_ maybe-unauth] request]
+(defn process-post-request [[_ maybe-unauth] request]
   ;; TODO: support sub-tree creation
   (or (maybe-unauth request)
       (let [[obj data-fmt _] (request-object request)]
@@ -422,7 +413,7 @@
                   (gs/evaluate-pattern pat))
                 (u/throw-ex (str "Parent not found - " (li/vec-to-path parent-path))))))))))
 
-(defn process-put-request [_ [_ maybe-unauth] request]
+(defn process-put-request [[_ maybe-unauth] request]
   (or (maybe-unauth request)
       (let [[obj data-fmt _] (request-object request)]
         (maybe-ok
@@ -435,7 +426,7 @@
                 {:Data (li/record-attributes obj)
                  :path path}})))))))
 
-(defn process-get-request [_ [_ maybe-unauth] request]
+(defn process-get-request [[_ maybe-unauth] request]
   ;; TODO: support __tree, between-paths and query-params
   (or (maybe-unauth request)
       (let [[_ data-fmt _] (request-object request)]
@@ -444,10 +435,16 @@
          #(if-let [parsed-path (parse-rest-uri request)]
             (if (= :tree (:suffix parsed-path))
               (u/throw-ex "__tree lookup not implemented")
-              (gs/evaluate-dataflow {(cn/crud-event-name (:entity parsed-path) :Lookup)
-                                     {:path (li/vec-to-path (:path parsed-path))}})))))))
+              (let [path (:path parsed-path)
+                    entity-name (:entity parsed-path)]
+                (gs/evaluate-dataflow
+                 (if (= entity-name (last path))
+                   {(cn/crud-event-name entity-name :LookupAll) {}}
+                   {(cn/crud-event-name entity-name :Lookup)
+                    {:path (li/vec-to-path path)}}))))
+            (u/throw-ex "invalid GET request"))))))
 
-(defn process-delete-request [_ [_ maybe-unauth] request]
+(defn process-delete-request [[_ maybe-unauth] request]
   (or (maybe-unauth request)
       (let [[obj data-fmt _] (request-object request)]
         (maybe-ok
@@ -503,7 +500,7 @@
   {cn/type-tag-key :event
    cn/instance-type (keyword event-name)})
 
-(defn- process-signup [_ call-post-signup [auth-config _] request]
+(defn- process-signup [call-post-signup [auth-config _] request]
   (log-request "Signup request received" request)
   (if-not auth-config
     (internal-error (get-internal-error-message :auth-disabled "sign-up"))
@@ -864,7 +861,7 @@
         (bad-request (str "authentication not valid") "INVALID_AUTHENTICATION")))
     (internal-error "cannot process register-magiclink - authentication not enabled")))
 
-(defn- process-get-magiclink [_ request]
+(defn- process-get-magiclink [request]
   (log-request "Get-magiclink request" request)
   (let [query (when-let [s (:query-string request)] (uh/form-decode s))]
     (if-let [token (:code query)]
@@ -877,7 +874,7 @@
           (bad-request (str "bad token") "BAD_TOKEN")))
       (bad-request (str "token not specified") "ID_TOKEN_REQUIRED"))))
 
-(defn- process-preview-magiclink [_ request]
+(defn- process-preview-magiclink [request]
   (log-request "Preview-magiclink request" request)
   (let [[obj _ _] (request-object request)]
     (if-let [token (:code obj)]

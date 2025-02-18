@@ -240,8 +240,9 @@
               [(first keyval) (second keyval)])))))
 
 (defn create-pattern-from-path [entity-name obj path]
-  (if-let [id-val ((cn/identity-attribute-name entity-name) obj)]
-    (let [path (concat path [id-val])
-          attrs (li/record-attributes obj)]
-      {entity-name (assoc assoc li/path-attr (li/vec-to-path path))})
-    (u/throw-ex (str (cn/identity-attribute-name entity-name) " is required for " entity-name))))
+  (let [attrs (li/record-attributes obj)
+        idn (cn/identity-attribute-name entity-name)]
+    (if-let [id-val (idn attrs)]
+      (let [path (concat path [id-val])]
+        {entity-name (assoc attrs li/path-attr (li/vec-to-path path))})
+      (u/throw-ex (str idn " is required for " entity-name)))))

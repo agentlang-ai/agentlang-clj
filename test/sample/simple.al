@@ -11,7 +11,7 @@
   :C :Int
   :X {:type :String
       :write-only true}
-  :Y :DateTime
+  :Y :Now
   :rbac [{:roles ["order-users"] :allow [:create]}]})
 
 (dataflow
