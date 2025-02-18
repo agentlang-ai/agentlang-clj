@@ -273,17 +273,13 @@
         resolver (rr/resolver-for-path recname)
         cont-rels-query0 (when-let [rels (:cont-rels sub-pats)] (realize-all-references env rels))
         [recname attrs0 cont-rels-query] (maybe-merge-cont-rels-query-to-attributes [recname attrs0 cont-rels-query0])
-        bet-rels-query (when-let [rels (:bet-rels sub-pats)] (realize-all-references env rels))
-        rels-query {:cont-rels cont-rels-query
-                    :bet-rels bet-rels-query
-                    :abstract-query (:abstract-query sub-pats)}
         qfordel? (:*query-for-delete* env)
         can-read-all (rbac/can-read? recname)
         can-update-all (when update-attrs (rbac/can-update? recname))
         can-delete-all (:*can-delete-all* env)
         qparams {:entity-name recname
                  :query-attributes attrs0
-                 :sub-query rels-query
+                 :sub-query sub-pats
                  :rbac {:can-read-all? can-read-all
                         :can-update-all? can-update-all
                         :can-delete-all? can-delete-all
@@ -501,10 +497,15 @@
      :between-join (mapv f bet-rels)}))
 
 (defn- maybe-lift-relationship-patterns [env pat]
-  (let [q (walk-query-pattern env pat false)
+  (let [alias (:as pat)
+        pat (dissoc pat alias)
+        q (walk-query-pattern env pat false)
         bet-rels (filter-between-relationships pat)
         cont-rels (filter-contains-relationships pat)]
-    [(apply dissoc pat (keys (merge bet-rels cont-rels)))
+    [(let [p (apply dissoc pat (keys (merge bet-rels cont-rels)))]
+       (if alias
+         (assoc p :as alias)
+         p))
      {:cont-rels (when (seq cont-rels) cont-rels)
       :bet-rels (when (seq bet-rels) bet-rels)
       :abstract-query q}]))
@@ -518,8 +519,9 @@
             data1 (if (map? data0) data0 (u/throw-ex (str "Failed to resolve " from " in " pat)))
             data (if (cn/an-instance? data1) (cn/instance-attributes data1) data1)
             k (first (keys pat))
-            attrs (merge (get pat k) data)]
-        [(merge {k attrs} (when alias {:as alias}))])
+            attrs (merge (get pat k) data)
+            pat (merge {k attrs} (when alias {:as alias}))]
+        (maybe-lift-relationship-patterns env pat))
       (if (cn/between-relationship? (li/record-name pat))
         [pat]
         (maybe-lift-relationship-patterns env pat)))

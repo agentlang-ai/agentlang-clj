@@ -346,71 +346,6 @@
 (def ^:private path-col (stu/attribute-column-name-kw li/path-attr))
 (def ^:private parent-col (stu/attribute-column-name-kw li/parent-attr))
 
-(defn- generate-between-relationship-joins [entity-name rels-query-pattern]
-  (let [rel-name (li/normalize-name (li/record-name rels-query-pattern))
-        rel-attrs (li/record-attributes rels-query-pattern)
-        is-attr-inst? (cn/an-instance? rel-attrs)
-        inst-name (if is-attr-inst?
-                    (cn/instance-type-kw rel-attrs)
-                    (li/record-name rel-attrs))
-        inst-attrs (when-not is-attr-inst?
-                     (li/record-attributes rel-attrs))
-        n1 (first (cn/find-between-keys rel-name inst-name))
-        n2 (first (cn/find-between-keys rel-name entity-name))]
-    (when-not (or n1 n2)
-      (u/throw-ex (str "Query " rels-query-pattern " failed, "
-                       "no relationship " rel-name " between " entity-name " and " inst-name)))
-    (let [rel-alias :bt0
-          rel-ref (partial li/make-ref rel-alias)
-          this-ref (partial li/make-ref :t0)
-          that-alias :bt1
-          that-ref (partial li/make-ref that-alias)
-          p (li/path-attr inst-attrs)
-          main-joins
-          [[(as-table-name rel-name) rel-alias]
-           [:and
-            [:= (rel-ref stu/deleted-flag-col-kw) false]
-            [:= (rel-ref (stu/attribute-column-name-kw n1)) (or p (that-ref path-col))]
-            [:= (rel-ref (stu/attribute-column-name-kw n2)) (this-ref path-col)]]]
-          sub-joins
-          (when-not p
-            [[(as-table-name inst-name) that-alias]
-             (vec
-              (concat
-               [:and
-                [:= (that-ref stu/deleted-flag-col-kw) false]]
-               (entity-attributes-as-queries inst-attrs that-alias)))])]
-      (vec (concat sub-joins main-joins)))))
-
-(defn- generate-contains-relationship-joins [traverse-up? depth rels-query-pattern]
-  (let [[[target-entity attrs] [relname npat]] (parse-names-from-rel-query rels-query-pattern)
-        target-alias (keyword (str "t" (inc depth)))
-        src-alias (keyword (str "t" depth))
-        join-pat
-        (concat
-         [[(as-table-name target-entity) target-alias]
-          (vec
-           (concat
-            [:and
-             [:= (li/make-ref target-alias stu/deleted-flag-col-kw) false]
-             (if traverse-up?
-               [:= (li/make-ref target-alias parent-col) (li/make-ref src-alias path-col)]
-               [:= (li/make-ref src-alias parent-col) (li/make-ref target-alias path-col)])]
-            (entity-attributes-as-queries attrs target-alias)))]
-         (when npat
-           (generate-contains-relationship-joins traverse-up? (inc depth) npat)))]
-    (vec join-pat)))
-
-(defn- generate-relationship-joins [entity-name sub-query]
-  (let [q0 (when-let [rels-query-pattern (:cont-rels sub-query)]
-             (let [relname (first (keys rels-query-pattern))]
-               (generate-contains-relationship-joins
-                (not (cn/child-in? (li/normalize-name relname) entity-name))
-                0 (relname rels-query-pattern))))
-        q1 (when-let [rels-query-pattern (:bet-rels sub-query)]
-             (generate-between-relationship-joins entity-name rels-query-pattern))]
-    {:join (vec (concat q0 q1))}))
-
 (defn- insert-deleted-clause [w sql-alias]
   (let [f (first w)]
     (if (= :and f)
@@ -445,15 +380,44 @@
         [[(keyword (stu/inst-priv-table entity-name)) ipa-alias]
          (concat
           [:and
-           [:like (li/make-ref :t0 path-col) ipa-path]
+           [:like (li/make-ref (keyword (as-table-name entity-name)) path-col) ipa-path]
            [:= ipa-user user]]
           (mapv (fn [opr] [:= (opr ipa-flag-cols) true]) oprs))]]
     (assoc sql-pat :join (concat join inv-privs-join))))
 
+(defn- between-join [src-entity alias-counter relname [target-entity attrs]]
+  (let [n1 (first (cn/find-between-keys relname src-entity))
+        n2 (first (cn/find-between-keys relname target-entity))]
+    (when-not (or n1 n2)
+      (u/throw-ex (str "Query failed, "
+                       "no relationship " relname " between " src-entity " and " target-entity)))
+    (let [rel-alias (keyword (as-table-name relname))
+          rel-ref (partial li/make-ref rel-alias)
+          this-alias (keyword (as-table-name src-entity))
+          this-ref (partial li/make-ref this-alias)
+          that-alias (keyword (as-table-name target-entity))
+          that-ref (partial li/make-ref that-alias)
+          p (li/path-attr attrs)
+          main-joins
+          [[(as-table-name relname) rel-alias]
+           [:and
+            [:= (rel-ref stu/deleted-flag-col-kw) false]
+            [:= (rel-ref (stu/attribute-column-name-kw n1)) (this-ref path-col)]
+            [:= (rel-ref (stu/attribute-column-name-kw n2)) (or p (that-ref path-col))]]]
+          sub-joins
+          (when-not p
+            [[(as-table-name target-entity) that-alias]
+             (vec
+              (concat
+               [:and
+                [:= (that-ref stu/deleted-flag-col-kw) false]]
+               (entity-attributes-as-queries attrs that-alias)))])]
+      (vec (concat sub-joins main-joins)))))
+
 (defn- contains-join [src-entity alias-counter relname [target-entity attrs]]
   (let [traverse-up? (not (cn/child-in? (li/normalize-name relname) src-entity))
-        src-alias (keyword (str "t" alias-counter))
-        target-alias (keyword (str "t" (inc alias-counter)))
+        src-alias (keyword (as-table-name src-entity))
+        target-alias (keyword (as-table-name target-entity))
         join-pat
         (concat
          [[(as-table-name target-entity) target-alias]
@@ -466,29 +430,51 @@
             (entity-attributes-as-queries attrs target-alias)))])]
     join-pat))
 
+(declare handle-joins-for-contains handle-joins-for-between)
+
 (defn- handle-joins-for-contains [entity-name alias-counter cjs]
   (mapv
    (fn [[relname spec]]
      (let [[target-entity _ :as sel] (:select spec)
-           r0 (contains-join entity-name alias-counter relname sel)]
-       (if-let [cjs (:contains-join spec)]
-         (apply concat r0 (handle-joins-for-contains target-entity (inc alias-counter) cjs))
-         r0)))
+           r0 (contains-join entity-name alias-counter relname sel)
+           r1 (if-let [cjs (:contains-join spec)]
+                (apply concat r0 (handle-joins-for-contains target-entity (inc alias-counter) cjs))
+                r0)]
+       (if-let [bjs (:between-join spec)]
+         (apply concat r1 (handle-joins-for-between target-entity (inc alias-counter) bjs))
+         r1)))
    cjs))
+
+(defn- handle-joins-for-between [entity-name alias-counter bjs]
+  (mapv
+   (fn [[relname spec]]
+     (let [[target-entity _ :as sel] (:select spec)
+           r0 (between-join entity-name alias-counter relname sel)
+           r1 (if-let [bjs (:between-join spec)]
+                (apply concat r0 (handle-joins-for-between target-entity (inc alias-counter) bjs))
+                r0)]
+       (if-let [cjs (:contains-join spec)]
+         (apply concat r1 (handle-joins-for-contains target-entity (inc alias-counter) cjs))
+         r1)))
+   bjs))
 
 (defn- query-from-abstract [abstract-query]
   (let [[entity-name attrs] (:select abstract-query)
+        entity-alias (keyword (as-table-name entity-name))
         q0 (merge
-            {:select (entity-column-names entity-name :t0)
-             :from [[(as-table-name entity-name) :t0]]}
+            {:select (entity-column-names entity-name entity-alias)
+             :from [[(as-table-name entity-name) entity-alias]]}
             (or (:? attrs)
                 (when (seq attrs)
-                  {:where (vec (concat [:and] (fix-refs :t0 (vals attrs))))})))
+                  {:where (vec (concat [:and] (fix-refs entity-alias (vals attrs))))})))
         cont-joins
         (when-let [cjs (:contains-join abstract-query)]
           (vec (first (handle-joins-for-contains entity-name 0 cjs))))
-        q (if (seq cont-joins)
-            (assoc q0 :join cont-joins)
+        bet-joins
+        (when-let [bjs (:between-join abstract-query)]
+          (vec (first (handle-joins-for-between entity-name 0 bjs))))
+        q (if (or (seq cont-joins) (seq bet-joins))
+            (assoc q0 :join (concat (seq cont-joins) (seq bet-joins)))
             q0)]
     q))
 
@@ -517,9 +503,10 @@
         entity-name (if select-all?
                       (li/normalize-name entity-name)
                       entity-name)
+        entity-alias (keyword (as-table-name entity-name))
         sql-pat0 (query-from-abstract (:abstract-query sub-query))
         w0 (:where sql-pat0)
-        w1 (if w0 (insert-deleted-clause w0 :t0) [:= (li/make-ref :t0 stu/deleted-flag-col-kw) false])
+        w1 (if w0 (insert-deleted-clause w0 entity-alias) [:= (li/make-ref entity-alias stu/deleted-flag-col-kw) false])
         sql-pat0 (assoc sql-pat0 :where w1)
         sql-pat (if rbac-enabled?
                   (if can-read-all

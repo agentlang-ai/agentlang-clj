@@ -370,8 +370,8 @@
 
     (is (= 2 (count (lookup-c-for-a 1))))
 
-    #_(check-bs [11 12] (lookup-b 1))
-    #_(check-bs [13] (lookup-b 2))))
+    (check-bs [11 12] (lookup-b 1))
+    (check-bs [13] (lookup-b 2))))
 
 (deftest query-operators
   (defcomponent :QO
