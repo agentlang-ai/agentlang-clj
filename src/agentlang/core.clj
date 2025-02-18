@@ -43,10 +43,10 @@
 
 (defn run-service
   ([args model-info nrepl-handler]
-   (let [[[evaluator _] config] (ur/prepare-runtime args model-info)]
+   (let [[_ config] (ur/prepare-runtime args model-info)]
      (when-let [server-cfg (ur/make-server-config config)]
        (log/info (str "Server config - " server-cfg))
-       (h/run-server evaluator server-cfg nrepl-handler))))
+       (h/run-server server-cfg nrepl-handler))))
   ([model-info nrepl-handler] (run-service nil model-info nrepl-handler)))
 
 (defn generate-swagger-doc []
@@ -161,18 +161,10 @@
      (json/decode request)
      (su/keys-as-keywords request))))
 
-(defn process_request [evaluator request]
-  (let [e (or evaluator
-              (do
-                (initialize)
-                (let [[config model components]
-                      (or @ur/resource-cache (ur/load-model-from-resource))]
-                  (when-not (seq components)
-                    (u/throw-ex (str "no components loaded from model " model)))
-                  (first (ur/init-runtime model components config)))))
-        parsed-request (normalize-external-request request)
+(defn process_request [_evaluator request]
+  (let [parsed-request (normalize-external-request request)
         auth (h/make-auth-handler (first @ur/resource-cache))]
-    [(json/encode (h/process-request e auth parsed-request)) e]))
+    [(json/encode (h/process-request auth parsed-request)) _evaluator]))
 
 (defn -process_request [a b]
   (process_request a b))

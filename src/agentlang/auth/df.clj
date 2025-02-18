@@ -2,6 +2,7 @@
   "Authenticate by evaluating a local dataflow."
   (:require [agentlang.util :as u]
             [agentlang.component :as cn]
+            [agentlang.global-state :as gs]
             [agentlang.util.auth :as au]
             [agentlang.auth.core :as auth]))
 
@@ -21,10 +22,10 @@
     (assoc result :access_token token)
     (normalize-result (first result) token)))
 
-(defmethod auth/user-login tag [{event :event evaluate :eval auth-event :auth-event}]
+(defmethod auth/user-login tag [{event :event auth-event :auth-event}]
   (when-not (= auth-event (cn/instance-type event))
     (u/throw-ex (str "login event is expected to be of type " auth-event)))
-  (let [r (evaluate event)
+  (let [r (gs/evaluate-dataflow event)
         result (if (map? r) r (first r))]
     (if (:ok result)
       (let [token (u/uuid-string)
