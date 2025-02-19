@@ -410,7 +410,7 @@
             (cond
               (cn/entity? recname)
               (let [parent-path (drop-last 2 path)]
-                (if (or (not (seq parent-path)) (lookup-instance-by-path (drop-last 2 parent-path)))
+                (if (or (not (seq parent-path)) (lookup-instance-by-path parent-path))
                   (let [pat (uh/create-pattern-from-path recname obj path)]
                     (gs/evaluate-pattern pat))
                   (u/throw-ex (str "Parent not found - " (li/vec-to-path parent-path)))))
@@ -435,22 +435,46 @@
                 {:Data (li/record-attributes obj)
                  :path path}})))))))
 
+(defn- fetch-all [entity-name path]
+  (gs/evaluate-pattern
+   {entity-name
+    {li/path-attr? [:like (str (li/vec-to-path path) "%")]}}))
+
+(defn- fetch-tree [entity-name insts]
+  (if-let [rels (seq (cn/contained-children entity-name))]
+    (apply
+     concat
+     (mapv
+      (fn [[relname _ child-entity]]
+        (mapv
+         (fn [parent-inst]
+           (let [path (concat (li/path-to-vec (li/path-attr parent-inst))
+                              [relname child-entity])
+                 rs (cleanup-results (:result (fetch-all child-entity path)))]
+             (if (seq rs)
+               (assoc parent-inst relname (fetch-tree child-entity rs))
+               parent-inst)))
+         insts))
+      rels))
+    insts))
+
 (defn process-get-request [[_ maybe-unauth] request]
-  ;; TODO: support __tree, between-paths and query-params
   (or (maybe-unauth request)
       (let [[_ data-fmt _] (request-object request)]
         (maybe-ok
          data-fmt
          #(if-let [parsed-path (parse-rest-uri request)]
-            (if (= :tree (:suffix parsed-path))
-              (u/throw-ex "__tree lookup not implemented")
-              (let [path (:path parsed-path)
-                    entity-name (:entity parsed-path)]
-                (gs/evaluate-dataflow
-                 (if (= entity-name (last path))
-                   {(cn/crud-event-name entity-name :LookupAll) {}}
-                   {(cn/crud-event-name entity-name :Lookup)
-                    {:path (li/vec-to-path path)}}))))
+            (let [path (:path parsed-path)
+                  entity-name (:entity parsed-path)
+                  result
+                  (if (= entity-name (last path))
+                    (fetch-all entity-name path)
+                    (gs/evaluate-dataflow
+                     {(cn/crud-event-name entity-name :Lookup)
+                      {:path (li/vec-to-path path)}}))]
+              (if (and (seq (:result result)) (= :tree (:suffix parsed-path)))
+                {:result (fetch-tree entity-name (:result result))}
+                result))
             (u/throw-ex "invalid GET request"))))))
 
 (defn process-delete-request [[_ maybe-unauth] request]

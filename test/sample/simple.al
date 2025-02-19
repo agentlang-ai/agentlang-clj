@@ -23,7 +23,12 @@
        :X "secret"
        :Y '(agentlang.lang.datetime/now)}})
 
-(dataflow
+(entity :A {:Id {:type :Int :id true} :X :Int})
+(entity :B {:Id {:type :Int :id true}  :Y :Int})
+(relationship :AB {:meta {:contains [:A :B]}})
+
+;; Enable for testing auth+rbac
+#_(dataflow
  :Agentlang.Kernel.Lang/AppInit
  [:> '(agentlang.util/getenv "SAMPLE_USER") :as :U]
  {:Agentlang.Kernel.Identity/User {:Email :U}}
