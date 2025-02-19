@@ -262,9 +262,11 @@
       args))
 
 (defn- handle-query-pattern [env recname [attrs sub-pats] alias]
-  (let [recname (li/normalize-name recname)
-        select-clause (:? attrs)
+  (let [select-clause (:? attrs)
         [update-attrs query-attrs] (when-not select-clause (lift-attributes-for-update attrs))
+        _ (when (and (li/query-pattern? recname) (seq query-attrs))
+            (u/throw-ex (str "Cannot have attribute specific queries for " recname)))
+        recname (li/normalize-name recname)
         attrs (if query-attrs query-attrs attrs)
         attrs0 (when (seq attrs)
                  (if select-clause
