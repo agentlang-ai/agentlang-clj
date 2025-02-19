@@ -33,6 +33,12 @@
 (entity
  :Agentlang.Kernel.Rbac/Role
  {:Name {:type :String, :unique true, li/path-identity true}})
+(dataflow
+ :Agentlang.Kernel.Rbac/LookupRole
+ {:Agentlang.Kernel.Rbac/Role
+  {:Name? :Agentlang.Kernel.Rbac/LookupRole.Name},
+  :as [:R]}
+ :R)
 (def oprs li/rbac-oprs)
 (defn-
  crud-list?
@@ -71,6 +77,12 @@
   :Role {:ref :Agentlang.Kernel.Rbac/Role.Name, :indexed true},
   :Assignee {:type :String, :indexed true},
   :meta {:unique [:Agentlang.Kernel.Rbac/Role :Assignee]}})
+(dataflow
+ :Agentlang.Kernel.Rbac/LookupRoleAssignment
+ {:Agentlang.Kernel.Rbac/RoleAssignment
+  {:Name? :Agentlang.Kernel.Rbac/LookupRoleAssignment.Name},
+  :as [:R]}
+ :R)
 (dataflow
  :Agentlang.Kernel.Rbac/FindRoleAssignments
  #:Agentlang.Kernel.Rbac{:RoleAssignment
@@ -152,4 +164,4 @@
                           :Agentlang.Kernel.Rbac/AssignOwnership.Assignee}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "0a1de4c7-1356-41ef-8d4d-9a68805ad9bc")
+ "a07ac556-5169-4f17-9bae-702ef4237e81")

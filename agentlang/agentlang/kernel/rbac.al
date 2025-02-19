@@ -12,6 +12,11 @@
          :unique true
          li/path-identity true}})
 
+(dataflow
+ :LookupRole
+ {:Role {:Name? :LookupRole.Name} :as [:R]}
+ :R)
+
 (def ^:private oprs li/rbac-oprs)
 
 (defn- crud-list? [xs]
@@ -50,6 +55,11 @@
              :indexed true}
   :meta
   {:unique [:Role :Assignee]}})
+
+(dataflow
+ :LookupRoleAssignment
+ {:RoleAssignment {:Name? :LookupRoleAssignment.Name} :as [:R]}
+ :R)
 
 (dataflow
  :FindRoleAssignments

@@ -51,11 +51,23 @@
 (entity
  :Agentlang.Kernel.Identity/UserSession
  {:User {:type :String, :id true}, :LoggedIn :Boolean})
+(dataflow
+ :Agentlang.Kernel.Identity/LookupUserSession
+ {:Agentlang.Kernel.Identity/UserSession
+  {:User? :Agentlang.Kernel.Identity/LookupUserSession.User},
+  :as [:U]}
+ :U)
 (entity
  :Agentlang.Kernel.Identity/SessionCookie
  {:Id {:type :String, :id true},
   :UserData :Any,
   :CreatedTimeMillis :Int64})
+(dataflow
+ :Agentlang.Kernel.Identity/LookupSessionCookie
+ {:Agentlang.Kernel.Identity/SessionCookie
+  {:Id? :Agentlang.Kernel.Identity/LookupSessionCookie.Id},
+  :as [:C]}
+ :C)
 (event
  :Agentlang.Kernel.Identity/UpdateUser
  {:UserDetails :Agentlang.Kernel.Identity/UserExtra})
@@ -99,4 +111,4 @@
  [:delete :Agentlang.Kernel.Rbac/RoleAssignment :purge])
 (def
  Agentlang_Kernel_Identity___COMPONENT_ID__
- "b934f1eb-2e98-4969-af2c-354205424151")
+ "d2284ad8-e872-4ac4-a477-99ec058fb27a")

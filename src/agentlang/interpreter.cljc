@@ -222,13 +222,21 @@
     [(into {} upattrs) (into {} (filter query-attribute? attrs))]
     [nil attrs]))
 
+(defn- call-resolver [resolver-fn resolver store-f env arg]
+  (if (rr/composed? resolver)
+    (when-let [rs (reduce (fn [arg r] (call-resolver resolver-fn r store-f env arg)) arg resolver)]
+      (store-f rs))
+    (or (:result (resolver-fn resolver env arg))
+        arg)))
+
 (defn- handle-upsert [env resolver recname update-attrs instances]
   (when (seq instances)
     (let [updated-instances (mapv #(realize-instance-values env recname (merge % update-attrs)) instances)
+          store-f (fn [updated-instances] (store/update-instances (env/get-store env) recname updated-instances))
           rs
           (if resolver
-            (every? identity (mapv #(r/call-resolver-update resolver env %) updated-instances))
-            (store/update-instances (env/get-store env) recname updated-instances))]
+            (call-resolver r/call-resolver-update resolver store-f env updated-instances)
+            (store-f updated-instances))]
       (when rs updated-instances))))
 
 (defn- fetch-parent [relname child-recname relpat]
@@ -287,7 +295,7 @@
                         :can-delete-all? can-delete-all
                         :follow-up-operation (or (when qfordel? :delete)
                                                  (when update-attrs :update))}}
-        result0 (if resolver
+        result0 (if (and resolver (not (rr/composed? resolver)))
                   (r/call-resolver-query resolver env qparams)
                   (store/do-query (env/get-store env) nil qparams))
         env0 (if (seq result0) (env/bind-instances env recname result0) env)
@@ -302,9 +310,10 @@
   (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))
         resolver (rr/resolver-for-path recname)
         store (env/get-store env)
+        store-f #(and (store/create-instance store %) %)
         final-inst (if resolver
-                     (r/call-resolver-create resolver env inst)
-                     (and (store/create-instance store inst) inst))
+                     (call-resolver r/call-resolver-create resolver store-f env inst)
+                     (store-f inst))
         _ (when (and (gs/rbac-enabled?) (cn/instance-of? recname final-inst))
             (store/assign-owner store recname final-inst))
         env0 (env/bind-instance env recname final-inst)
@@ -395,9 +404,9 @@
 
       :else (u/throw-ex (str "Schema not found for " recname ". Cannot evaluate " pat)))))
 
-(defn- call-resolver-delete [entity-name args]
+(defn- call-resolver-delete [env store-f entity-name args]
   (when-let [resolver (rr/resolver-for-path entity-name)]
-    (r/call-resolver-delete [entity-name args])))
+    (call-resolver r/call-resolver-delete resolver store-f env [entity-name args])))
 
 (defn- extract-entity-name [pattern]
   (let [pattern (dissoc pattern :as :from)
@@ -414,10 +423,11 @@
                      (cn/entity? pattern))
         (u/throw-ex (str "Second element must be a valid entity name - [:delete " pattern " " params "]"))))
     (let [ent-name (if (keyword? pattern) pattern (extract-entity-name pattern))
-          can-delete-all (rbac/can-delete? ent-name)]
+          can-delete-all (rbac/can-delete? ent-name)
+          store-f (fn [_] (store/delete-all store pattern purge?))]
       (if (or purge? delall?)
         (if can-delete-all
-          (or (call-resolver-delete pattern params) (store/delete-all store pattern purge?))
+          (or (call-resolver-delete env store-f pattern params) (store-f nil))
           (u/throw-ex (str "No permission to delete all instances of " ent-name)))
         (let [enriched-env (if can-delete-all
                              (assoc env :*can-delete-all* true)
@@ -425,10 +435,12 @@
               r (evaluate-pattern enriched-env pattern)
               env (:env r), insts (:result r)]
           (when-let [entity-name (and (seq insts) (cn/instance-type-kw (first insts)))]
-            (or (call-resolver-delete entity-name insts)
-                (doseq [inst insts]
-                  (store/delete-by-id store entity-name li/path-attr (li/path-attr inst)))
-                insts)))))))
+            (let [store-f (fn [_]
+                            (doseq [inst insts]
+                              (store/delete-by-id store entity-name li/path-attr (li/path-attr inst))))]
+              (or (call-resolver-delete env store-f entity-name insts)
+                  (store-f nil)
+                  insts))))))))
 
 (defn- handle-quote [env pat]
   (w/prewalk

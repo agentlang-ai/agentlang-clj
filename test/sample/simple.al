@@ -25,4 +25,6 @@
 
 (dataflow
  :Agentlang.Kernel.Lang/AppInit
- [:> '(println "hello, world")])
+ [:> '(agentlang.util/getenv "SAMPLE_USER") :as :U]
+ {:Agentlang.Kernel.Identity/User {:Email :U}}
+ {:Agentlang.Kernel.Rbac/RoleAssignment {:Role "user" :Assignee :U}})
