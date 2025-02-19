@@ -5,6 +5,7 @@
             [agentlang.util :as u]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
+            #?(:cljs [cljs.reader :refer [read-string]])
             [agentlang.env :as env]
             [agentlang.component :as cn]))
 
