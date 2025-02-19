@@ -437,6 +437,11 @@
       %)
    pat))
 
+(defn- call-function [env pat]
+  (let [fname (first pat)
+        args (mapv #(:result (evaluate-pattern env %)) (rest pat))]
+    (li/evaluate `(~fname ~@args))))
+
 (defn- parse-expr-pattern [pat]
   (let [[h t] (split-with #(not= % :as) pat)]
     (if (seq t)
@@ -453,10 +458,11 @@
         tag (first pat)
         result
         (apply
-         (cond
-           (= :delete tag) delete-instances
-           (= li/quote-tag tag) handle-quote
-           :else (u/throw-ex (str "Invalid expression - " pat)))
+         (case tag
+           :> call-function
+           :delete delete-instances
+           :q# handle-quote
+           (u/throw-ex (str "Invalid expression - " pat)))
          env (rest pat))
         env (if alias (env/bind-variable env alias result) env)]
     (make-result env result)))
@@ -469,7 +475,7 @@
     (map? pat) crud-handler
     (vector? pat) expr-handler
     (keyword? pat) ref-handler
-    :else nil))
+    :else pat))
 
 (defn- filter-relationships [predic? pats]
   (into {} (filter (fn [[k _]] (predic? (li/normalize-name k))) pats)))
@@ -529,33 +535,39 @@
         (maybe-lift-relationship-patterns env pat)))
     [pat]))
 
-(defn evaluate-pattern
-  ([env pat]
-   (let [env (or env (env/make (store/get-default-store) nil))
-         [condition-handlers pat]
-         (if (map? pat)
-           [(li/except-tag pat) (dissoc pat li/except-tag)]
-           [nil pat])
-         [pat sub-pats] (maybe-preprocecss-pattern env pat)]
-     (if-let [handler (pattern-handler pat)]
-       (try
-         (let [r (handler env pat sub-pats)
-               res (:result r)
-               no-data (or (nil? res) (and (seqable? res) (not (seq res))))]
-           (if-let [on-not-found (and no-data (:not-found condition-handlers))]
-             (evaluate-pattern env on-not-found)
-             r))
-         (catch #?(:clj Exception :cljs js/Error) ex
-           (if-let [on-error (:error condition-handlers)]
-             (evaluate-pattern env on-error)
-             (throw ex))))
-       (u/throw-ex (str "Cannot handle invalid pattern " pat)))))
-  ([pat] (evaluate-pattern nil pat)))
-
 (defn- maybe-normalize-pattern [pat]
   (if (li/query-pattern? pat)
     {pat {}}
     pat))
+
+(defn- literal? [x]
+  (or (number? x) (string? x) (boolean? x)))
+
+(defn evaluate-pattern
+  ([env pat]
+   (if (literal? pat)
+     (make-result env pat)
+     (let [env (or env (env/make (store/get-default-store) nil))
+           pat (maybe-normalize-pattern pat)
+           [condition-handlers pat]
+           (if (map? pat)
+             [(li/except-tag pat) (dissoc pat li/except-tag)]
+             [nil pat])
+           [pat sub-pats] (maybe-preprocecss-pattern env pat)]
+       (if-let [handler (pattern-handler pat)]
+         (try
+           (let [r (handler env pat sub-pats)
+                 res (:result r)
+                 no-data (or (nil? res) (and (seqable? res) (not (seq res))))]
+             (if-let [on-not-found (and no-data (:not-found condition-handlers))]
+               (evaluate-pattern env on-not-found)
+               r))
+           (catch #?(:clj Exception :cljs js/Error) ex
+             (if-let [on-error (:error condition-handlers)]
+               (evaluate-pattern env on-error)
+               (throw ex))))
+         (u/throw-ex (str "Cannot handle invalid pattern " pat))))))
+  ([pat] (evaluate-pattern nil pat)))
 
 (defn evaluate-dataflow
   ([store env event-instance-or-patterns]
@@ -580,9 +592,8 @@
                 (try
                   (loop [df-patterns (or patterns (cn/fetch-dataflow-patterns event-instance))
                          pat-count 0, env env, result nil]
-                    (if-let [pat0 (first df-patterns)]
-                      (let [pat (maybe-normalize-pattern pat0)
-                            pat-count (inc pat-count)
+                    (if-let [pat (first df-patterns)]
+                      (let [pat-count (inc pat-count)
                             env (env/bind-eval-state env pat pat-count)
                             {env1 :env r :result} (evaluate-pattern env pat)]
                         (recur (rest df-patterns) pat-count env1 r))

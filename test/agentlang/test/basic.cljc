@@ -424,6 +424,16 @@
       (is (cn/instance-of? :HC/R r))
       (is (= 20 (:Id r))))))
 
+(defn f [x y] (+ x y))
+
+(deftest fncall
+  (defcomponent :Fnc
+    (dataflow
+     :Fnc/CallF
+     [:> '(agentlang.test.basic/f :Fnc/CallF.X 100) :as :R]
+     :R))
+  (is (= 105 (tu/invoke {:Fnc/CallF {:X 5}}))))
+
 ;; (deftest compound-attributes
 ;;   (defcomponent :Df04
 ;;     (entity {:Df04/E1 {:A :Int}})
