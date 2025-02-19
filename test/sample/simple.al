@@ -16,7 +16,8 @@
 
 (dataflow
  :K
- {:E1 {:A '(+ 5 :B)
+ {:E1 {:Id :K.Id
+       :A '(+ 5 :B)
        :B :K.Data.I
        :C '(+ 10 :A)
        :X "secret"

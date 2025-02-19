@@ -156,14 +156,6 @@
          (assoc hdrs "Set-Cookie" (str cookie "; Domain=" (if (= "NULL" cd) "" cd) "; Path=/")))
        hdrs))})
 
-(defn- maybe-assoc-root-type [mode orig-obj obj]
-  (if-let [t (case mode
-               :single (cn/instance-type-kw orig-obj)
-               :seq (cn/instance-type-kw (first orig-obj))
-               nil)]
-    {:result {:type t :instances (if (= mode :single) [obj] obj)}}
-    obj))
-
 (defn- find-data-format [request]
   (let [ct (request-content-type request)]
     (uh/content-types ct)))
@@ -174,21 +166,30 @@
        ((uh/decoder data-fmt) (String. (.bytes body)))) data-fmt nil]
     [nil nil (unsupported-media-type request)]))
 
-(defn- cleanup-result [result]
-  (let [mode (cond
-               (cn/an-instance? result) :single
-               (and (seqable? result) (seq result) (cn/an-instance? (first result))) :seq
-               :else :none)]
-    (maybe-assoc-root-type
-     mode result (case mode
-                   :single (cn/cleanup-inst result)
-                   :seq (mapv cn/cleanup-inst result)
-                   result))))
+(defn- cleanup-result [obj]
+  (if (cn/an-instance? obj)
+    (cn/cleanup-inst obj)
+    obj))
 
-(defn- cleanup-results [rs]
-  (if (map? rs)
-    (cleanup-result rs)
-    (mapv cleanup-result rs)))
+(defn- maybe-instance-type [obj]
+  (and (cn/an-instance? obj)
+       (cn/instance-type-kw obj)))
+
+(defn- cleanup-results [result]
+  (let [sing? (map? result)
+        [t rs]
+        (cond
+          sing?
+          [(maybe-instance-type result) (cleanup-result result)]
+
+          (vector? result)
+          [(maybe-instance-type (first result)) (mapv cleanup-result result)]
+
+          :else [nil result])]
+    (if t
+      {:instances (if sing? [rs] rs)
+       :type t}
+      result)))
 
 (defn- maybe-non-ok-result [rs]
   (cond
@@ -405,13 +406,21 @@
       (let [[obj data-fmt _] (request-object request)]
         (maybe-ok
          data-fmt
-         #(when-let [parsed-path (parse-rest-uri request)]
-            (let [path (:path parsed-path)
-                  parent-path (drop-last 2 path)]
-              (if (or (not (seq parent-path)) (lookup-instance-by-path (drop-last 2 parent-path)))
-                (let [pat (uh/create-pattern-from-path (:entity parsed-path) obj path)]
-                  (gs/evaluate-pattern pat))
-                (u/throw-ex (str "Parent not found - " (li/vec-to-path parent-path))))))))))
+         #(when-let [{path :path recname :entity} (parse-rest-uri request)]
+            (cond
+              (cn/entity? recname)
+              (let [parent-path (drop-last 2 path)]
+                (if (or (not (seq parent-path)) (lookup-instance-by-path (drop-last 2 parent-path)))
+                  (let [pat (uh/create-pattern-from-path recname obj path)]
+                    (gs/evaluate-pattern pat))
+                  (u/throw-ex (str "Parent not found - " (li/vec-to-path parent-path)))))
+
+              (cn/event? recname)
+              (if (= recname (first path) (li/record-name obj))
+                (gs/evaluate-dataflow obj)
+                (u/throw-ex (str "Event is not of type " recname " - " obj)))
+
+              :else (u/throw-ex (str "Invalid POST resource - " path))))))))
 
 (defn process-put-request [[_ maybe-unauth] request]
   (or (maybe-unauth request)
