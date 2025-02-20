@@ -348,7 +348,7 @@
        :BB01/AB?
        {:BB01/A {:Id :BB01/LookupAllForA.A}}}
       :into
-      {:AX :BB01/A.X
+      {:AX [:BB01/AB :BB01/A.X]
        :BY :BB01/B.Y
        :CZ :BB01/C.Z}}))
 
