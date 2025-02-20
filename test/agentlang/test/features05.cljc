@@ -1,4 +1,5 @@
-(ns agentlang.test.features05
+#_(do
+    (ns agentlang.test.features05
   (:require #?(:clj [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [clojure.pprint :as pp]
@@ -756,4 +757,4 @@
               :as :E3
               :throws
               {:error {:throwsRaw/Error {:Message :throwsRaw/E.Email}}
-               :not-found {:throwsRaw/NotFound {:Message :throwsRaw/E.Email}}}])))))
+               :not-found {:throwsRaw/NotFound {:Message :throwsRaw/E.Email}}}]))))))

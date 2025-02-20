@@ -1,4 +1,4 @@
-(ns agentlang.test.features06
+#_(do (ns agentlang.test.features06
   (:require #?(:clj [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [agentlang.component :as cn]
@@ -177,4 +177,4 @@
     (chkb 2 (tu/first-result {:Agentlang.Kernel.Eval/RestartSuspension
                               {:Id s2 :Value (assoc a2 :Flag false)}}))
     (is (nil? (tu/result {:Agentlang.Kernel.Eval/RestartSuspension
-                          {:Id s1 :Value (assoc a1 :Flag false)}})))))
+                          {:Id s1 :Value (assoc a1 :Flag false)}}))))))

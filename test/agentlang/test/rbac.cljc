@@ -30,30 +30,30 @@
      {:Agentlang.Kernel.Identity/User {:Email "xyz@xyz.com"}})
     (dataflow
      :RoleMgmt/CreateRoles
-     {:Agentlang.Kernel.Rbac/Role {:Name "r1"}}
-     {:Agentlang.Kernel.Rbac/Role {:Name "r2"}})
+     {:Agentlang.Kernel.Rbac/Role {:Name "rm.r1"}}
+     {:Agentlang.Kernel.Rbac/Role {:Name "rm.r2"}})
     (dataflow
      :RoleMgmt/AssignPrivileges
      {:Agentlang.Kernel.Rbac/Privilege
-      {:Name "p1"
+      {:Name "rm.p1"
        :Actions [:q# [:read :create :update]]
        :Resource [:q# [:A :B]]}}
      {:Agentlang.Kernel.Rbac/Privilege
-      {:Name "p2"
+      {:Name "rm.p2"
        :Actions [:q# [:read]]
        :Resource [:q# [:C]]}}
      {:Agentlang.Kernel.Rbac/PrivilegeAssignment
-      {:Role "r1" :Privilege "p1"}}
+      {:Role "rm.r1" :Privilege "rm.p1"}}
      {:Agentlang.Kernel.Rbac/PrivilegeAssignment
-      {:Role "r1" :Privilege "p2"}}
+      {:Role "rm.r1" :Privilege "rm.p2"}}
      {:Agentlang.Kernel.Rbac/PrivilegeAssignment
-      {:Role "r2" :Privilege "p2"}})
+      {:Role "rm.r2" :Privilege "rm.p2"}})
     (dataflow
      :RoleMgmt/AssignRoles
      {:Agentlang.Kernel.Rbac/RoleAssignment
-      {:Role "r1" :Assignee "abc@abc.com"}}
+      {:Role "rm.r1" :Assignee "abc@abc.com"}}
      {:Agentlang.Kernel.Rbac/RoleAssignment
-      {:Role "r2" :Assignee "xyz@xyz.com"}}))
+      {:Role "rm.r2" :Assignee "xyz@xyz.com"}}))
   (let [[r1 r2 r3 r4]
         (mapv tu/invoke [:RoleMgmt/CreateUsers :RoleMgmt/CreateRoles
                                :RoleMgmt/AssignPrivileges :RoleMgmt/AssignRoles])]

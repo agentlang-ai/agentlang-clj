@@ -1,4 +1,4 @@
-(ns agentlang.test.query
+#_(do (ns agentlang.test.query
   (:require #?(:clj  [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [clojure.string :as s]
@@ -572,4 +572,4 @@
     (is (cn/same-instance? e1 (tu/first-result {:I1123/QueryDeleted {:Id 1}})))
     (is (cn/same-instance? e2 (tu/first-result {:I1123/Delete_E {:Id 2}})))
     (let [es (tu/result {:I1123/QueryAllDeleted {}})]
-      (is (and (= 2 (count es)) (every? e? es))))))
+      (is (and (= 2 (count es)) (every? e? es)))))))

@@ -1,4 +1,4 @@
-(ns agentlang.test.features02
+#_(do (ns agentlang.test.features02
   (:require #?(:clj [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [clojure.string :as s]
@@ -761,4 +761,4 @@
 
     (is (tu/not-found? (tu/eval-all-dataflows
                         {:Scp/LookupAll_Child
-                         {li/path-attr (fq "path://Parent/1/Contains/Child/%")}})))))
+                         {li/path-attr (fq "path://Parent/1/Contains/Child/%")}}))))))

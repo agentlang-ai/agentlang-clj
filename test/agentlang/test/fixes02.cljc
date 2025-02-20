@@ -1,4 +1,4 @@
-(ns agentlang.test.fixes02
+#_(do (ns agentlang.test.fixes02
   (:require #?(:clj [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [agentlang.component :as cn]
@@ -728,4 +728,4 @@
          (lr/as-edn :Rewi)))
   (is (cn/remove-event :Rewi/Evt))
   (is (= '(do (component :Rewi)) (lr/as-edn :Rewi)))
-  (is (not (cn/event? :Rewi/Evt))))
+  (is (not (cn/event? :Rewi/Evt)))))

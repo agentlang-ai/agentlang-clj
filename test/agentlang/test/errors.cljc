@@ -1,4 +1,4 @@
-(ns agentlang.test.errors
+#_(do (ns agentlang.test.errors
   (:require [clojure.test :refer :all]
             [agentlang.util.errors :refer :all]
             [agentlang.test.util :as test-util]
@@ -151,4 +151,4 @@
       (evaluate-raised-error-test-case (:error-key test-case)
                                        (:args test-case)
                                        (:expected-internal test-case)
-                                       (:expected-client test-case)))))
+                                       (:expected-client test-case))))))

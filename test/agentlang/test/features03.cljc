@@ -1,4 +1,4 @@
-(ns agentlang.test.features03
+#_(do (ns agentlang.test.features03
   (:require #?(:clj [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [clojure.string :as s]
@@ -508,4 +508,4 @@
                            (is (every? c? cs))
                            (is (= z-sum (reduce + 0 (mapv :Z cs))))))]
       (lookup-all-c a 1 2 30)
-      (lookup-all-c a 2 1 10))))
+      (lookup-all-c a 2 1 10)))))

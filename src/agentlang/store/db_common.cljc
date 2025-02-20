@@ -385,7 +385,7 @@
           (mapv (fn [opr] [:= (opr ipa-flag-cols) true]) oprs))]]
     (assoc sql-pat :join (concat join inv-privs-join))))
 
-(defn- between-join [src-entity alias-counter relname [target-entity attrs]]
+(defn- between-join [src-entity relname [target-entity attrs]]
   (let [n1 (first (cn/find-between-keys relname src-entity))
         n2 (first (cn/find-between-keys relname target-entity))]
     (when-not (or n1 n2)
@@ -415,7 +415,7 @@
                (entity-attributes-as-queries attrs that-alias)))])]
       (vec (concat sub-joins main-joins)))))
 
-(defn- contains-join [src-entity alias-counter relname [target-entity attrs]]
+(defn- contains-join [src-entity relname [target-entity attrs]]
   (let [traverse-up? (not (cn/child-in? (li/normalize-name relname) src-entity))
         src-alias (keyword (as-table-name src-entity))
         target-alias (keyword (as-table-name target-entity))
@@ -433,29 +433,29 @@
 
 (declare handle-joins-for-contains handle-joins-for-between)
 
-(defn- handle-joins-for-contains [entity-name alias-counter cjs]
+(defn- handle-joins-for-contains [entity-name cjs]
   (mapv
    (fn [[relname spec]]
      (let [[target-entity _ :as sel] (:select spec)
-           r0 (contains-join entity-name alias-counter relname sel)
+           r0 (contains-join entity-name relname sel)
            r1 (if-let [cjs (:contains-join spec)]
-                (apply concat r0 (handle-joins-for-contains target-entity (inc alias-counter) cjs))
+                (apply concat r0 (handle-joins-for-contains target-entity cjs))
                 r0)]
        (if-let [bjs (:between-join spec)]
-         (apply concat r1 (handle-joins-for-between target-entity (inc alias-counter) bjs))
+         (apply concat r1 (handle-joins-for-between target-entity bjs))
          r1)))
    cjs))
 
-(defn- handle-joins-for-between [entity-name alias-counter bjs]
+(defn- handle-joins-for-between [entity-name bjs]
   (mapv
    (fn [[relname spec]]
      (let [[target-entity _ :as sel] (:select spec)
-           r0 (between-join entity-name alias-counter relname sel)
+           r0 (between-join entity-name relname sel)
            r1 (if-let [bjs (:between-join spec)]
-                (apply concat r0 (handle-joins-for-between target-entity (inc alias-counter) bjs))
+                (apply concat r0 (handle-joins-for-between target-entity bjs))
                 r0)]
        (if-let [cjs (:contains-join spec)]
-         (apply concat r1 (handle-joins-for-contains target-entity (inc alias-counter) cjs))
+         (apply concat r1 (handle-joins-for-contains target-entity cjs))
          r1)))
    bjs))
 
@@ -470,10 +470,10 @@
                   {:where (vec (concat [:and] (fix-refs entity-alias (vals attrs))))})))
         cont-joins
         (when-let [cjs (:contains-join abstract-query)]
-          (vec (first (handle-joins-for-contains entity-name 0 cjs))))
+          (vec (first (handle-joins-for-contains entity-name cjs))))
         bet-joins
         (when-let [bjs (:between-join abstract-query)]
-          (vec (first (handle-joins-for-between entity-name 0 bjs))))
+          (vec (first (handle-joins-for-between entity-name bjs))))
         q (if (or (seq cont-joins) (seq bet-joins))
             (assoc q0 :join (concat (seq cont-joins) (seq bet-joins)))
             q0)]

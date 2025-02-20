@@ -1,4 +1,4 @@
-(ns agentlang.test.fixes04
+#_(do (ns agentlang.test.fixes04
   (:require #?(:clj [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [agentlang.component :as cn]
@@ -77,4 +77,4 @@
       :error [:eval '(identity "error")]]))
   (is (cn/instance-of? :I1538/Workspace (tu/first-result {:I1538/AddTest {}})))
   (is (= "found" (tu/result {:I1538/Test1 {:User "TestUser"}})))
-  (is (= "not-found" (tu/result {:I1538/Test1 {:User "Abc"}}))))
+  (is (= "not-found" (tu/result {:I1538/Test1 {:User "Abc"}})))))

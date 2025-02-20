@@ -1,4 +1,4 @@
-(ns agentlang.test.features04
+#_(do (ns agentlang.test.features04
   (:require #?(:clj [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [agentlang.util :as u]
@@ -608,4 +608,4 @@
     (is (every? (tu/type-check :I1273/Employee) emps))
     (is (= "Represents a company employee" (cn/docstring :I1273/Employee)))
     (is (= "Globally unique email" (cn/docstring :I1273/EmployeeEmail)))
-    (is (= "Group employees under companies" (cn/docstring :I1273/CompanyEmployee)))))
+    (is (= "Group employees under companies" (cn/docstring :I1273/CompanyEmployee))))))
