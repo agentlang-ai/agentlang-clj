@@ -6,6 +6,7 @@
             #?(:clj [clojure.java.io :as io])
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
+            #?(:cljs [cljs.reader :as reader])
             [agentlang.datafmt.json :as json])
   #?(:clj
      (:require [net.cgrand.macrovich :as macros])
@@ -313,7 +314,7 @@
 
 (def parse-string
   #?(:clj read-string
-     :cljs cljs.reader/read-string))
+     :cljs reader/read-string))
 
 (defn safe-read-string [s]
   (try
@@ -495,3 +496,13 @@
 
 (defn raise-not-implemented [fn-name]
   (throw-ex "Not implemented - " fn-name))
+
+#?(:clj
+    (defn execute-script
+      [path]
+      (let [process (.exec (Runtime/getRuntime) path)]
+        (io/copy (io/reader (.getInputStream process)) *out*)
+        (let [exit-val (.waitFor process)]
+          (log/info (str "Exit code: " exit-val)))
+        (io/copy (io/reader (.getErrorStream process)) *out*))))
+>>>>>>> d45f6975f46365fdad22430996257198ebfcda79
