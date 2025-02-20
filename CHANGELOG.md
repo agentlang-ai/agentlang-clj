@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update `:agent-gen` to generate agent with component file only
 - Add support for fetching Ingested docs
 - Escape special characters and wildcard characters for `LIKE` patterns in DB
+- Support for `pgvector` and `sqlite-vec` implementaion for vector search
+- Dataflow suspend/resume feature
+- Add planner as a feature
+- Support for env call in config
+- New delegate semantics
 
 ## [0.6.1] - 2024-12-05
 
