@@ -224,11 +224,17 @@
     (first attr-scm)
     attr-scm))
 
+(def timeout-ms-tag :timeout-ms)
+(def ^:private instance-meta-keys [:as :meta :meta? :into])
+
+(defn normalize-instance-pattern [pat]
+  (apply dissoc pat instance-meta-keys))
+
 (defn record-name [pat]
   (if (name? pat)
     pat
     (when (map? pat)
-      (let [pat (dissoc pat :meta :as :meta?)
+      (let [pat (normalize-instance-pattern pat)
             n (ffirst (filter (fn [[_ v]] (map? v)) pat))]
         (when (or (name? n)
                   (and (string? n) (name? (keyword n))))
@@ -242,11 +248,11 @@
 
 (defn record-attributes [pat]
   (when (map? pat)
-    (let [pat (dissoc pat :meta :meta? :as)]
+    (let [pat (normalize-instance-pattern pat)]
       (first (filter map? (vals pat))))))
 
 (defn destruct-instance-pattern [pat]
-  (let [pat (dissoc pat :meta :meta? :as)]
+  (let [pat (normalize-instance-pattern pat)]
     [(first (keys pat)) (first (vals pat))]))
 
 (defn split-by-delim
@@ -402,14 +408,6 @@
 
 (defn unq-name []
   (keyword (gensym)))
-
-(def rel-tag :->)
-(def timeout-ms-tag :timeout-ms)
-
-(def ^:private instance-meta-keys [:as :with-types timeout-ms-tag rel-tag])
-
-(defn normalize-instance-pattern [pat]
-  (apply dissoc pat instance-meta-keys))
 
 (defn instance-pattern? [pat]
   (when (map? pat)

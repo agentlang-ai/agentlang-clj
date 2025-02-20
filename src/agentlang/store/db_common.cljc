@@ -361,6 +361,23 @@
                     (rest arg))])
         args))
 
+(defn- ref-from-canonical-name [n]
+  (let [parts (li/path-parts n)
+        refs (seq (:refs parts))]
+    (when-not refs
+      (u/throw-ex (str "Invalid attribute reference - " n)))
+    (let [cn (:component parts), recname (:record parts)]
+      (li/make-ref
+       (if (and cn recname)
+         (as-table-name (li/make-path cn recname))
+         recname)
+       (stu/attribute-column-name-kw (first refs))))))
+
+(defn- select-into [into-spec]
+  (mapv (fn [[k v]]
+          [(ref-from-canonical-name v) k])
+        into-spec))
+
 (defn- entity-column-names [entity-name sql-alias]
   (let [attr-names (cn/query-attribute-names entity-name)]
     (mapv #(li/make-ref sql-alias (stu/attribute-column-name-kw %)) attr-names)))
@@ -459,11 +476,12 @@
          r1)))
    bjs))
 
-(defn- query-from-abstract [abstract-query]
+(defn- query-from-abstract [abstract-query into-spec]
   (let [[entity-name attrs] (:select abstract-query)
         entity-alias (keyword (as-table-name entity-name))
         q0 (merge
-            {:select (entity-column-names entity-name entity-alias)
+            {:select (or (when into-spec (select-into into-spec))
+                         (entity-column-names entity-name entity-alias))
              :from [[(as-table-name entity-name) entity-alias]]}
             (or (:? attrs)
                 (when (seq attrs)
@@ -505,7 +523,8 @@
                       (li/normalize-name entity-name)
                       entity-name)
         entity-alias (keyword (as-table-name entity-name))
-        sql-pat0 (query-from-abstract (:abstract-query sub-query))
+        into-spec (:into sub-query)
+        sql-pat0 (query-from-abstract (:abstract-query sub-query) into-spec)
         w0 (:where sql-pat0)
         w1 (if w0 (insert-deleted-clause w0 entity-alias) [:= (li/make-ref entity-alias stu/deleted-flag-col-kw) false])
         sql-pat0 (assoc sql-pat0 :where w1)
@@ -520,8 +539,11 @@
     (execute-fn!
      datasource
      (fn [conn]
-       (let [pstmt (prepare conn [(first sql-params)])]
-         (stu/results-as-instances entity-name (execute-stmt-once! conn pstmt (rest sql-params))))))))
+       (let [pstmt (prepare conn [(first sql-params)])
+             rslt (execute-stmt-once! conn pstmt (rest sql-params))]
+         (if into-spec
+           rslt
+           (stu/results-as-instances entity-name rslt)))))))
 
 (defn do-query
   ([datasource query-sql query-params]

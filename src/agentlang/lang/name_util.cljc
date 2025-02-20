@@ -50,16 +50,16 @@
                  :cljs (cljs.reader/read-string qv))}))))))
 
 (defn- maybe-merge-non-attrs [fq-inst orig-inst]
-  (let [rels (when-let [rels (li/rel-tag orig-inst)]
-               (fq-generic rels false))
+  (let [rels nil #_(when-let [rels (li/rel-tag orig-inst)]
+                     (fq-generic rels false))
         alias-def (:as orig-inst)
         with-types (when-let [tps (li/with-types-tag orig-inst)]
                      (fq-generic tps false))
         toms (li/timeout-ms-tag orig-inst)]
     (merge
      fq-inst
-     (when rels
-       {li/rel-tag rels})
+     #_(when rels
+         {li/rel-tag rels})
      (when alias-def
        {:as alias-def})
      (when with-types

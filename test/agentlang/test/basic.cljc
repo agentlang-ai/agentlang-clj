@@ -338,7 +338,19 @@
       :BB01/BC?
       {:BB01/B {}
        :BB01/AB?
-       {:BB01/A {:Id :BB01/LookupAllCforA.A}}}}))
+       {:BB01/A {:Id :BB01/LookupAllCforA.A}}}})
+
+    (dataflow
+     :BB01/LookupAllForA
+     {:BB01/C? {}
+      :BB01/BC?
+      {:BB01/B {}
+       :BB01/AB?
+       {:BB01/A {:Id :BB01/LookupAllForA.A}}}
+      :into
+      {:AX :BB01/A.X
+       :BY :BB01/B.Y
+       :CZ :BB01/C.Z}}))
 
   (let [create-a #(tu/invoke {:BB01/Create_A
                               {:Instance
@@ -349,6 +361,7 @@
         lookup-b #(tu/invoke {:BB01/LookupB {:A %}})
 
         lookup-c-for-a #(tu/invoke {:BB01/LookupAllCforA {:A %}})
+        lookup-all-for-a #(tu/invoke {:BB01/LookupAllForA {:A %}})
 
         a? (partial cn/instance-of? :BB01/A)
         b? (partial cn/instance-of? :BB01/B)
@@ -369,7 +382,11 @@
     (is (c? (create-c 21 1030 13)))
 
     (is (= 2 (count (lookup-c-for-a 1))))
-
+    (let [rs (lookup-all-for-a 1)]
+      (is (= 2 (count rs)))
+      (is (= 20 (apply + (mapv :AX rs))))
+      (is (= (+ 110 120) (apply + (mapv :BY rs))))
+      (is (= (+ 1010 1030) (apply + (mapv :CZ rs)))))
     (check-bs [11 12] (lookup-b 1))
     (check-bs [13] (lookup-b 2))))
 

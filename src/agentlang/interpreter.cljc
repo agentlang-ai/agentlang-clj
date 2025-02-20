@@ -409,7 +409,7 @@
     (call-resolver r/call-resolver-delete resolver store-f env [entity-name args])))
 
 (defn- extract-entity-name [pattern]
-  (let [pattern (dissoc pattern :as :from)
+  (let [pattern (li/normalize-instance-pattern pattern)
         ks (keys pattern)]
     (first (filter #(cn/entity? (li/normalize-name %)) ks))))
 
@@ -518,7 +518,8 @@
 
 (defn- maybe-lift-relationship-patterns [env pat]
   (let [alias (:as pat)
-        pat (dissoc pat alias)
+        into (:into pat)
+        pat (li/normalize-instance-pattern pat)
         q (walk-query-pattern env pat false)
         bet-rels (filter-between-relationships pat)
         cont-rels (filter-contains-relationships pat)]
@@ -528,7 +529,8 @@
          p))
      {:cont-rels (when (seq cont-rels) cont-rels)
       :bet-rels (when (seq bet-rels) bet-rels)
-      :abstract-query q}]))
+      :abstract-query q
+      :into into}]))
 
 (defn- maybe-preprocecss-pattern [env pat]
   (if (map? pat)

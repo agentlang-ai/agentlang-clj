@@ -32,7 +32,7 @@
 (def error-tag :error)
 (def not-found-tag :not-found)
 
-(def rel-tag li/rel-tag)
+(def rel-tag nil)
 (def timeout-ms-tag li/timeout-ms-tag)
 
 (def attributes attrs-tag)
