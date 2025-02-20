@@ -1,4 +1,4 @@
-(defproject com.github.agentlang-ai/agentlang "0.6.2-alpha"
+(defproject com.github.agentlang-ai/agentlang "0.6.2-alpha1"
   :dependencies [[org.clojure/clojure "1.12.0"]
                  [org.clojure/clojurescript "1.11.132"
                   :exclusions [com.google.code.findbugs/jsr305]]
@@ -40,7 +40,7 @@
                  [org.bitbucket.b_c/jose4j "0.7.12"]
                  [reagent "1.1.0"]
                  [cljsjs/react "17.0.2-0"]
-                 [tick "0.5.0-RC1"]
+                 [tick "1.0"]
                  [spec-provider "0.4.14"]
                  [amazonica "0.3.162"]
                  [buddy/buddy-core "1.6.0"]

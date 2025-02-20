@@ -115,7 +115,7 @@
       pat)))
 
 (defn- parse-fn-call [expr alias]
-  (let [pat [:eval (~(first expr) ~@(mapv parse-ref-or-expr (rest expr)))]]
+  (let [pat [:eval (list* (first expr) (mapv parse-ref-or-expr (rest expr)))]]
     (if alias
       (vec (concat pat [:as alias]))
       pat)))

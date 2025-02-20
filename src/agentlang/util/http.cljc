@@ -229,8 +229,9 @@
            :vars (map name path)}
           (recur (conj path (-> parent-entity first last))))))))
 
-(defn form-decode [s]
-  (w/keywordize-keys (codec/form-decode s)))
+#?(:clj
+   (defn form-decode [s]
+     (w/keywordize-keys (codec/form-decode s))))
 
 (defn parse-cookies [cookie-string]
   (when cookie-string
