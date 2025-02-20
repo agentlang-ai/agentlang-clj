@@ -397,7 +397,8 @@
           this-ref (partial li/make-ref this-alias)
           that-alias (keyword (as-table-name target-entity))
           that-ref (partial li/make-ref that-alias)
-          p (li/path-attr attrs)
+          p (when-let [p (li/path-attr attrs)]
+              (and (string? p) p))
           main-joins
           [[(as-table-name relname) rel-alias]
            [:and

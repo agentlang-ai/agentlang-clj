@@ -23,9 +23,12 @@
        :X "secret"
        :Y '(agentlang.lang.datetime/now)}})
 
-(entity :A {:Id {:type :Int :id true :default 1} :X :Int})
-(entity :B {:Id {:type :Int :id true :default 10}  :Y :Int})
+(entity :A {:Id {:type :Int :id true} :X :Int})
+(entity :B {:Id {:type :Int :id true} :Y :Int})
 (relationship :AB {:meta {:contains [:A :B]}})
+
+(entity :C {:Id {:type :Int :id true} :Z :Int})
+(relationship :AC {:meta {:between [:A :C]}})
 
 ;; Enable for testing auth+rbac
 #_(dataflow

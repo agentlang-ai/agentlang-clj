@@ -1081,7 +1081,9 @@
   (let [[node-names new-attrs] (assoc-relnode-attributes (preproc-attrs attrs) elems relmeta)
         [meta new-attrs] (between-unique-meta (:meta attrs) relmeta elems node-names new-attrs)
         meta (assoc meta :relationship :between cn/relmeta-key relmeta)
-        r (serializable-entity relname (assoc new-attrs :meta meta) attrs)]
+        r (serializable-entity relname (assoc new-attrs :meta meta
+                                              li/parent-attr li/parent-attr-spec
+                                              li/path-attr li/path-attr-spec) attrs)]
     (when (cn/register-relationship elems relname)
       (and (raw/relationship relname attrs) r))))
 

@@ -436,9 +436,16 @@
                  :path path}})))))))
 
 (defn- fetch-all [entity-name path]
-  (gs/evaluate-pattern
-   {entity-name
-    {li/path-attr? [:like (str (li/vec-to-path path) "%")]}}))
+  (let [relname (last (drop-last path))]
+    (gs/evaluate-pattern
+     (if (cn/between-relationship? relname)
+       (let [other-entity (first path)
+             other-path (drop-last 2 path)]
+         (u/trace {(li/name-as-query-pattern entity-name) {}
+                   (li/name-as-query-pattern relname)
+                   {other-entity {li/path-attr (li/vec-to-path other-path)}}}))
+       {entity-name
+        {li/path-attr? [:like (str (li/vec-to-path path) "%")]}}))))
 
 (defn- fetch-tree [entity-name insts]
   (if-let [rels (seq (cn/contained-children entity-name))]

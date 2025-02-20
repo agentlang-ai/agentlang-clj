@@ -1035,15 +1035,13 @@
 (def instance-path li/path-attr)
 
 (defn- maybe-assoc-path [recname attrs]
-  (cond
-    (between-relationship? recname) attrs
-    (entity? recname)
+  (if (entity? recname)
     (let [path (li/path-attr attrs)
           id ((identity-attribute-name recname) attrs)]
       (if (li/default-path? path)
         (assoc attrs li/path-attr (str (li/make-path recname) "," id))
         (assoc attrs li/path-attr (maybe-complete-path path id))))
-    :else attrs))
+    attrs))
 
 (defn make-instance
   "Initialize an instance of a record from the given map of attributes.
