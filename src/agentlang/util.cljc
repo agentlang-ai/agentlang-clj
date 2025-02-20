@@ -486,14 +486,6 @@
 (defn as-agent-tools [ks]
   (mapv (fn [k] {:name (subs (str k) 1)}) ks))
 
-(defn execute-script
-  [path]
-  (let [process (.exec (Runtime/getRuntime) path)]
-    (io/copy (io/reader (.getInputStream process)) *out*)
-    (let [exit-val (.waitFor process)]
-      (log/info (str "Exit code: " exit-val)))
-    (io/copy (io/reader (.getErrorStream process)) *out*)))
-
 (defn raise-not-implemented [fn-name]
   (throw-ex "Not implemented - " fn-name))
 
@@ -505,4 +497,3 @@
         (let [exit-val (.waitFor process)]
           (log/info (str "Exit code: " exit-val)))
         (io/copy (io/reader (.getErrorStream process)) *out*))))
->>>>>>> d45f6975f46365fdad22430996257198ebfcda79
