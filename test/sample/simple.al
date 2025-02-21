@@ -30,6 +30,14 @@
 (entity :C {:Id {:type :Int :id true} :Z :Int})
 (relationship :AC {:meta {:between [:A :C]}})
 
+(dataflow
+ :FindAC
+ {:C? {}
+  :AC? {:A {:Id :FindAC.A} :as :A1}
+  :into
+  {:AX :A1.X
+   :CZ :C.Z}})
+
 ;; Enable for testing auth+rbac
 #_(dataflow
  :Agentlang.Kernel.Lang/AppInit

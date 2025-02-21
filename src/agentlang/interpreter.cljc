@@ -601,7 +601,8 @@
                           {})]
      (binding [gs/active-event-context (:EventContext event-instance)]
        (let [env0 (or env (env/bind-instance (env/make store nil) event-instance))
-             env (env/assoc-active-event env0 event-instance)]
+             env (env/assoc-active-event env0 event-instance)
+             store (or (env/get-store env) store)]
          (store/call-in-transaction
           store
           (fn [txn]
@@ -625,7 +626,7 @@
   ([event-instance] (evaluate-dataflow (store/get-default-store) nil event-instance)))
 
 (defn evaluate-dataflow-in-environment [env event-instance]
-  (evaluate-dataflow nil env event-instance false))
+  (evaluate-dataflow nil env event-instance))
 
 #?(:clj
    (defn async-evaluate-pattern [op-code pat result-chan]

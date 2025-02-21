@@ -497,3 +497,11 @@
         (let [exit-val (.waitFor process)]
           (log/info (str "Exit code: " exit-val)))
         (io/copy (io/reader (.getErrorStream process)) *out*))))
+
+(defn safe-partial [handler & args]
+  (let [f (apply partial args)]
+    (fn [& rest]
+      (try
+        (apply f rest)
+        (catch #?(:clj Exception :cljs :default) ex
+          (handler ex))))))
