@@ -11,9 +11,11 @@
 (def sql-keywords #{:select :where := :<> :> :>= :< :<=
                     :and :or :between :in :count :group-by
                     :join :left-join :right-join :having
-                    :order-by :limit :offset})
+                    :order-by :limit :offset :as})
 
-(defn sql-keyword? [k] (some #{k} sql-keywords))
+(defn sql-keyword? [k]
+  (let [k (keyword (s/lower-case (name k)))]
+    (some #{k} sql-keywords)))
 
 (defn- sys-col? [n] (= (s/upper-case n) deleted-flag-col))
 

@@ -382,30 +382,6 @@
   (let [attr-names (cn/query-attribute-names entity-name)]
     (mapv #(li/make-ref sql-alias (stu/attribute-column-name-kw %)) attr-names)))
 
-(def ^:private alias-db #?(:clj (ThreadLocal.) :cljs (atom nil)))
-
-(defn- get-alias-db [] #?(:clj (.get alias-db) :cljs @alias-db))
-(defn- set-alias-db! [db] #?(:clj (.set alias-db db) :cljs (reset! alias-db db)))
-
-(defn- register-alias! [relname entity-name alias]
-  (set-alias-db! (assoc (get-alias-db) [relname entity-name] alias)))
-
-(defn- get-alias [relname entity-name]
-  (get (get-alias-db) [relname entity-name]))
-
-(defn- reset-alias-db! [] (set-alias-db! nil))
-
-(defn- register-alias [[relname ref]]
-  (let [parts (li/path-parts ref)
-        cn (:component parts)
-        n (:record parts)]
-    (if (and cn n)
-      (let [rparts (li/split-path relname)
-            alias (keyword (s/join "_" (mapv name (concat rparts [cn n]))))]
-        (register-alias! relname (li/make-path cn n) alias)
-        (li/make-ref alias (first (:refs parts))))
-      (u/throw-ex (str "Invalid reference " ref)))))
-
 (def ^:private ipa-alias :ipa)
 (def ^:private ipa-path (li/make-ref ipa-alias (stu/attribute-column-name-kw :ResourcePath)))
 (def ^:private ipa-user (li/make-ref ipa-alias (stu/attribute-column-name-kw :Assignee)))
@@ -425,6 +401,12 @@
            [:= ipa-user user]]
           (mapv (fn [opr] [:= (opr ipa-flag-cols) true]) oprs))]]
     (assoc sql-pat :join (concat join inv-privs-join))))
+
+(defn- get-alias [relname entity-name]
+  (when-let [alias (li/get-alias relname entity-name)]
+    (when (stu/sql-keyword? alias)
+      (u/throw-ex (str "SQL keyword " alias " cannot be used as an alias")))
+    alias))
 
 (defn- between-join [src-entity relname [target-entity attrs]]
   (let [n1 (first (cn/find-between-keys relname src-entity))
@@ -521,22 +503,10 @@
             q0)]
     q))
 
-(defn- preprocess-into-spec [into-spec]
-  (when (seq into-spec)
-    (into
-     {}
-     (mapv (fn [[k v]]
-             [k (cond
-                  (keyword? v) v
-                  (vector? v) (register-alias v)
-                  :else (u/throw-ex (str "Invalid attribute reference " v " in " into-spec)))])
-           into-spec))))
-
 (defn- query-by-attributes [datasource {entity-name :entity-name
                                         attrs :query-attributes
                                         sub-query :sub-query
                                         rbac :rbac}]
-  (reset-alias-db!)
   (let [rbac-enabled? (gs/rbac-enabled?)
         [can-read-all can-update-all can-delete-all update-delete-tag]
         (when rbac-enabled?
@@ -559,7 +529,7 @@
                       (li/normalize-name entity-name)
                       entity-name)
         entity-alias (keyword (as-table-name entity-name))
-        into-spec (preprocess-into-spec (:into sub-query))
+        into-spec (:into sub-query)
         sql-pat0 (query-from-abstract (:abstract-query sub-query) into-spec)
         w0 (:where sql-pat0)
         w1 (if w0 (insert-deleted-clause w0 entity-alias) [:= (li/make-ref entity-alias stu/deleted-flag-col-kw) false])

@@ -5,6 +5,7 @@
             #?(:clj [clojure.core.cache.wrapped :as cache])
             [agentlang.model]
             [agentlang.util :as u]
+            [agentlang.util.seq :as us]
             [agentlang.component :as cn]
             [agentlang.env :as env]
             [agentlang.store :as store]
@@ -506,8 +507,13 @@
         cont-rels (filter cn/contains-relationship? names)
         bet-rels (filter cn/between-relationship? names)
         rf (partial realize-all-references env)
-        f (fn [r] [r (walk-query-pattern env (rf (or (get pat r)
-                                                     (get pat (li/name-as-query-pattern r)))) true)])]
+        f (fn [r]
+            (let [subpat (or (get pat r)
+                             (get pat (li/name-as-query-pattern r)))
+                  [alias subpat] (if (map? subpat) [(:as subpat) (dissoc subpat :as)] [nil subpat])]
+              (when (and alias (cn/relationship? r))
+                (li/register-alias! r (li/record-name subpat) alias))
+              [r (walk-query-pattern env (rf subpat) true) alias]))]
     {:select [entity-name
               (let [attrs ((if qmode identity filter-query-attributes) (get pat entity-name))]
                 (if-let [select-clause (:? attrs)]
@@ -520,6 +526,7 @@
   (let [alias (:as pat)
         into (:into pat)
         pat (li/normalize-instance-pattern pat)
+        _ (li/reset-alias-db!)
         q (walk-query-pattern env pat false)
         bet-rels (filter-between-relationships pat)
         cont-rels (filter-contains-relationships pat)]

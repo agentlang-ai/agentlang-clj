@@ -631,3 +631,16 @@
     (if (string? n)
       (keyword (subs n 1))
       n)))
+
+(def ^:private alias-db #?(:clj (ThreadLocal.) :cljs (atom nil)))
+
+(defn- get-alias-db [] #?(:clj (.get alias-db) :cljs @alias-db))
+(defn- set-alias-db! [db] #?(:clj (.set alias-db db) :cljs (reset! alias-db db)))
+
+(defn register-alias! [relname entity-name alias]
+  (set-alias-db! (assoc (get-alias-db) [relname entity-name] alias)))
+
+(defn get-alias [relname entity-name]
+  (get (get-alias-db) [relname entity-name]))
+
+(defn reset-alias-db! [] (set-alias-db! nil))
