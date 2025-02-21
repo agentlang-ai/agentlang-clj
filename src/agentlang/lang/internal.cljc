@@ -640,7 +640,11 @@
 (defn register-alias! [relname entity-name alias]
   (set-alias-db! (assoc (get-alias-db) [relname entity-name] alias)))
 
-(defn get-alias [relname entity-name]
-  (get (get-alias-db) [relname entity-name]))
+(defn get-alias
+  ([relname entity-name]
+   (get (get-alias-db) [relname entity-name]))
+  ([entity-name]
+   (when-let [db (seq (get-alias-db))]
+     (second (first (filter (fn [[[_ en] v]] (= en entity-name)) db))))))
 
 (defn reset-alias-db! [] (set-alias-db! nil))

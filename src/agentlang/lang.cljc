@@ -1077,10 +1077,29 @@
 
     :else [meta new-attrs]))
 
+(defn- merge-rbac [r1 r2]
+  (let [rs (concat r1 r2)]
+    (when (seq rs)
+      (let [rps (mapv (fn [r] [(:roles r) (:allow r)]) rs)
+            xs (reduce (fn [m [r p]]
+                         (if-let [p0 (get m r)]
+                           (assoc m r (set/union (set p0) (set p)))
+                           (assoc m r p)))
+                       {} rps)]
+        (mapv (fn [[k v]] {:roles k :allow (vec v)}) xs)))))
+
+(defn- install-between-rbac [elems attrs]
+  (if (:rbac attrs)
+    attrs
+    (assoc attrs :rbac (merge-rbac (cn/fetch-rbac-spec (first elems))
+                                   (cn/fetch-rbac-spec (second elems))))))
+
 (defn- between-relationship [relname attrs relmeta elems]
-  (let [[node-names new-attrs] (assoc-relnode-attributes (preproc-attrs attrs) elems relmeta)
-        [meta new-attrs] (between-unique-meta (:meta attrs) relmeta elems node-names new-attrs)
+  (let [[node-names new-attrs0] (assoc-relnode-attributes (preproc-attrs attrs) elems relmeta)
+        [meta new-attrs1] (between-unique-meta (:meta attrs) relmeta elems node-names new-attrs0)
+        new-attrs (install-between-rbac elems new-attrs1)
         meta (assoc meta :relationship :between cn/relmeta-key relmeta)
+        _ (instance-privilege-entity relname)
         r (serializable-entity relname (assoc new-attrs :meta meta
                                               li/parent-attr li/parent-attr-spec
                                               li/path-attr li/path-attr-spec) attrs)]

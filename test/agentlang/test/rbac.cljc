@@ -407,308 +407,142 @@
            (is (not (lookup-e "u2@ipv.com" 1)))
            (is (cn/same-instance? e (lookup-e "u1@ipv.com" 1)))))))))
 
-;; (deftest creator-and-parent-as-owners
-;;   (reset-events!)
-;;   (defcomponent :I1018
-;;     (entity
-;;      :I1018/A
-;;      {:rbac [{:roles ["i1018-admin"] :allow [:create :update :read]}]
-;;       :Id {:type :Int tu/guid true}
-;;       :X :Int})
-;;     (entity
-;;      :I1018/B
-;;      {:rbac [{:roles ["i1018-user"] :allow [:create :update :read]}]
-;;       :Id {:type :Int tu/guid true}
-;;       :Y :Int})
-;;     (relationship
-;;      :I1018/R
-;;      {:meta {:contains [:I1018/A :I1018/B]}})
-;;     (dataflow
-;;      :I1018/InitUsers
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u1@i1018.com"}}
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u2@i1018.com"}}
-;;      {:Agentlang.Kernel.Rbac/RoleAssignment
-;;       {:Role "i1018-admin" :Assignee "u1@i1018.com"}}
-;;      {:Agentlang.Kernel.Rbac/RoleAssignment
-;;       {:Role "i1018-user" :Assignee "u2@i1018.com"}}))
-;;   (is (finalize-events))
-;;   (is (cn/instance-of?
-;;        :Agentlang.Kernel.Rbac/RoleAssignment
-;;        (tu/first-result {:I1018/InitUsers {}})))
-;;   (call-with-rbac
-;;    (fn []
-;;      (let [fq (partial pi/as-fully-qualified-path :I1018)
-;;            a? (partial cn/instance-of? :I1018/A)
-;;            b? (partial cn/instance-of? :I1018/B)
-;;            create-a (fn [id]
-;;                       {:I1018/Create_A
-;;                        {:Instance
-;;                         {:I1018/A {:Id id :X (* id 100)}}}})
-;;            create-b (fn [a id]
-;;                       {:I1018/Create_B
-;;                        {:Instance
-;;                         {:I1018/B
-;;                          {:Id id
-;;                           :Y (* 5 id)}}
-;;                         li/path-attr (str "/A/" a "/R")}})
-;;            lookup-bs (fn [a]
-;;                        {:I1018/LookupAll_B
-;;                         {li/path-attr (fq (str "path://A/" a "/R/B/%"))}})
-;;            with-u1 (partial with-user "u1@i1018.com")
-;;            with-u2 (partial with-user "u2@i1018.com")
-;;            a1 (tu/first-result (with-u1 (create-a 1)))
-;;            bs1 (mapv #(tu/first-result (with-u2 (create-b 1 %))) [10 20])
-;;            bs2 (tu/result (with-u2 (lookup-bs 1)))
-;;            is-bs (fn [bs]
-;;                    (is (= (count bs) 2))
-;;                    (is (every? b? bs))
-;;                    (is (every? #(= #{"u1@i1018.com" "u2@i1018.com"}
-;;                                    (cn/owners %)) bs)))]
-;;        (is (a? a1))
-;;        (is-bs bs1)
-;;        (is-bs bs2)))))
+(deftest rbac-with-between
+  (with-rbac
+    #(defcomponent :Rwb
+       (entity
+        :Rwb/A
+        {:Id {:type :Int :id true} :X :Int
+         :rbac [{:roles ["rwb-user"] :allow [:create]}
+                {:roles ["rwb-guest"] :allow [:read]}]})
+       (entity :Rwb/B {:Id {:type :Int :id true} :Y :Int
+                       :rbac [{:roles ["rwb-user"] :allow [:create]}
+                              {:roles ["rwb-guest"] :allow [:read]}]})
+       (entity :Rwb/C {:Id {:type :Int :id true} :Z :Int})
 
-;; (deftest issue-1025-rbac-update
-;;   (reset-events!)
-;;   (defcomponent :I1025
-;;     (entity
-;;      :I1025/Member
-;;      {:Id :Identity
-;;       :rbac [{:roles ["i1025"] :allow [:create]}]})
-;;     (entity :I1025/Assessment {:Id :Identity})
-;;     (relationship
-;;      :I1025/AssessmentOf
-;;      {:meta {:contains [:I1025/Member :I1025/Assessment]}})
-;;     (relationship
-;;      :I1025/AssessementBy
-;;      {:meta {:between [:I1025/Member :I1025/Assessment]}})
-;;     (relationship
-;;      :I1025/Relation
-;;      {:meta {:between [:I1025/Member :I1025/Member :as [:From :To]]}
-;;       :rbac {:owner :From}})
-;;     (dataflow
-;;      :I1025/CreateAssessment
-;;      {:I1025/Assessment {}
-;;       :-> [[:I1025/AssessmentOf {:I1025/Member {:Id? :I1025/CreateAssessment.Of}}]
-;;            [{:I1025/AssessementBy {}} {:I1025/Member {:Id? :I1025/CreateAssessment.By}}]]})
-;;     (dataflow
-;;      :I1025/InitUsers
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u1@i1025.com"}}
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u2@i1025.com"}}
-;;      {:Agentlang.Kernel.Rbac/RoleAssignment
-;;       {:Role "i1025" :Assignee "u1@i1025.com"}}
-;;      {:Agentlang.Kernel.Rbac/RoleAssignment
-;;       {:Role "i1025" :Assignee "u2@i1025.com"}}))
-;;   (is (finalize-events))
-;;   (is (cn/instance-of?
-;;        :Agentlang.Kernel.Rbac/RoleAssignment
-;;        (tu/first-result {:I1025/InitUsers {}})))
-;;   (call-with-rbac
-;;    (fn []
-;;      (let [wu1 (partial with-user "u1@i1025.com")
-;;            wu2 (partial with-user "u2@i1025.com")
-;;            create-member (fn [with-user]
-;;                            (tu/first-result
-;;                             (with-user {:I1025/Create_Member
-;;                                         {:Instance
-;;                                          {:I1025/Member {}}}})))
-;;            create-relation (fn [with-user from to]
-;;                              (tu/first-result
-;;                               (with-user {:I1025/Create_Relation
-;;                                           {:Instance
-;;                                            {:I1025/Relation
-;;                                             {:From from :To to}}}})))
-;;            create-assessment (fn [with-user of by]
-;;                                (tu/first-result
-;;                                 (with-user {:I1025/CreateAssessment
-;;                                             {:Of of :By by}})))
-;;            assign-ownership (fn [with-user id]
-;;                               (tu/first-result
-;;                                (with-user {:Agentlang.Kernel.Rbac/Create_OwnershipAssignment
-;;                                            {:Instance
-;;                                             {:Agentlang.Kernel.Rbac/OwnershipAssignment
-;;                                              {:Resource :I1025/Member
-;;                                               :ResourceId id
-;;                                               :Assignee "u2@i1025.com"}}}})))
-;;            remove-ownership (fn [with-user id]
-;;                               (tu/first-result
-;;                                (with-user {:Agentlang.Kernel.Rbac/Delete_OwnershipAssignment
-;;                                            {:Name id}})))
-;;            m? (partial cn/instance-of? :I1025/Member)
-;;            a? (partial cn/instance-of? :I1025/Assessment)
-;;            r? (partial cn/instance-of? :I1025/Relation)
-;;            m1 (create-member wu1), m2 (create-member wu1)
-;;            m3 (create-member wu2)]
-;;        (is (m? m1)) (is (m? m2)) (is (m? m3))
-;;        (is (r? (create-relation wu1 (:Id m1) (:Id m2))))
-;;        (is (r? (create-relation wu1 (:Id m1) (:Id m3))))
-;;        (is (not (create-relation wu2 (:Id m1) (:Id m2))))
-;;        (is (r? (create-relation wu2 (:Id m3) (:Id m1))))
-;;        (is (a? (create-assessment wu1 (:Id m1) (:Id m1))))
-;;        (is (a? (create-assessment wu1 (:Id m1) (:Id m2))))
-;;        (is (tu/is-error #(create-assessment wu2 (:Id m1) (:Id m2))))
-;;        (let [res (mapv (partial assign-ownership wu1) [(:Id m1) (:Id m2)])
-;;              oa? (partial cn/instance-of? :Agentlang.Kernel.Rbac/OwnershipAssignment)]
-;;          (is (every? oa? res))
-;;          (is (a? (create-assessment wu2 (:Id m1) (:Id m2))))
-;;          (is (every? oa? (mapv (partial remove-ownership wu1) (mapv :Name res))))
-;;          (is (tu/is-error #(create-assessment wu2 (:Id m1) (:Id m2)))))))))
+       (relationship :Rwb/AB {:meta {:between [:Rwb/A :Rwb/B]}})
+       (relationship :Rwb/BC {:meta {:contains [:Rwb/B :Rwb/C]}})
 
-;; (deftest issue-1035-owner-assign
-;;   (defcomponent :I1035
-;;     (entity :I1035/Member {:Id :Identity
-;;                            :rbac [{:roles ["i1035"] :allow [:create]}]})
-;;     (entity :I1035/Score {:Id :Identity
-;;                           :rbac [{:roles ["i1035"] :allow [:create]}]})
-;;     (relationship
-;;      :I1035/Relation
-;;      {:meta {:between [:I1035/Member :I1035/Member :as [:From :To]]}
-;;       :rbac {:owner :From
-;;              :assign {:ownership [:To :-> :From]}}})
-;;     (relationship
-;;      :I1035/ScoreFor
-;;      {:meta {:contains [:I1035/Member :I1035/Score]}})
-;;     (dataflow
-;;      :I1035/AssignScore
-;;      {:I1035/Score {}
-;;       :-> [[:I1035/ScoreFor {:I1035/Member {:Id? :I1035/AssignScore.Member}}]]})
-;;     (dataflow
-;;      :I1035/InitUsers
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u1@i1035.com"}}
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u2@i1035.com"}}
-;;      {:Agentlang.Kernel.Rbac/RoleAssignment
-;;       {:Role "i1035" :Assignee "u1@i1035.com"}}
-;;      {:Agentlang.Kernel.Rbac/RoleAssignment
-;;       {:Role "i1035" :Assignee "u2@i1035.com"}}))
-;;   (is (finalize-events))
-;;   (is (cn/instance-of?
-;;        :Agentlang.Kernel.Rbac/RoleAssignment
-;;        (tu/first-result {:I1035/InitUsers {}})))
-;;   (call-with-rbac
-;;    (fn []
-;;      (let [wu1 (partial with-user "u1@i1035.com")
-;;            wu2 (partial with-user "u2@i1035.com")
-;;            create-member (fn [with-user]
-;;                            (tu/first-result
-;;                             (with-user {:I1035/Create_Member
-;;                                         {:Instance
-;;                                          {:I1035/Member {}}}})))
-;;            lookup-owners (fn [with-user member-id]
-;;                            (cn/owners
-;;                             (tu/first-result
-;;                              (with-user
-;;                                {:I1035/Lookup_Member {:Id member-id}}))))
-;;            assign-score (fn [with-user member-id]
-;;                           (tu/first-result
-;;                            (with-user {:I1035/AssignScore
-;;                                        {:Member member-id}})))
-;;            create-relation (fn [with-user from to]
-;;                              (tu/first-result
-;;                               (with-user {:I1035/Create_Relation
-;;                                           {:Instance
-;;                                            {:I1035/Relation
-;;                                             {:From from :To to}}}})))
-;;            delete-relation (fn [with-user relid]
-;;                              (tu/first-result
-;;                               (with-user {:I1035/Delete_Relation
-;;                                           {li/id-attr relid}})))
-;;            m? (partial cn/instance-of? :I1035/Member)
-;;            s? (partial cn/instance-of? :I1035/Score)
-;;            r? (partial cn/instance-of? :I1035/Relation)
-;;            m1 (create-member wu1) m2 (create-member wu1)
-;;            m3 (create-member wu2)]
-;;        (is (every? m? [m1 m2 m3]))
-;;        (is (= #{"u1@i1035.com"} (lookup-owners wu1 (:Id m1))))
-;;        (is (= #{"u1@i1035.com"} (lookup-owners wu1 (:Id m2))))
-;;        (is (= #{"u2@i1035.com"} (lookup-owners wu2 (:Id m3))))
-;;        (is (s? (assign-score wu1 (:Id m1))))
-;;        (is (not (assign-score wu2 (:Id m2))))
-;;        (is (s? (assign-score wu2 (:Id m3))))
-;;        (is (not (create-relation wu2 (:Id m1) (:Id m3))))
-;;        (is (r? (create-relation wu1 (:Id m1) (:Id m2))))
-;;        (is (not (assign-score wu2 (:Id m2))))
-;;        ;; assing ownership via Relation.
-;;        (let [r (create-relation wu1 (:Id m2) (:Id m3))]
-;;          (is (r? r))
-;;          (is (= #{"u1@i1035.com"} (lookup-owners wu1 (:Id m1))))
-;;          (is (= #{"u1@i1035.com" "u2@i1035.com"} (lookup-owners wu1 (:Id m2))))
-;;          (is (= #{"u2@i1035.com"} (lookup-owners wu2 (:Id m3))))
-;;          (is (s? (assign-score wu2 (:Id m2))))
-;;          ;; revoke ownership by deleting Relation.
-;;          (is (cn/same-instance? r (delete-relation wu1 (li/id-attr r))))
-;;          (is (= #{"u1@i1035.com"} (lookup-owners wu1 (:Id m1))))
-;;          (is (= #{"u1@i1035.com"} (lookup-owners wu1 (:Id m2))))
-;;          (is (= #{"u2@i1035.com"} (lookup-owners wu2 (:Id m3)))))))))
+       (dataflow
+        :Rwb/CreateB
+        {:Rwb/B {:Id :Rwb/CreateB.Id :Y :Rwb/CreateB.Y}
+         :Rwb/AB {:Rwb/A {:Id? :Rwb/CreateB.A}}})
 
-;; (deftest view-rbac
-;;   (defcomponent :Vrbac
-;;     (entity
-;;      :Vrbac/Customer
-;;      {:Id {:type :Int :guid true}
-;;       :Name :String
-;;       :rbac [{:roles ["vrbac"] :allow [:create]}]})
-;;     (entity
-;;      :Vrbac/Order
-;;      {:Id {:type :Int :guid true}
-;;       :CustomerId :Int
-;;       :Date :Now
-;;       :rbac [{:roles ["vrbac"] :allow [:create]}]})
-;;     (view
-;;      :Vrbac/CustomerOrder
-;;      {:CustomerName :Vrbac/Customer.Name
-;;       :CustomerId :Vrbac/Customer.Id
-;;       :OrderId :Vrbac/Order.Id
-;;       :rbac [{:roles ["vrbac"] :allow [:read]}]
-;;       :query {:Vrbac/Order? {}
-;;               :join [{:Vrbac/Customer {:Id? :Vrbac/Order.CustomerId}}]}})
-;;     (dataflow
-;;      :Vrbac/InitUsers
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u1@vrbac.com"}}
-;;      {:Agentlang.Kernel.Identity/User
-;;       {:Email "u2@vrbac.com"}}
-;;      {:Agentlang.Kernel.Rbac/RoleAssignment
-;;       {:Role "vrbac" :Assignee "u1@vrbac.com"}}
-;;      {:Agentlang.Kernel.Rbac/RoleAssignment
-;;       {:Role "vrbac" :Assignee "u2@vrbac.com"}}))
-;;   (is (finalize-events))
-;;   (is (cn/instance-of?
-;;        :Agentlang.Kernel.Rbac/RoleAssignment
-;;        (tu/first-result {:Vrbac/InitUsers {}})))
-;;   (call-with-rbac
-;;    (fn []
-;;      (let [wu1 (partial with-user "u1@vrbac.com")
-;;            wu2 (partial with-user "u2@vrbac.com")
-;;            cust (fn [with-user id name]
-;;                   (tu/first-result
-;;                    (with-user
-;;                      {:Vrbac/Create_Customer
-;;                       {:Instance
-;;                        {:Vrbac/Customer {:Id id :Name name}}}})))
-;;            cust? (partial cn/instance-of? :Vrbac/Customer)
-;;            order (fn [with-user id cust-id]
-;;                    (tu/first-result
-;;                     (with-user
-;;                       {:Vrbac/Create_Order
-;;                        {:Instance
-;;                         {:Vrbac/Order {:Id id :CustomerId cust-id}}}})))
-;;            order? (partial cn/instance-of? :Vrbac/Order)
-;;            cs (mapv (partial cust wu1) [1001 1002] ["jay" "mat"])
-;;            c (cust wu2 1003 "joe")
-;;            _ (is (every? cust? (concat cs [c])))
-;;            os (mapv (partial order wu1) [1 2 3 4 5] [1001 1002 1001 1003 1003])
-;;            _ (is (every? order? os))
-;;            rs (tu/result (wu1 {:Vrbac/LookupAll_CustomerOrder {}}))
-;;            co? (partial cn/instance-of? :Vrbac/CustomerOrder)]
-;;        (is (and (= 5 (count rs)) (is (every? co? rs))))
-;;        (let [rs1 (filter #(= 1001 (:CustomerId %)) rs)
-;;              p? (fn [ordid] (is (= 1 (count (filter #(= ordid (:OrderId %)) rs1)))))]
-;;          (is (= 2 (count rs1)))
-;;          (p? 1)
-;;          (p? 3))))))
+       (dataflow
+        :Rwb/CreateC
+        {:Rwb/C {:Id :Rwb/CreateC.Id :Z :Rwb/CreateC.Z}
+         :Rwb/BC {:Rwb/B {:Id? :Rwb/CreateC.B}}})
+
+       (dataflow
+        :Rwb/LookupB
+        {:Rwb/B? {}
+         :Rwb/AB? {:Rwb/A {:Id :Rwb/LookupB.A}}})
+
+       (dataflow
+        :Rwb/LookupC
+        {:Rwb/C? {}
+         :Rwb/BC? {:Rwb/B {:Id :Rwb/LookupC.B}}})
+
+       (dataflow
+        :Rwb/LookupAllCforA
+        {:Rwb/C? {}
+         :Rwb/BC?
+         {:Rwb/B {}
+          :Rwb/AB?
+          {:Rwb/A {:Id :Rwb/LookupAllCforA.A}}}})
+
+       (dataflow
+        :Rwb/LookupAllForA
+        {:Rwb/C? {}
+         :Rwb/BC?
+         {:Rwb/B {}
+          :Rwb/AB?
+          {:Rwb/A {:Id :Rwb/LookupAllForA.A} :as :A}}
+         :into
+         {:AX :A.X
+          :BY :Rwb/B.Y
+          :CZ :Rwb/C.Z}})
+
+       (dataflow
+        :Rwb/InitUsers
+        {:Agentlang.Kernel.Identity/User
+         {:Email "u1@rwb.com"}}
+        {:Agentlang.Kernel.Identity/User
+         {:Email "u2@rwb.com"}}
+        {:Agentlang.Kernel.Identity/User
+         {:Email "u3@rwb.com"}}
+        {:Agentlang.Kernel.Rbac/RoleAssignment
+         {:Role "rwb-user" :Assignee "u1@rwb.com"}}
+        {:Agentlang.Kernel.Rbac/RoleAssignment
+         {:Role "rwb-user" :Assignee "u2@rwb.com"}}
+        {:Agentlang.Kernel.Rbac/RoleAssignment
+         {:Role "rwb-guest" :Assignee "u3@rwb.com"}})))
+  (call-with-rbac
+   (fn []
+     (let [with-u1 (partial with-user "u1@rwb.com")
+           with-u2 (partial with-user "u2@rwb.com")
+           with-u3 (partial with-user "u3@rwb.com")
+           create-a (fn [wu id x]
+                      (tu/invoke (wu {:Rwb/Create_A
+                                      {:Instance
+                                       {:Rwb/A {:Id id :X x}}}})))
+           create-b (fn [wu id y a]
+                      (tu/invoke (wu {:Rwb/CreateB {:Id id :Y y :A a}})))
+           create-c (fn [wu id z b]
+                      (tu/invoke (wu {:Rwb/CreateC {:Id id :Z z :B b}})))
+
+           lookup-b (fn [wu a]
+                      (tu/invoke (wu {:Rwb/LookupB {:A a}})))
+
+           lookup-c-for-a (fn [wu a]
+                            (tu/invoke (wu {:Rwb/LookupAllCforA {:A a}})))
+           lookup-all-for-a (fn [wu a]
+                              (tu/invoke (wu {:Rwb/LookupAllForA {:A a}})))
+
+           a? (partial cn/instance-of? :Rwb/A)
+           b? (partial cn/instance-of? :Rwb/B)
+           c? (partial cn/instance-of? :Rwb/C)
+           check-bs (fn [ids bs]
+                      (is (= (count bs) (count ids)))
+                      (is (every? b? bs))
+                      (doseq [b bs]
+                        (is (some (fn [id] (= id (:Id b))) ids))))]
+       (tu/is-error #(create-a identity 1 10))
+       (tu/is-error #(create-a with-u3 1 10))
+       (is (a? (create-a with-u1 1 10)))
+       (is (a? (create-a with-u2 2 20)))
+       (is (b? (create-b with-u1 11 110 1)))
+       (is (b? (create-b with-u1 12 120 1)))
+       (is (b? (create-b with-u2 13 130 2)))
+       (is (c? (create-c with-u1 20 1010 11)))
+       (is (c? (create-c with-u1 21 1030 12)))
+       (tu/is-error #(create-c with-u2 21 1030 12))
+       (is (c? (create-c with-u2 21 1040 13)))
+       (is (= 2 (count (lookup-c-for-a with-u1 1))))
+       (tu/is-error #(count (lookup-c-for-a with-u1 2)))
+       (tu/is-error #(lookup-all-for-a with-u2 1))
+       (let [rs (lookup-all-for-a with-u3 2)
+             r (first rs)]
+         (is (= 1 (count rs)))
+         (is (= 20 (:AX r)))
+         (is (= 130 (:BY r)))
+         (is (= 1040 (:CZ r))))
+       (let [rs (lookup-all-for-a with-u2 2)
+             r (first rs)]
+         (is (= 1 (count rs)))
+         (is (= 20 (:AX r)))
+         (is (= 130 (:BY r)))
+         (is (= 1040 (:CZ r))))
+       (let [rs (lookup-all-for-a with-u1 1)]
+         (is (= 2 (count rs)))
+         (is (= 20 (apply + (mapv :AX rs))))
+         (is (= (+ 110 120) (apply + (mapv :BY rs))))
+         (is (= (+ 1010 1030) (apply + (mapv :CZ rs)))))
+       (let [rs (lookup-all-for-a with-u3 1)]
+         (is (= 2 (count rs)))
+         (is (= 20 (apply + (mapv :AX rs))))
+         (is (= (+ 110 120) (apply + (mapv :BY rs))))
+         (is (= (+ 1010 1030) (apply + (mapv :CZ rs)))))
+       (check-bs [11 12] (lookup-b with-u1 1))
+       (check-bs [13] (lookup-b with-u3 2))
+       (check-bs [13] (lookup-b with-u2 2))))))

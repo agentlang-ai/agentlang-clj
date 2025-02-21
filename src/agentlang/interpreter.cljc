@@ -270,6 +270,23 @@
                   [(li/normalize-name recname) (assoc attrs li/parent-attr? [:= c-parent-attr (pr-str [parent pid])]) nil]))))))
       args))
 
+(defn- all-entities [recname sub-pats]
+  (let [crels (:cont-rels sub-pats)
+        brels (:bet-rels sub-pats)]
+    (set
+     (if (or (seq crels) (seq brels))
+       (let [names (atom [recname])]
+         (w/postwalk
+          #(do (when (map? %)
+                 (when-let [n (li/record-name %)]
+                   (let [n (li/normalize-name n)]
+                     (when (cn/entity? n)
+                       (swap! names conj n)))))
+               %)
+          [crels brels])
+         @names)
+       [recname]))))
+
 (defn- handle-query-pattern [env recname [attrs sub-pats] alias]
   (let [select-clause (:? attrs)
         [update-attrs query-attrs] (when-not select-clause (lift-attributes-for-update attrs))
@@ -285,13 +302,15 @@
         cont-rels-query0 (when-let [rels (:cont-rels sub-pats)] (realize-all-references env rels))
         [recname attrs0 cont-rels-query] (maybe-merge-cont-rels-query-to-attributes [recname attrs0 cont-rels-query0])
         qfordel? (:*query-for-delete* env)
-        can-read-all (rbac/can-read? recname)
+        all-ents (all-entities recname sub-pats)
+        can-read-all (every? #(rbac/can-read? %) all-ents)
         can-update-all (when update-attrs (rbac/can-update? recname))
         can-delete-all (:*can-delete-all* env)
         qparams {:entity-name recname
                  :query-attributes attrs0
                  :sub-query sub-pats
-                 :rbac {:can-read-all? can-read-all
+                 :rbac {:read-on-entities (set/difference all-ents #{recname})
+                        :can-read-all? can-read-all
                         :can-update-all? can-update-all
                         :can-delete-all? can-delete-all
                         :follow-up-operation (or (when qfordel? :delete)

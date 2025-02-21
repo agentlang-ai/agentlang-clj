@@ -1,1 +1,3 @@
-{:service {:port 8000}}
+{:service {:port 8000}
+ :store {:type :h2
+         :dbname "./db"}}

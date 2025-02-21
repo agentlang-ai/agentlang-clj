@@ -382,25 +382,32 @@
   (let [attr-names (cn/query-attribute-names entity-name)]
     (mapv #(li/make-ref sql-alias (stu/attribute-column-name-kw %)) attr-names)))
 
-(def ^:private ipa-alias :ipa)
-(def ^:private ipa-path (li/make-ref ipa-alias (stu/attribute-column-name-kw :ResourcePath)))
-(def ^:private ipa-user (li/make-ref ipa-alias (stu/attribute-column-name-kw :Assignee)))
+(def ^:private ipa-path (fn [ipa-alias] (li/make-ref ipa-alias (stu/attribute-column-name-kw :ResourcePath))))
+(def ^:private ipa-user (fn [ipa-alias] (li/make-ref ipa-alias (stu/attribute-column-name-kw :Assignee))))
 
 (def ^:private ipa-flag-cols
-  {:read (li/make-ref ipa-alias (stu/attribute-column-name-kw :CanRead))
-   :update (li/make-ref ipa-alias (stu/attribute-column-name-kw :CanUpdate))
-   :delete (li/make-ref ipa-alias (stu/attribute-column-name-kw :CanDelete))})
+  {:read #(li/make-ref % (stu/attribute-column-name-kw :CanRead))
+   :update #(li/make-ref % (stu/attribute-column-name-kw :CanUpdate))
+   :delete #(li/make-ref % (stu/attribute-column-name-kw :CanDelete))})
 
-(defn- maybe-add-rbac-joins [oprs user entity-name sql-pat]
-  (let [join (:join sql-pat)
-        inv-privs-join
-        [[(keyword (stu/inst-priv-table entity-name)) ipa-alias]
-         (concat
-          [:and
-           [:like (li/make-ref (keyword (as-table-name entity-name)) path-col) ipa-path]
-           [:= ipa-user user]]
-          (mapv (fn [opr] [:= (opr ipa-flag-cols) true]) oprs))]]
-    (assoc sql-pat :join (concat join inv-privs-join))))
+(defn- maybe-add-rbac-joins
+  ([oprs user entity-name read-on-entities sql-pat]
+   (let [join (:join sql-pat)
+         ipa-table (keyword (stu/inst-priv-table entity-name))
+         ipa-alias ipa-table
+         inv-privs-join
+         [[ipa-table ipa-alias]
+          (concat
+           [:and
+            [:like (li/make-ref (or (li/get-alias entity-name)
+                                    (keyword (as-table-name entity-name))) path-col) (ipa-path ipa-alias)]
+            [:= (ipa-user ipa-alias) user]]
+           (mapv (fn [opr] [:= ((opr ipa-flag-cols) ipa-alias) true]) oprs))]
+         additional-joins (when (seq read-on-entities)
+                            (mapv (comp :join #(maybe-add-rbac-joins [:read] user % nil nil)) read-on-entities))]
+     (assoc sql-pat :join (concat join inv-privs-join (first additional-joins)))))
+  ([oprs user entity-name sql-pat]
+   (maybe-add-rbac-joins oprs user entity-name nil sql-pat)))
 
 (defn- get-alias [relname entity-name]
   (when-let [alias (li/get-alias relname entity-name)]
@@ -508,12 +515,14 @@
                                         sub-query :sub-query
                                         rbac :rbac}]
   (let [rbac-enabled? (gs/rbac-enabled?)
-        [can-read-all can-update-all can-delete-all update-delete-tag]
+        [can-read-all can-update-all can-delete-all
+         update-delete-tag read-on-entities]
         (when rbac-enabled?
           [(:can-read-all? rbac)
            (:can-update-all? rbac)
            (:can-delete-all? rbac)
-           (:follow-up-operation rbac)])
+           (:follow-up-operation rbac)
+           (:read-on-entities rbac)])
         update-delete-tag
         (when update-delete-tag
           (cond
@@ -539,7 +548,9 @@
                     (if update-delete-tag
                       (maybe-add-rbac-joins [update-delete-tag] user entity-name sql-pat0)
                       sql-pat0)
-                    (maybe-add-rbac-joins (concat [:read] (when update-delete-tag [update-delete-tag])) user entity-name sql-pat0))
+                    (maybe-add-rbac-joins
+                     (concat [:read] (when update-delete-tag [update-delete-tag]))
+                     user entity-name read-on-entities sql-pat0))
                   sql-pat0)
         sql-params (sql/raw-format-sql sql-pat)]
     (execute-fn!
