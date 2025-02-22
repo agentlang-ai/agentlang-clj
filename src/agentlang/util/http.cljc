@@ -240,9 +240,13 @@
             (let [keyval (map #(.trim %) (.split cookie "=" 2))]
               [(first keyval) (second keyval)])))))
 
-(defn create-pattern-from-path [entity-name obj path]
+(defn create-pattern-from-path [entity-name obj path parent]
   (let [attrs (li/record-attributes obj)
         idn (cn/identity-attribute-name entity-name)]
     (let [id-val (or (idn attrs) li/id-attr-s)
           path (concat path [id-val])]
-      {entity-name (assoc attrs li/path-attr (li/vec-to-path path))})))
+      {entity-name
+       (merge
+        (assoc attrs li/path-attr (li/vec-to-path path))
+        (when (map? parent)
+          {li/parent-attr (li/path-attr parent)}))})))

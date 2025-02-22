@@ -391,8 +391,8 @@
             (cond
               (cn/entity? recname)
               (let [parent-path (drop-last 2 path)]
-                (if (or (not (seq parent-path)) (lookup-instance-by-path parent-path))
-                  (let [pat (uh/create-pattern-from-path recname obj path)]
+                (if-let [parent (or (not (seq parent-path)) (lookup-instance-by-path parent-path))]
+                  (let [pat (uh/create-pattern-from-path recname obj path parent)]
                     (gs/evaluate-pattern pat))
                   (_not-found (str "Parent not found - " (li/vec-to-path parent-path)))))
 

@@ -375,7 +375,7 @@
 
 (defn- select-into [into-spec]
   (mapv (fn [[k v]]
-          [(ref-from-canonical-name v) k])
+          [(ref-from-canonical-name v) (str "\"" (name k) "\"")])
         into-spec))
 
 (defn- entity-column-names [entity-name sql-alias]
