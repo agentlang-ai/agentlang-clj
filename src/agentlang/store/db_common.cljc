@@ -559,7 +559,7 @@
        (let [pstmt (prepare conn [(first sql-params)])
              rslt (execute-stmt-once! conn pstmt (rest sql-params))]
          (if into-spec
-           rslt
+           (stu/results-as-into-specs into-spec rslt)
            (stu/results-as-instances entity-name rslt)))))))
 
 (defn do-query

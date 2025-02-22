@@ -266,3 +266,20 @@
 
 (defn inst-priv-table [entity-name]
   (entity-table-name (inst-priv-entity entity-name)))
+
+(defn- fetch-into-val [kms [k v]]
+  (let [[_ n] (li/split-path k)]
+    [(n kms) v]))
+
+(defn results-as-into-specs [into-spec rslt]
+  (if (seq rslt)
+    (let [ks (keys into-spec)
+          r1 (first rslt)]
+      (if ((first ks) r1)
+        rslt
+        ;; Postgres returns lowercase column-names in the table_name/col-name format
+        (let [kss (mapv #(keyword (s/lower-case (name %))) ks)
+              kms (into {} (mapv (fn [k K] [k K]) kss ks))
+              f (partial fetch-into-val kms)]
+          (mapv (fn [r] (into {} (mapv f r))) rslt))))
+    rslt))
