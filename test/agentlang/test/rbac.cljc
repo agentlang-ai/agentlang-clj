@@ -114,7 +114,7 @@
              delete-e (fn [id] {:Brd/Delete_E {:path (as-path id)}})
              with-u1 (partial with-user "u1@brd.com")
              with-u2 (partial with-user "u2@brd.com")]
-         (tu/is-error #(tu/invoke (create-e 1)))
+         (tu/is-forbidden (tu/invoke (create-e 1)))
          (is (e? (tu/invoke (with-u1 (create-e 1)))))
          (is (e? (tu/invoke (with-u2 (create-e 2)))))
          (is (e? (tu/invoke (with-u2 (create-e 3)))))
@@ -388,7 +388,7 @@
            ip? #(string? (:ResourcePath %))
            e1 (create-e "u1@ipv.com" 1)]
        (is (e? e1))
-       (tu/is-error #(create-e "u2@ipv.com" 2))
+       (tu/is-forbidden (create-e "u2@ipv.com" 2))
        (is (cn/same-instance? e1 (lookup-e "u1@ipv.com" 1)))
        (is (not (lookup-e "u2@ipv.com" 1)))
        (is (e? (update-e "u1@ipv.com" 1 3000)))
@@ -507,8 +507,8 @@
                       (is (every? b? bs))
                       (doseq [b bs]
                         (is (some (fn [id] (= id (:Id b))) ids))))]
-       (tu/is-error #(create-a identity 1 10))
-       (tu/is-error #(create-a with-u3 1 10))
+       (tu/is-forbidden (create-a identity 1 10))
+       (tu/is-forbidden (create-a with-u3 1 10))
        (is (a? (create-a with-u1 1 10)))
        (is (a? (create-a with-u2 2 20)))
        (is (b? (create-b with-u1 11 110 1)))

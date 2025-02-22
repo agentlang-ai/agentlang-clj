@@ -44,6 +44,8 @@
            :cljs (catch js/Error e
                    (report-expected-ex e))))))
 
+(defn is-forbidden [r] (= :forbidden (:status r)))
+
 (defn- finalize-kernel-components []
   (doseq [cn [:Agentlang.Kernel.Lang
               :Agentlang.Kernel.Identity

@@ -325,20 +325,20 @@
     (make-result env2 result)))
 
 (defn- handle-entity-create-pattern [env recname attrs alias]
-  (when-not (rbac/can-create? recname)
-    (u/throw-ex (str "No permission to create instance of " recname)))
-  (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))
-        resolver (rr/resolver-for-path recname)
-        store (env/get-store env)
-        store-f #(and (store/create-instance store %) %)
-        final-inst (if resolver
-                     (call-resolver r/call-resolver-create resolver store-f env inst)
-                     (store-f inst))
-        _ (when (and (gs/rbac-enabled?) (cn/instance-of? recname final-inst))
-            (store/assign-owner store recname final-inst))
-        env0 (env/bind-instance env recname final-inst)
-        env1 (if alias (env/bind-variable env0 alias final-inst) env0)]
-    (make-result env1 final-inst)))
+  (if-not (rbac/can-create? recname)
+    (make-result env {:status :forbidden})
+    (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))
+          resolver (rr/resolver-for-path recname)
+          store (env/get-store env)
+          store-f #(and (store/create-instance store %) %)
+          final-inst (if resolver
+                       (call-resolver r/call-resolver-create resolver store-f env inst)
+                       (store-f inst))
+          _ (when (and (gs/rbac-enabled?) (cn/instance-of? recname final-inst))
+              (store/assign-owner store recname final-inst))
+          env0 (env/bind-instance env recname final-inst)
+          env1 (if alias (env/bind-variable env0 alias final-inst) env0)]
+      (make-result env1 final-inst))))
 
 (defn- handle-event-pattern [env recname attrs alias]
   (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))
@@ -620,29 +620,31 @@
                             event-instance-or-patterns
                             (cn/make-instance event-instance-or-patterns))
                           {})]
-     (binding [gs/active-event-context (:EventContext event-instance)]
-       (let [env0 (or env (env/bind-instance (env/make store nil) event-instance))
-             env (env/assoc-active-event env0 event-instance)
-             store (or (env/get-store env) store)]
-         (store/call-in-transaction
-          store
-          (fn [txn]
-            (if (and (seq event-instance) (cn/instance-of? :Agentlang.Kernel.Rbac/DeleteInstancePrivilegeAssignment event-instance))
-              (rbac/delete-instance-privilege-assignment env event-instance)
-              (let [txn-set? (when (and txn (not (gs/get-active-txn)))
-                               (gs/set-active-txn! txn)
-                               true)]
-                (try
-                  (loop [df-patterns (or patterns (cn/fetch-dataflow-patterns event-instance))
-                         pat-count 0, env env, result nil]
-                    (if-let [pat (first df-patterns)]
-                      (let [pat-count (inc pat-count)
-                            env (env/bind-eval-state env pat pat-count)
-                            {env1 :env r :result} (evaluate-pattern env pat)]
-                        (recur (rest df-patterns) pat-count env1 r))
-                      (make-result env result)))
-                  (finally
-                    (when txn-set? (gs/set-active-txn! nil))))))))))))
+     (gs/call-with-event-context
+      (:EventContext event-instance)
+      (fn []
+        (let [env0 (or env (env/bind-instance (env/make store nil) event-instance))
+              env (env/assoc-active-event env0 event-instance)
+              store (or (env/get-store env) store)]
+          (store/call-in-transaction
+           store
+           (fn [txn]
+             (if (and (seq event-instance) (cn/instance-of? :Agentlang.Kernel.Rbac/DeleteInstancePrivilegeAssignment event-instance))
+               (rbac/delete-instance-privilege-assignment env event-instance)
+               (let [txn-set? (when (and txn (not (gs/get-active-txn)))
+                                (gs/set-active-txn! txn)
+                                true)]
+                 (try
+                   (loop [df-patterns (or patterns (cn/fetch-dataflow-patterns event-instance))
+                          pat-count 0, env env, result nil]
+                     (if-let [pat (first df-patterns)]
+                       (let [pat-count (inc pat-count)
+                             env (env/bind-eval-state env pat pat-count)
+                             {env1 :env r :result} (evaluate-pattern env pat)]
+                         (recur (rest df-patterns) pat-count env1 r))
+                       (make-result env result)))
+                   (finally
+                     (when txn-set? (gs/set-active-txn! nil)))))))))))))
   ([store event-instance] (evaluate-dataflow store nil event-instance))
   ([event-instance] (evaluate-dataflow (store/get-default-store) nil event-instance)))
 

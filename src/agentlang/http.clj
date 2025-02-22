@@ -75,6 +75,7 @@
     (case status
       400 :bad-request
       401 :unauthorized
+      403 :forbidden
       404 :not-found
       415 :unsupported-media-type
       :error)))
@@ -102,7 +103,11 @@
    (unauthorized "not authorized to access this resource" data-fmt "UNAUTHORIZED")))
 
 (defn- _not-found
-  ([s data-fmt] (response {:reason s} 404 data-fmt))
+  ([s data-fmt] (response {:reason s :status :not-found} 404 data-fmt))
+  ([s] (_not-found s :json)))
+
+(defn- forbidden
+  ([s data-fmt] (response {:reason s :status :forbidden} 403 data-fmt))
   ([s] (_not-found s :json)))
 
 (defn- bad-request
@@ -207,26 +212,32 @@
   ([on-no-perm data-fmt exp]
    (try
      (let [result (exp)]
-       (if (and (map? result) (number? (:status result)))
-         result
-         (wrap-result on-no-perm (:result result) data-fmt)))
+       (if (map? result)
+         (let [s (:status result)]
+           (cond
+             (number? s) result
+             (= :forbidden s) (forbidden "User is not allowed to perform this action.")
+             :else (wrap-result on-no-perm (:result result) data-fmt)))
+         result))
      (catch Exception ex
        (generic-exception-handler ex data-fmt))))
   ([data-fmt exp]
    (maybe-ok nil data-fmt exp)))
 
-(defn- assoc-event-context [request auth-config event-instance]
-  (if auth-config
+(defn- make-event-context [request auth-config]
+  (when auth-config
     (let [user (auth/session-user (assoc auth-config :request request
-                                         :cookie (get (:headers request) "cookie")))
-          event-instance (if (cn/an-instance? event-instance)
+                                         :cookie (get (:headers request) "cookie")))]
+      {:User (:email user)
+       :Sub (:sub user)
+       :UserDetails user})))
+
+(defn- assoc-event-context [request auth-config event-instance]
+  (if-let [ctx (make-event-context request auth-config)]
+    (let [event-instance (if (cn/an-instance? event-instance)
                            event-instance
                            (cn/make-instance event-instance))]
-      (cn/assoc-event-context-values
-       {:User (:email user)
-        :Sub (:sub user)
-        :UserDetails user}
-       event-instance))
+      (cn/assoc-event-context-values ctx event-instance))
     event-instance))
 
 (defn- event-from-request [request event-name data-fmt auth-config]
@@ -381,40 +392,46 @@
       (gs/evaluate-pattern
        {entity-name {li/path-attr? (li/vec-to-path path)}})))))
 
-(defn process-post-request [[_ maybe-unauth] request]
+(defn process-post-request [[auth-config maybe-unauth] request]
   ;; TODO: support sub-tree creation
   (or (maybe-unauth request)
-      (let [[obj data-fmt _] (request-object request)]
-        (maybe-ok
-         data-fmt
-         #(when-let [{path :path recname :entity} (parse-rest-uri request)]
-            (cond
-              (cn/entity? recname)
-              (let [parent-path (drop-last 2 path)]
-                (if-let [parent (or (not (seq parent-path)) (lookup-instance-by-path parent-path))]
-                  (let [pat (uh/create-pattern-from-path recname obj path parent)]
-                    (gs/evaluate-pattern pat))
-                  (_not-found (str "Parent not found - " (li/vec-to-path parent-path)))))
+      (gs/call-with-event-context
+       (make-event-context request auth-config)
+       (fn []
+         (let [[obj data-fmt _] (request-object request)]
+           (maybe-ok
+            data-fmt
+            #(when-let [{path :path recname :entity} (parse-rest-uri request)]
+               (cond
+                 (cn/entity? recname)
+                 (let [parent-path (drop-last 2 path)]
+                   (if-let [parent (or (not (seq parent-path)) (lookup-instance-by-path parent-path))]
+                     (let [pat (uh/create-pattern-from-path recname obj path parent)]
+                       (gs/evaluate-pattern pat))
+                     (_not-found (str "Parent not found - " (li/vec-to-path parent-path)))))
 
-              (cn/event? recname)
-              (if (= recname (first path) (li/record-name obj))
-                (gs/evaluate-dataflow obj)
-                (bad-request (str "Event is not of type " recname " - " obj)))
+                 (cn/event? recname)
+                 (if (= recname (first path) (li/record-name obj))
+                   (gs/evaluate-dataflow obj)
+                   (bad-request (str "Event is not of type " recname " - " obj)))
 
-              :else (bad-request (str "Invalid POST resource - " path))))))))
+                 :else (bad-request (str "Invalid POST resource - " path))))))))))
 
-(defn process-put-request [[_ maybe-unauth] request]
+(defn process-put-request [[auth-config maybe-unauth] request]
   (or (maybe-unauth request)
-      (let [[obj data-fmt _] (request-object request)]
-        (maybe-ok
-         data-fmt
-         #(when-let [parsed-path (parse-rest-uri request)]
-            (let [path (:path parsed-path)
-                  [c n] (li/split-path (:entity parsed-path))]
-              (gs/evaluate-pattern
-               {(cn/crud-event-name c n :Update)
-                {:Data (li/record-attributes obj)
-                 :path (li/vec-to-path path)}})))))))
+      (gs/call-with-event-context
+       (make-event-context request auth-config)
+       (fn []
+         (let [[obj data-fmt _] (request-object request)]
+           (maybe-ok
+            data-fmt
+            #(when-let [parsed-path (parse-rest-uri request)]
+               (let [path (:path parsed-path)
+                     [c n] (li/split-path (:entity parsed-path))]
+                 (gs/evaluate-pattern
+                  {(cn/crud-event-name c n :Update)
+                   {:Data (li/record-attributes obj)
+                    :path (li/vec-to-path path)}})))))))))
 
 (defn- fetch-all [entity-name path]
   (let [relname (last (drop-last path))]
@@ -446,38 +463,44 @@
       rels))
     insts))
 
-(defn process-get-request [[_ maybe-unauth] request]
+(defn process-get-request [[auth-config maybe-unauth] request]
   (or (maybe-unauth request)
-      (let [[_ data-fmt _] (request-object request)]
-        (maybe-ok
-         data-fmt
-         #(if-let [parsed-path (parse-rest-uri request)]
-            (let [path (:path parsed-path)
-                  entity-name (:entity parsed-path)]
-              (if (cn/entity? entity-name)
-                (let [result
-                      (if (= entity-name (last path))
-                        (fetch-all entity-name path)
-                        (gs/evaluate-dataflow
-                         {(cn/crud-event-name entity-name :Lookup)
-                          {:path (li/vec-to-path path)}}))]
-                  (if (and (seq (:result result)) (= :tree (:suffix parsed-path)))
-                    {:result (fetch-tree entity-name (:result result))}
-                    result))
-                (bad-request (str entity-name " is not an entity"))))
-            (bad-request "invalid GET request"))))))
+      (gs/call-with-event-context
+       (make-event-context request auth-config)
+       (fn []
+         (let [[_ data-fmt _] (request-object request)]
+           (maybe-ok
+            data-fmt
+            #(if-let [parsed-path (parse-rest-uri request)]
+               (let [path (:path parsed-path)
+                     entity-name (:entity parsed-path)]
+                 (if (cn/entity? entity-name)
+                   (let [result
+                         (if (= entity-name (last path))
+                           (fetch-all entity-name path)
+                           (gs/evaluate-dataflow
+                            {(cn/crud-event-name entity-name :Lookup)
+                             {:path (li/vec-to-path path)}}))]
+                     (if (and (seq (:result result)) (= :tree (:suffix parsed-path)))
+                       {:result (fetch-tree entity-name (:result result))}
+                       result))
+                   (bad-request (str entity-name " is not an entity"))))
+               (bad-request "invalid GET request"))))))))
 
-(defn process-delete-request [[_ maybe-unauth] request]
+(defn process-delete-request [[auth-config maybe-unauth] request]
   (or (maybe-unauth request)
-      (let [[obj data-fmt _] (request-object request)]
-        (maybe-ok
-         data-fmt
-         #(when-let [parsed-path (parse-rest-uri request)]
-            (let [path (:path parsed-path)
-                  [c n] (li/split-path (:entity parsed-path))]
-              (gs/evaluate-pattern
-               {(cn/crud-event-name c n :Delete)
-                {:path (li/vec-to-path path)}})))))))
+      (gs/call-with-event-context
+       (make-event-context request auth-config)
+       (fn []
+         (let [[obj data-fmt _] (request-object request)]
+           (maybe-ok
+            data-fmt
+            #(when-let [parsed-path (parse-rest-uri request)]
+               (let [path (:path parsed-path)
+                     [c n] (li/split-path (:entity parsed-path))]
+                 (gs/evaluate-pattern
+                  {(cn/crud-event-name c n :Delete)
+                   {:path (li/vec-to-path path)}})))))))))
 
 ;; TODO: Add layer of domain filtering on top of cognito.
 (defn- whitelisted-email? [email]
@@ -581,13 +604,16 @@
           (do (log/warn (str "bad login request - " err))
               (bad-request err data-fmt "BAD_REQUEST_FORMAT"))
           (try
-            (let [result (auth/user-login
+            (let [r0 (auth/user-login
                           (assoc
                            auth-config
                            :event evobj))
+                  result (if (map? r0)
+                           (or (:result r0) r0)
+                           r0)
                   user-id (get (decode-jwt-token-from-response result) :sub)
                   cookie (get-in result [:authentication-result :user-data :cookie])
-                  resp (ok {:result (if cookie {:authentication-result :success} result)} data-fmt)]
+                  resp (ok (if cookie {:authentication-result :success} result) data-fmt)]
               (sess/upsert-user-session user-id true)
               (if cookie
                 (do (sess/session-cookie-create cookie result)

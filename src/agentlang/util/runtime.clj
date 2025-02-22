@@ -286,15 +286,10 @@
           auth (or (:authentication config)
                    {:service :cognito
                     :superuser-email (u/getenv "AGENTLANG_SUPERUSER_EMAIL" "superuser@superuser.com")
-                    :whitelist? false})
-          opt (:interceptors config)
-          inter (if-not (:rbac opt)
-                  (assoc opt :rbac {:enabled true})
-                  opt)]
-      (assoc (dissoc config :rbac-enabled)
+                    :whitelist? false})]
+      (assoc config
              :service serv
-             :authentication auth
-             :interceptors inter))
+             :authentication auth))
     config))
 
 (defn load-config [options]

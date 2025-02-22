@@ -18,6 +18,12 @@
 
 (def ^:dynamic active-event-context nil)
 
+(defn call-with-event-context [ctx f]
+  (if ctx
+    (binding [active-event-context ctx]
+      (f))
+    (f)))
+
 (defn active-user [] (:User active-event-context))
 
 #?(:clj
