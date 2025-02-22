@@ -229,10 +229,9 @@
         embeddings-config (:embeddings config)]
     (when embeddings-config (ec/init embeddings-config))
     (when (or (not (init-schema? config)) (store/init-all-schema store))
-      (let [resolved-config (run-initconfig config ev)
-            has-rbac (some #{:rbac} (keys ins))]
-        (if has-rbac
-          (lr/finalize-events ev)
+      (let [resolved-config (run-initconfig config ev)]
+        (if (:rbac-enabled config)
+          (lr/finalize-events)
           (lr/reset-events!))
         (u/run-init-fns)
         (register-resolvers! config ev)

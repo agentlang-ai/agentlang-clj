@@ -7,11 +7,13 @@
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
+(defn- evaluate-dataflow-internal [event]
+  (:result (gs/evaluate-dataflow-internal event)))
+
 (defn session-lookup [user]
-  (let [result (:result
-                (gs/evaluate-dataflow-internal
-                 {:Agentlang.Kernel.Identity/LookupUserSession
-                  {:User user}}))]
+  (let [result (evaluate-dataflow-internal
+                {:Agentlang.Kernel.Identity/LookupUserSession
+                 {:User user}})]
     [(cond
        (not (seq result)) :not-found
        (cn/instance-of? :Agentlang.Kernel.Identity/UserSession result) :ok
@@ -24,21 +26,20 @@
       (:LoggedIn session)
       (u/throw-ex (str "failed to lookup session for user " user)))))
 
-(defn not-found? [session]
-  (= :not-found (first session)))
+(defn ok? [session]
+  (= :ok (first session)))
 
-(defn session-exists-for? [user]
-  (not (not-found? (session-lookup user))))
+(defn session-exists-for? [user] (ok? (session-lookup user)))
 
 (defn session-create [user logged-in]
-  (gs/evaluate-dataflow-internal
+  (evaluate-dataflow-internal
    {:Agentlang.Kernel.Identity/Create_UserSession
     {:Instance
      {:Agentlang.Kernel.Identity/UserSession
       {:User user :LoggedIn logged-in}}}}))
 
 (defn session-update [user logged-in]
-  (gs/evaluate-dataflow-internal
+  (evaluate-dataflow-internal
    {:Agentlang.Kernel.Identity/Update_UserSession
     {:path (li/vec-to-path [:Agentlang.Kernel.Identity/UserSession user])
      :Data {:LoggedIn logged-in}}}))
@@ -55,7 +56,7 @@
     sid))
 
 (defn session-cookie-create [sid user-data]
-  (gs/evaluate-dataflow-internal
+  (evaluate-dataflow-internal
    {:Agentlang.Kernel.Identity/Create_SessionCookie
     {:Instance
      {:Agentlang.Kernel.Identity/SessionCookie
@@ -64,22 +65,18 @@
        :CreatedTimeMillis #?(:clj (System/currentTimeMillis) :cljs 0)}}}}))
 
 (defn session-cookie-delete [sid]
-  (first
-   (:result
-    (first
-     (gs/evaluate-dataflow-internal
-      {:Agentlang.Kernel.Identity/Delete_SessionCookie
-       {:Id (normalize-sid sid)}})))))
+  (evaluate-dataflow-internal
+   {:Agentlang.Kernel.Identity/Delete_SessionCookie
+    {:Id (normalize-sid sid)}}))
 
 (defn session-cookie-replace [sid user-data]
   (session-cookie-delete sid)
   (session-cookie-create sid user-data))
 
 (defn lookup-session-cookie-user-data [sid]
-  (let [result (:result
-                (gs/evaluate-dataflow-internal
-                 {:Agentlang.Kernel.Identity/LookupSessionCookie
-                  {:Id (normalize-sid sid)}}))]
+  (let [result (evaluate-dataflow-internal
+                {:Agentlang.Kernel.Identity/LookupSessionCookie
+                 {:Id (normalize-sid sid)}})]
     (when (and (seq result) (cn/instance-of? :Agentlang.Kernel.Identity/SessionCookie result))
       [(:UserData result) (:CreatedTimeMillis result) (li/path-attr result)])))
 
@@ -87,32 +84,32 @@
   (when-let [[user-data _ path] (lookup-session-cookie-user-data sid)]
     (let [authr (merge (:authentication-result user-data) tokens)
           user-data (assoc user-data :authentication-result authr)]
-      (gs/evaluate-dataflow-internal
+      (evaluate-dataflow-internal
        {:Agentlang.Kernel.Identity/Update_SessionCookie
         {:path path :Data {:UserData user-data}}})
       user-data)))
 
 (defn maybe-assign-roles [email user-roles]
-  (gs/evaluate-dataflow-internal
+  (evaluate-dataflow-internal
    {:Agentlang.Kernel.Rbac/DeleteRoleAssignments
     {:Assignee email}})
   (doseq [role (if (string? user-roles)
                  (s/split user-roles #",")
                  user-roles)]
     (let [role-assignment (str role "-" email)]
-      (when-not (gs/evaluate-dataflow-internal
+      (when-not (evaluate-dataflow-internal
                  {:Agentlang.Kernel.Rbac/LookupRole
                   {:Name role}})
-        (when-not (gs/evaluate-dataflow-internal
+        (when-not (evaluate-dataflow-internal
                    {:Agentlang.Kernel.Rbac/Create_Role
                     {:Instance
                      {:Agentlang.Kernel.Rbac/Role
                       {:Name role}}}})
           (u/throw-ex (str "failed to create role " role))))
-      (when-not (gs/evaluate-dataflow-internal
+      (when-not (evaluate-dataflow-internal
                  {:Agentlang.Kernel.Rbac/LookupRoleAssignment
                   {:Name role-assignment}})
-        (when-not (gs/evaluate-dataflow-internal
+        (when-not (evaluate-dataflow-internal
                    {:Agentlang.Kernel.Rbac/Create_RoleAssignment
                     {:Instance
                      {:Agentlang.Kernel.Rbac/RoleAssignment
@@ -123,14 +120,14 @@
   #?(:clj
      (try
        (let [r (first
-                (gs/evaluate-dataflow-internal
+                (evaluate-dataflow-internal
                  {:Agentlang.Kernel.Identity/FindUser
                   {:Email email}}))
              user
              (if (and (= :ok (:status r)) (seq (:result r)))
                (first (:result r))
                (let [r (first
-                        (gs/evaluate-dataflow-internal
+                        (evaluate-dataflow-internal
                          {:Agentlang.Kernel.Identity/Create_User
                           {:Instance
                            {:Agentlang.Kernel.Identity/User
