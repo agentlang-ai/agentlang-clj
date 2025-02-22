@@ -413,7 +413,7 @@
                   [c n] (li/split-path (:entity parsed-path))]
               (gs/evaluate-pattern
                {(cn/crud-event-name c n :Update)
-                {:Data obj
+                {:Data (li/record-attributes obj)
                  :path (li/vec-to-path path)}})))))))
 
 (defn- fetch-all [entity-name path]
