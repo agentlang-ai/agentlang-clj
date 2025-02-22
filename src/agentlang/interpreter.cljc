@@ -342,13 +342,15 @@
 
 (defn- handle-event-pattern [env recname attrs alias]
   (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))
+        env (env/bind-instance env recname inst)
         resolver (rr/resolver-for-path recname)
         final-result (if resolver
                        (r/call-resolver-eval resolver env inst)
                        (evaluate-dataflow-in-environment env inst))
         env0 (:env final-result)
-        env1 (if alias (env/bind-variable env0 alias (:result final-result)) env0)]
-    (make-result env1 final-result)))
+        r (:result final-result)
+        env1 (if alias (env/bind-variable env0 alias r) env0)]
+    (make-result env1 r)))
 
 (defn- handle-record-pattern [env recname attrs alias]
   (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))

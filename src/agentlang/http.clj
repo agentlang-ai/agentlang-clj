@@ -413,8 +413,8 @@
                   [c n] (li/split-path (:entity parsed-path))]
               (gs/evaluate-pattern
                {(cn/crud-event-name c n :Update)
-                {:Data (li/record-attributes obj)
-                 :path path}})))))))
+                {:Data obj
+                 :path (li/vec-to-path path)}})))))))
 
 (defn- fetch-all [entity-name path]
   (let [relname (last (drop-last path))]
@@ -477,7 +477,7 @@
                   [c n] (li/split-path (:entity parsed-path))]
               (gs/evaluate-pattern
                {(cn/crud-event-name c n :Delete)
-                {:path path}})))))))
+                {:path (li/vec-to-path path)}})))))))
 
 ;; TODO: Add layer of domain filtering on top of cognito.
 (defn- whitelisted-email? [email]
