@@ -78,8 +78,8 @@
 (defn ok-result
   ([result safe]
    (let [f (if (map? result) result (first result))]
-     (if (= :ok (:status f))
-       (:result f)
+     (if-let [rs (:result f)]
+       rs
        (let [msg (str "unexpected result: " result)]
          (if safe
            (do (log/warn msg) nil)
