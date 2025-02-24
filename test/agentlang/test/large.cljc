@@ -261,6 +261,23 @@
    {:Id :ResourceAllocation.Core/GetProjectAllocationsForResource.ResourceId}}})
 
 (dataflow
+ :ResourceAllocation.Core/GetProjectAllocationsForPeriod
+ {:ResourceAllocation.Core/Allocation
+  {:Project? :ResourceAllocation.Core/GetProjectAllocationsForPeriod.Project
+   :Period?
+   [:between
+    :ResourceAllocation.Core/GetProjectAllocationsForPeriod.StartDate
+    :ResourceAllocation.Core/GetProjectAllocationsForPeriod.EndDate]}
+  :into
+  {:Allocation :ResourceAllocation.Core/Allocation.Id
+   :Project :ResourceAllocation.Core/Allocation.Project
+   :ProjectName :ResourceAllocation.Core/Allocation.ProjectName
+   :Resource :ResourceAllocation.Core/Allocation.Resource
+   :Period :ResourceAllocation.Core/Allocation.Period
+   :Duration :ResourceAllocation.Core/Allocation.Duration
+   :AllocationEntered :ResourceAllocation.Core/Allocation.AllocationEntered}})
+
+(dataflow
  :ResourceAllocation.Core/GetAllocations
  {:ResourceAllocation.Core/Allocation
   {:Period? [:between
@@ -272,7 +289,15 @@
 
 (dataflow
  :ResourceAllocation.Core/GetAllAllocations
- {:ResourceAllocation.Core/Allocation? {}})
+{:ResourceAllocation.Core/Allocation? {}
+ :into
+ {:Allocation :ResourceAllocation.Core/Allocation.Id
+  :Project :ResourceAllocation.Core/Allocation.Project
+  :ProjectName :ResourceAllocation.Core/Allocation.ProjectName
+  :Resource :ResourceAllocation.Core/Allocation.Resource
+  :Period :ResourceAllocation.Core/Allocation.Period
+  :Duration :ResourceAllocation.Core/Allocation.Duration
+  :AllocationEntered :ResourceAllocation.Core/Allocation.AllocationEntered}})
 
 (event :ResourceAllocation.Core/GetTeamResources {:TeamId :String})
 
@@ -605,13 +630,21 @@
                              {:StartDate "2025-01-01"
                               :EndDate "2025-03-01"}})            
             res4 (tu/invoke {:ResourceAllocation.Core/GetAllAllocations
-                             {}})]
-        (doseq [res [res0 res1 res2 res3 res4]] (is (as? res)))
+                             {}})
+            res5 (tu/invoke {:ResourceAllocation.Core/GetProjectAllocationsForPeriod
+                             {:Project "p01"
+                              :StartDate "2025-01-01"
+                              :EndDate "2025-01-01"}})
+            is-into-res #(is (not (a? (first %))) (= (:Project (first %))))]
+        (doseq [res [res0 res1 res2 res3]] (is (as? res)))
         (is (= (count res0) 3))
         (is (= (count res1) 1))        
         (is (= (count res2) 2))
         (is (= (count res3) 3))        
-        (is (= (count res4) 4)))))
+        (is (= (count res4) 4))
+        (is-into-res res4)
+        (is-into-res res5)
+        (is (= (count res5) 1)))))
 
 #_(deftest team-allocation-queries
   (testing "Testing team allocation"
