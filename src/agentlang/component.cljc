@@ -5,6 +5,7 @@
             [agentlang.lang.datetime :as dt]
             [agentlang.lang.internal :as li]
             [agentlang.lang.raw :as raw]
+            [agentlang.global-state :as gs]
             [agentlang.meta :as mt]
             [agentlang.util :as u]
             [agentlang.util.errors :refer [make-error raise-error throw-ex-info]]
@@ -2199,7 +2200,7 @@
 (def pre-event-name (partial prepost-event-name :before))
 
 (defn make-post-event [event-name inst]
-  (make-instance event-name {:Instance inst}))
+  {event-name {:Instance inst}})
 
 (def ^:private post-events-disabled-entities (atom #{}))
 
@@ -2215,14 +2216,20 @@
 
 (defn do-fire-prepost-event [selector event-evaluator tag entity-name inst]
   (let [event-name (prepost-event-name selector tag entity-name)]
-    (when (find-dataflows event-name)
-      [event-name (event-evaluator (make-post-event event-name inst))])))
+    (if (find-dataflows event-name)
+      (let [rs (:result (event-evaluator (make-post-event event-name inst)))
+            final-inst (if (map? rs) rs (first rs))]
+        (if (and (an-instance? final-inst) (instance-of? entity-name final-inst))
+          final-inst
+          inst))
+      inst)))
 
-(defn fire-prepost-event [selector event-evaluator tag inst]
+(defn fire-prepost-event [selector tag inst]
   (let [typ (instance-type-kw inst)
         skip (and (= selector :after) (post-events-disabled? typ))]
-    (when-not skip
-      (do-fire-prepost-event selector event-evaluator tag typ inst))))
+    (if-not skip
+      (do-fire-prepost-event selector gs/evaluate-pattern tag typ inst)
+      inst)))
 
 (def fire-post-event (partial fire-prepost-event :after))
 (def force-fire-post-event (partial do-fire-prepost-event :after))

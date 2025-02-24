@@ -22,10 +22,11 @@
   (let [event (if (map? event) event {event {}})]
     (:result (evaluate-dataflow (cn/make-instance event)))))
 
-(defn- report-expected-ex [ex]
-  (println (str "Expected exception in test: "
-                #?(:clj (.getMessage ex)
-                   :cljs ex)))
+(defn- report-expected-ex [ex errmsg]
+  (println (str "Expected exception: "
+                (or errmsg
+                    #?(:clj (.getMessage ex)
+                       :cljs ex))))
   ex)
 
 (defn- maybe-result-map [r]
@@ -34,15 +35,17 @@
     (and (seqable? r) (map? (first r))) (first r)
     :else nil))
 
-(defn is-error [f]
-  (is (try
-        (if-let [r (maybe-result-map (f))]
-          (:error r)
-          true)
-        #?(:clj (catch Exception ex
-                  (report-expected-ex ex))
-           :cljs (catch js/Error e
-                   (report-expected-ex e))))))
+(defn is-error
+  ([f errmsg]
+   (is (try
+         (if-let [r (maybe-result-map (f))]
+           (:error r)
+           true)
+         #?(:clj (catch Exception ex
+                   (report-expected-ex ex errmsg))
+            :cljs (catch js/Error e
+                    (report-expected-ex e errmsg))))))
+  ([f] (is-error f nil)))
 
 (defn is-forbidden [r] (= :forbidden (:status r)))
 

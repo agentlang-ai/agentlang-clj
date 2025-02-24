@@ -240,11 +240,13 @@
   (when (seq instances)
     (let [updated-instances (mapv #(realize-instance-values env recname (merge % update-attrs)) instances)
           store-f (fn [updated-instances] (store/update-instances (env/get-store env) recname updated-instances))
+          updated-instances (mapv #(cn/fire-pre-event :update %) updated-instances)
           rs
           (if resolver
             (call-resolver r/call-resolver-update resolver store-f env updated-instances)
             (store-f updated-instances))]
-      (when rs updated-instances))))
+      (when rs
+        (mapv #(cn/fire-post-event :update %) updated-instances)))))
 
 (defn- fetch-parent [relname child-recname relpat]
   (when-not (cn/contains-relationship? relname)
@@ -337,9 +339,11 @@
           resolver (rr/resolver-for-path recname)
           store (env/get-store env)
           store-f #(and (store/create-instance store %) %)
+          inst (cn/fire-pre-event :create inst)
           final-inst (if resolver
                        (call-resolver r/call-resolver-create resolver store-f env inst)
                        (store-f inst))
+          _ (cn/fire-post-event :create inst)
           _ (when (and (gs/rbac-enabled?) (cn/instance-of? recname final-inst))
               (store/assign-owner store recname final-inst))
           env0 (env/bind-instance env recname final-inst)
@@ -461,14 +465,18 @@
                              (assoc env :*can-delete-all* true)
                              (assoc env :*query-for-delete* true))
               r (evaluate-pattern enriched-env pattern)
-              env (:env r), insts (:result r)]
+              env (:env r), insts (:result r)
+              insts (mapv #(cn/fire-pre-event :delete %) insts)]
           (when-let [entity-name (and (seq insts) (cn/instance-type-kw (first insts)))]
             (let [store-f (fn [_]
                             (doseq [inst insts]
-                              (store/delete-by-id store entity-name li/path-attr (li/path-attr inst))))]
-              (or (call-resolver-delete env store-f entity-name insts)
-                  (store-f nil)
-                  insts))))))))
+                              (store/delete-by-id store entity-name li/path-attr (li/path-attr inst))))
+                  result
+                  (or (call-resolver-delete env store-f entity-name insts)
+                      (store-f nil)
+                      insts)
+                  _ (mapv #(cn/fire-post-event :delete %) insts)]
+              result)))))))
 
 (defn- handle-quote [env pat]
   (w/prewalk

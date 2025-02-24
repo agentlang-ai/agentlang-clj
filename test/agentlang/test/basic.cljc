@@ -441,6 +441,83 @@
       (is (cn/instance-of? :HC/R r))
       (is (= 20 (:Id r))))))
 
+(defn ppe-update-y [inst]
+  (assoc inst :Y (* (:X inst) 10)))
+
+(deftest pre-post-events
+  (defcomponent :PPE
+    (entity
+     :PPE/E
+     {:Id {:type :Int :id true}
+      :X :Int
+      :Y {:type :Int :optional true}})
+    (entity
+     :PPE/F
+     {:Id {:type :Int :id true}
+      :Z :Int})
+    (dataflow
+     :PPE/LookupF
+     {:PPE/F {:Id? :PPE/LookupF.Id} :as [:F]}
+     :F)
+    (dataflow
+     [:before :create :PPE/E]
+     {:PPE/F {:Id :Instance.Id
+              :Z :Instance.X}}
+     [:> '(agentlang.test.basic/ppe-update-y :Instance)])
+    (dataflow
+     [:before :update :PPE/E]
+     [:> '(agentlang.test.basic/ppe-update-y :Instance)])
+    (dataflow
+     [:after :update :PPE/E]
+     {:PPE/F {:Id? :Instance.Id
+              :Z :Instance.X}})
+    (dataflow
+     [:after :delete :PPE/E]
+     [:delete {:PPE/F {:Id? :Instance.Id}}]))
+  (let [cre (fn [id x]
+              (tu/invoke
+               {:PPE/Create_E
+                {:Instance
+                 {:PPE/E
+                  {:Id id :X x}}}}))
+        upe (fn [path new-x]
+              (first
+               (tu/invoke
+                {:PPE/Update_E
+                 {:Data {:X new-x}
+                  :path path}})))
+        allf (fn [] (tu/invoke {:PPE/LookupAll_F {}}))
+        findf (fn [id] (tu/invoke {:PPE/LookupF {:Id id}}))
+        e? (partial cn/instance-of? :PPE/E)
+        f? (partial cn/instance-of? :PPE/F)
+        e1 (cre 1 10)
+        chkfs (fn [n]
+                (let [fs (allf)]
+                  (is (= n (count fs)))
+                  (is (every? f? fs))))
+        chkf (fn [id x]
+                (let [f (findf id)]
+                  (= (:Z f) x)))]
+    (is (e? e1))
+    (is (= 100 (:Y e1)))
+    (chkfs 1)
+    (tu/is-error #(cre 1 10) "duplicate PPE/E.Id")
+    (chkfs 1)
+    (is (e? (cre 2 20)))
+    (chkfs 2)
+    (chkf 1 10)
+    (chkf 2 20)
+    (let [e (upe (li/path-attr e1) 30)]
+      (is (e? e))
+      (is (= 30 (:X e)))
+      (is (= 300 (:Y e))))
+    (chkf 1 30)
+    (chkf 2 20)
+    (is (e? (first (tu/invoke {:PPE/Delete_E {:path (li/path-attr e1)}}))))
+    (chkfs 1)
+    (is (nil? (findf 1)))
+    (chkf 2 20)))
+
 (defn f [x y] (+ x y))
 
 (deftest fncall
