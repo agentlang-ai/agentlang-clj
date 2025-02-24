@@ -47,7 +47,7 @@
 (defn update-inst-statement [conn table-name id obj]
   (let [[entity-name instance] obj
         scm (:schema (cn/find-entity-schema entity-name))
-        id-attrs (cn/identity-attributes scm)
+        id-attrs [li/path-attr]
         immutable-attrs (cn/immutable-attributes scm)
         ignore-attrs (set/intersection
                       (set (mapv su/attribute-column-name id-attrs))
@@ -57,7 +57,7 @@
             ignore-attrs)
         col-names (mapv su/attribute-column-name ks)
         col-vals (u/objects-as-string (mapv #(% instance) ks))
-        id-attr-name (cn/identity-attribute-name entity-name)
+        id-attr-name li/path-attr
         id-attr-val (id-attr-name instance)
         sql (str "UPDATE " table-name " SET "
                  (update-set-exprs col-names)
