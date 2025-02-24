@@ -34,7 +34,11 @@
   (cond
     (keyword? v) (follow-reference env v)
     (li/quoted? v) (:result (evaluate-pattern env v))
-    (vector? v) (mapv #(evaluate-attribute-value env k %) v)
+    (vector? v) `[~(let [k (first v)]
+                     (if (su/sql-keyword? k)
+                       k
+                       (follow-reference env k)))
+                  ~@(mapv #(evaluate-attribute-value env k %) (rest v))]
     (list? v) (evaluate-attr-expr env nil k v)
     :else v))
 
@@ -51,6 +55,8 @@
       (merge {recname (into {} new-attrs)}
              (when alias {:as alias})))
     pat))
+
+(declare realize-all-references)
 
 (defn- follow-references-in-map [env m]
   (let [res (mapv (fn [[k v]]

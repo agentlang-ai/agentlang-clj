@@ -8,6 +8,7 @@
              :as ln
              :refer [component attribute event relationship
                      entity record dataflow inference]]
+            [agentlang.lang.internal :as li]
             [agentlang.test.util :as tu]))
 
 (component :ResourceAllocation.Core)
@@ -153,6 +154,12 @@
 (relationship
  :ResourceAllocation.Core/TeamResource
  {:meta {:between [:ResourceAllocation.Core/Team :ResourceAllocation.Core/Resource]}})
+
+(dataflow
+ :ResourceAllocation.Core/CreateTeamResource
+ {:ResourceAllocation.Core/TeamResource
+  {:Team :ResourceAllocation.Core/CreateTeamResource.Team
+   :Resource :ResourceAllocation.Core/CreateTeamResource.Resource}})
 
 (entity
  :ResourceAllocation.Core/Project
@@ -307,6 +314,21 @@
   :ResourceAllocation.Core/TeamResource?
   {:ResourceAllocation.Core/Team
    {:Id :ResourceAllocation.Core/GetTeamResources.TeamId}}})
+
+(event
+ :ResourceAllocation.Core/GetTeamsWithAllocs
+ {:StartDate :String :EndDate :String})
+
+(dataflow
+ :ResourceAllocation.Core/GetTeamsWithAllocs
+ {:ResourceAllocation.Core/Team? {}
+  :ResourceAllocation.Core/TeamResource?
+  {:ResourceAllocation.Core/Resource {}
+   :ResourceAllocation.Core/ResourceAllocation
+   {:ResourceAllocation.Core/Allocation
+    {:Period [:between
+              :ResourceAllocation.Core/GetTeamsWithAllocs.StartDate
+              :ResourceAllocation.Core/GetTeamsWithAllocs.EndDate]}}}})
 
 (dataflow
  :ResourceAllocation.Core/InitUsers
@@ -513,52 +535,77 @@
 (deftest allocation-queries
   (testing "Testing Allocation creation/query"
 
-    (tu/invoke
-     {:ResourceAllocation.Core/Create_Resource
-      {:Instance
-       {:ResourceAllocation.Core/Resource
-        {:Id "r03"
-         :FirstName "user"
-         :LastName "01"
-         :FullName "user 02"
-         :Email "user01@acme.com"
-         :PhoneNumber "111-222-3333"
-         :Department "Engineering"
-         :Role "Software Engineer"
-         :HRLevel "3"
-         :Type "FTE"
-         :HourlyRate 45
-         :HourlyRateCurrency "USD"
-         :AverageWeeklyHours 38
-         :Manager "manager01"
-         :Status "Active"
-         :StartDate "2025-04-10"
-         :WorkLocation "San Francisco"
-         :LocationCategory "Offsite"}}}})
-
-    (tu/invoke
-     {:ResourceAllocation.Core/Create_Resource
-      {:Instance
-       {:ResourceAllocation.Core/Resource
-        {:Id "r04"
-         :FirstName "user"
-         :LastName "02"
-         :FullName "user 02"
-         :Email "user02@acme.com"
-         :PhoneNumber "222-333-4444"
-         :Department "Finance"
-         :Role "Analyst"
-         :HRLevel "2"
-         :Type "FTE"
-         :HourlyRate 50
-         :HourlyRateCurrency "USD"
-         :AverageWeeklyHours 40
-         :Manager "manager02"
-         :Status "Active"
-         :StartDate "2024-09-01"
-         :WorkLocation "New York"
-         :LocationCategory "Onsite"}}}})    
-
+    (let [t? (partial cn/instance-of? :ResourceAllocation.Core/Team)
+          r? (partial cn/instance-of? :ResourceAllocation.Core/Resource)
+          t01 (tu/invoke
+               {:ResourceAllocation.Core/Create_Team
+                {:Instance
+                 {:ResourceAllocation.Core/Team
+                  {:Id "t01"
+                   :Name "team 1"}}}})
+          _ (is (t? t01))
+          t02 (tu/invoke
+               {:ResourceAllocation.Core/Create_Team
+                {:Instance
+                 {:ResourceAllocation.Core/Team
+                  {:Id "t02"
+                   :Name "team "}}}})
+          _ (is (t? t02))
+          r03 (tu/invoke
+               {:ResourceAllocation.Core/Create_Resource
+                {:Instance
+                 {:ResourceAllocation.Core/Resource
+                  {:Id "r03"
+                   :FirstName "user"
+                   :LastName "01"
+                   :FullName "user 02"
+                   :Email "user01@acme.com"
+                   :PhoneNumber "111-222-3333"
+                   :Department "Engineering"
+                   :Role "Software Engineer"
+                   :HRLevel "3"
+                   :Type "FTE"
+                   :HourlyRate 45
+                   :HourlyRateCurrency "USD"
+                   :AverageWeeklyHours 38
+                   :Manager "manager01"
+                   :Status "Active"
+                   :StartDate "2025-04-10"
+                   :WorkLocation "San Francisco"
+                   :LocationCategory "Offsite"}}}})
+          _ (is (r? r03))
+          tr? (partial cn/instance-of? :ResourceAllocation.Core/TeamResource)
+          _ (is (tr? (tu/invoke
+                      {:ResourceAllocation.Core/CreateTeamResource
+                       {:Team (li/path-attr t01)
+                        :Resource (li/path-attr r03)}})))
+          r04 (tu/invoke
+               {:ResourceAllocation.Core/Create_Resource
+                {:Instance
+                 {:ResourceAllocation.Core/Resource
+                  {:Id "r04"
+                   :FirstName "user"
+                   :LastName "02"
+                   :FullName "user 02"
+                   :Email "user02@acme.com"
+                   :PhoneNumber "222-333-4444"
+                   :Department "Finance"
+                   :Role "Analyst"
+                   :HRLevel "2"
+                   :Type "FTE"
+                   :HourlyRate 50
+                   :HourlyRateCurrency "USD"
+                   :AverageWeeklyHours 40
+                   :Manager "manager02"
+                   :Status "Active"
+                   :StartDate "2024-09-01"
+                   :WorkLocation "New York"
+                   :LocationCategory "Onsite"}}}})
+          _ (is (r? r04))]
+      (is (tr? (tu/invoke
+                {:ResourceAllocation.Core/CreateTeamResource
+                 {:Team (li/path-attr t02)
+                  :Resource (li/path-attr r04)}})))
       (tu/invoke
        {:ResourceAllocation.Core/AllocationForResource
         {:Id "alloc01"
@@ -597,7 +644,7 @@
          :Notes "test 3"
          :ExOverAllocated false
          :ExUnderAllocated false}})
-      
+
       (tu/invoke
        {:ResourceAllocation.Core/AllocationForResource
         {:Id "alloc04"
@@ -635,7 +682,19 @@
                              {:Project "p01"
                               :StartDate "2025-01-01"
                               :EndDate "2025-01-01"}})
-            is-into-res #(is (not (a? (first %))) (= (:Project (first %))))]
+            is-into-res #(is (not (a? (first %))) (= (:Project (first %))))
+            ts01 (tu/invoke
+                  {:ResourceAllocation.Core/GetTeamsWithAllocs
+                   {:StartDate "2025-01-01"
+                    :EndDate "2025-04-01"}})
+            ts02 (tu/invoke
+                  {:ResourceAllocation.Core/GetTeamsWithAllocs
+                   {:StartDate "2025-01-01"
+                    :EndDate "2025-01-01"}})]
+        (is (= 3 (count ts01)))
+        (is (every? t? ts01))
+        (is (= 2 (count ts02)))
+        (is (every? t? ts02))
         (doseq [res [res0 res1 res2 res3]] (is (as? res)))
         (is (= (count res0) 3))
         (is (= (count res1) 1))        
@@ -644,7 +703,7 @@
         (is (= (count res4) 4))
         (is-into-res res4)
         (is-into-res res5)
-        (is (= (count res5) 1)))))
+        (is (= (count res5) 1))))))
 
 #_(deftest team-allocation-queries
   (testing "Testing team allocation"
@@ -720,9 +779,10 @@
              res-user (tu/invoke (with-user
                                    "u2@email.com"
                                    {:ResourceAllocation.Core/LookupAll_Team {}}))
-             t1 (first (filter #(= (:Id %) "903b5917-2c07-467f-995f-0b9cd23bfdc6") res-user))]
-         (is (= 2 (count res-admin)))
-         (is (= 1 (count res-user)))
+             t1 (first (filter #(= (:Id %) "903b5917-2c07-467f-995f-0b9cd23bfdc6") res-user))
+             t? (partial cn/instance-of? :ResourceAllocation.Core/Team)]
+         (is (and (> (count res-admin) 1) (every? t? res-admin)))
+         (is (= 1 (count res-user)) (t? (first res-user)))
          (is (= "Team 2" (:Name t1)))
          (is (= "Active" (:Status t1))))))))
 

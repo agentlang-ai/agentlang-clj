@@ -335,7 +335,7 @@
   (mapv (fn [[k v]]
           (let [c (li/make-ref sql-alias (stu/attribute-column-name-kw k))]
             (if (vector? v)
-              `[~(first v) ~c ~(last v)]
+              `[~(first v) ~c ~@(rest (rest v))]
               [:= c v])))
         attrs))
 

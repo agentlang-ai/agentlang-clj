@@ -1,3 +1,12 @@
 {:service {:port 8000}
  :store {:type :h2
-         :dbname "./db"}}
+         :dbname "./db"}
+ :rbac-enabled true
+ :authentication {:service :cognito
+                  :superuser-email #$ FRACTL_SUPERUSER_EMAIL
+                  :region          #$ AWS_REGION
+                  :access-key      #$ AWS_ACCESS_KEY
+                  :secret-key      #$ AWS_SECRET_KEY
+                  :client-id       #$ AWS_COGNITO_CLIENT_ID
+                  :user-pool-id    #$ AWS_COGNITO_USER_POOL_ID
+                  :whitelist?      false}}
