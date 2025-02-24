@@ -13,8 +13,10 @@
             [agentlang.intercept.rbac :as rbac]
             [agentlang.global-state :as gs]
             [agentlang.lang.internal :as li]
+            [agentlang.lang.datetime :as dt]
             [agentlang.resolver.registry :as rr]
             [agentlang.resolver.core :as r]
+            [agentlang.datafmt.json :as json]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
@@ -236,6 +238,32 @@
     (or (:result (resolver-fn resolver env arg))
         arg)))
 
+(defn- str-session-info [sinfo]
+  (cond
+    (string? sinfo) sinfo
+    (map? sinfo) (json/encode sinfo)
+    :else (str sinfo)))
+
+(defn- maybe-create-audit-trail [env tag insts]
+  #?(:clj
+     (when (gs/audit-trail-enabled?)
+       (let [action (name tag)]
+         (doseq [inst insts]
+           (let [entity-name (cn/instance-type inst)]
+             (when (cn/audit-required? entity-name)
+               (let [id-val (li/path-attr inst)
+                     attrs {:InstancePath id-val
+                            :Action action
+                            :Timestamp (dt/unix-timestamp)
+                            :User (or (gs/active-user) "anonymous")}
+                     trail-data (if-let [sinfo (gs/active-session-info)]
+                                  (assoc attrs :SessionToken (str-session-info sinfo))
+                                  attrs)
+                     trail-entry {(cn/audit-trail-entity-name entity-name) trail-data}]
+                 (when-not (:result (gs/kernel-call #(evaluate-pattern trail-entry)))
+                   (log/warn (str "failed to audit " tag " on " inst))))))))))
+  insts)
+
 (defn- handle-upsert [env resolver recname update-attrs instances]
   (when (seq instances)
     (let [updated-instances (mapv #(realize-instance-values env recname (merge % update-attrs)) instances)
@@ -246,7 +274,7 @@
             (call-resolver r/call-resolver-update resolver store-f env updated-instances)
             (store-f updated-instances))]
       (when rs
-        (mapv #(cn/fire-post-event :update %) updated-instances)))))
+        (mapv #(cn/fire-post-event :update %) (maybe-create-audit-trail env :update updated-instances))))))
 
 (defn- fetch-parent [relname child-recname relpat]
   (when-not (cn/contains-relationship? relname)
@@ -347,7 +375,8 @@
           _ (when (and (gs/rbac-enabled?) (cn/instance-of? recname final-inst))
               (store/assign-owner store recname final-inst))
           env0 (env/bind-instance env recname final-inst)
-          env1 (if alias (env/bind-variable env0 alias final-inst) env0)]
+          env1 (if alias (env/bind-variable env0 alias final-inst) env0)
+          _ (maybe-create-audit-trail env :create [final-inst])]
       (make-result env1 final-inst))))
 
 (defn- handle-event-pattern [env recname attrs alias]
@@ -475,7 +504,8 @@
                   (or (call-resolver-delete env store-f entity-name insts)
                       (store-f nil)
                       insts)
-                  _ (mapv #(cn/fire-post-event :delete %) insts)]
+                  _ (mapv #(cn/fire-post-event :delete %) insts)
+                  _ (maybe-create-audit-trail env :delete insts)]
               result)))))))
 
 (defn- handle-quote [env pat]

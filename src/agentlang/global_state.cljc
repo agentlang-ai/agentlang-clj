@@ -26,6 +26,9 @@
 
 (defn active-user [] (:User active-event-context))
 
+(defn active-session-info []
+  (get-in active-event-context [:UserDetails :session-info]))
+
 #?(:clj
    (def ^:private active-txn (ThreadLocal.))
    :cljs
@@ -47,8 +50,6 @@
   (reset! script-mode true))
 
 (defn in-script-mode? [] @script-mode)
-
-(def ^:dynamic audit-trail-mode nil)
 
 (def ^:dynamic migration-mode nil)
 

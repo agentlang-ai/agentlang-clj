@@ -8,10 +8,9 @@
             [agentlang.intercept.rbac.internal :as ri]))
 
 (defn- can-do? [predic arg]
-  (cond
-    gs/audit-trail-mode true
-    (gs/rbac-enabled?) (predic (gs/active-user) arg)
-    :else true))
+  (if (gs/rbac-enabled?)
+    (predic (gs/active-user) arg)
+    true))
 
 (def can-create? (partial can-do? ri/can-create?))
 (def can-read? (partial can-do? ri/can-read?))
