@@ -1401,28 +1401,32 @@
 ;;            evt (cn/make-instance :UserAccount/IncreaseLoan {:Balance r})]
 ;;        (is (thrown? Exception (cn/instance-of? :UserAccount/Estimate (first (tu/fresult (e/eval-all-dataflows evt)))))))))
 
-;; (deftest try_
-;;   (defcomponent :Try
-;;     (entity
-;;      :Try/E
-;;      {:X {:type :Int
-;;           :indexed true}})
-;;     (record
-;;      :Try/R
-;;      {:Y :Boolean})
-;;     (dataflow
-;;      :Try/Find
-;;      [:try
-;;       {:Try/E {:X? :Try/Find.X}}
-;;       :ok {:Try/R {:Y true}}
-;;       [:error :not-found] {:Try/R {:Y false}}]))
-;;   (let [r1 (tu/first-result {:Try/Find {:X 100}})
-;;         e (cn/make-instance {:Try/E {:X 100}})
-;;         _ (tu/first-result {:Try/Create_E
-;;                             {:Instance e}})
-;;         r2 (tu/first-result {:Try/Find {:X 100}})]
-;;     (is (not (:Y r1)))
-;;     (is (:Y r2))))
+(deftest try_
+  (defcomponent :Try
+    (entity
+     :Try/E
+     {:Id {:type :Int :id true}
+      :X {:type :Int :indexed true}})
+    (record
+     :Try/R
+     {:Y :Int})
+    (dataflow
+     :Try/Find
+     [:try
+      {:Try/E {:X? :Try/Find.X}}
+      :error {:Try/R {:Y 1}}
+      :not-found {:Try/R {:Y 0}}
+      :as :Result]
+     :Result))
+  (let [r1 (tu/invoke {:Try/Find {:X 100}})
+        e0 (cn/make-instance {:Try/E {:Id 1 :X 100}})
+        e1 (tu/invoke {:Try/Create_E {:Instance e0}})
+        e? (partial cn/instance-of? :Try/E)
+        _ (is e? e1)
+        e2 (first (tu/invoke {:Try/Find {:X 100}}))
+        r? (partial cn/instance-of? :Try/R)]
+    (is (and (r? r1) (= 0 (:Y r1))))
+    (is (e? e2))))
 
 ;; (deftest password-match
 ;;   (defcomponent :PM
