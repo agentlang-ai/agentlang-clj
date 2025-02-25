@@ -108,7 +108,7 @@
 
 (defn- forbidden
   ([s data-fmt] (response {:reason s :status :forbidden} 403 data-fmt))
-  ([s] (_not-found s :json)))
+  ([s] (forbidden s :json)))
 
 (defn- bad-request
   ([s data-fmt errtype]
