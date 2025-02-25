@@ -366,7 +366,7 @@
     (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))
           resolver (rr/resolver-for-path recname)
           store (env/get-store env)
-          store-f #(and (store/create-instance store %) %)
+          store-f #(when-let [inst (store/create-instance store %)] inst)
           inst (cn/fire-pre-event :create inst)
           final-inst (if resolver
                        (call-resolver r/call-resolver-create resolver store-f env inst)
@@ -393,10 +393,11 @@
 
 (defn- handle-record-pattern [env recname attrs alias]
   (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))
-        env0 (if alias (env/bind-variable env alias inst) env)]
+        env0 (if alias (env/bind-variable env alias inst) env)
+        env1 (env/bind-instance env0 recname inst)]
     (when (cn/instance-of? :Agentlang.Kernel.Rbac/InstancePrivilegeAssignment inst)
       (rbac/handle-instance-privilege-assignment env inst))
-    (make-result env0 inst)))
+    (make-result env1 inst)))
 
 (defn- realize-pattern [env pat]
   (if (keyword? pat)
@@ -546,45 +547,41 @@
      {:not-found (second (drop-while not-not-found pat))
       :error (second (drop-while not-error pat))}]))
 
-(defn- handle-try [env pat]
-  (let [[body alias handlers] (parse-try pat)
+(defn- handle-try [env & pat]
+  (let [[body _ handlers] (parse-try pat)
         not-found (:not-found handlers)
-        err (:error handlers)
-        result
-        (try
-          (loop [body body, e env, result nil]
-            (if-let [p (first body)]
-              (let [er (evaluate-pattern e p)
-                    r (:result er)]
-                (if (and (nil? (seq r)) not-found)
-                  (:result (evaluate-pattern e not-found))
-                  (recur (rest body) (:env er) r)))
-              result))
-          (catch #?(:clj Exception :cljs :default) ex
-            (if err
-              (:result (evaluate-pattern (env/bind-variable env :Error ex) err))
-              (throw ex))))]
-    (make-result (if alias (env/bind-variable env alias result) env) result)))
+        err (:error handlers)]
+    (try
+      (loop [body body, e env, result nil]
+        (if-let [p (first body)]
+          (let [er (evaluate-pattern e p)
+                r (:result er)]
+            (if (and (nil? (seq r)) not-found)
+              (:result (evaluate-pattern e not-found))
+              (recur (rest body) (:env er) r)))
+          result))
+      (catch #?(:clj Exception :cljs :default) ex
+        (if err
+          (:result (evaluate-pattern (env/bind-variable env :Error ex) err))
+          (throw ex))))))
 
-(defn- handle-for-each [env pat]
+(defn- handle-for-each [env & pat]
   (let [cond-pat (first pat)
-        body (extract-body-patterns #{:as} (rest pat))
-        alias (second (drop-while not-as pat))]
-    (loop [rs (:result (evaluate-pattern cond-pat))
+        body (extract-body-patterns #{:as} (rest pat))]
+    (loop [rs (:result (evaluate-pattern env cond-pat))
            e env, result nil]
       (if-let [r (first rs)]
         (let [e (env/bind-variable e :% r)
               inner-result
               (loop [body body, e e, result nil]
                 (if-let [p (first body)]
-                  (let [er (evaluate-pattern p)]
+                  (let [er (evaluate-pattern e p)]
                     (recur (rest body) (:env er) (:result er)))
                   result))]
-          (recur (rest rs) e inner-result))
-        (make-result (if alias (env/bind-variable env alias result) env) result)))))
+          (recur (rest rs) e inner-result))))))
 
 (defn- parse-condition [env condition]
-  (let [args (realize-all-references env (rest condition))
+  (let [args (mapv (partial realize-all-references env) (rest condition))
         n (apply compare args)]
     (case (first condition)
       := (zero? n)
@@ -595,22 +592,22 @@
       :>= (or (zero? n) (pos? n))
       (u/throw-ex (str "Invalid operator " (first condition) " in " condition)))))
 
-(defn- handle-match [env pat]
-  (let [alias (second (drop-while not-as pat))
-        body (extract-body-patterns #{:as} (rest pat))
-        r (:result (evaluate-pattern (first pat)))
-        result
-        (loop [body body, e (env/bind-variable env :% r)]
-          (when-let [condition (first body)]
-            (let [c (second body), conseq (or c condition)]
-              (if-not c
+(defn- handle-match [env & pat]
+  (let [body (extract-body-patterns #{:as} (rest pat))
+        r (:result (evaluate-pattern env (first pat)))
+        e (env/bind-variable env :% r)]
+    (when r
+      (loop [body body]
+        (when-let [condition (first body)]
+          (let [c (second body), conseq (or c condition)]
+            (if-not c
+              (:result (evaluate-pattern e conseq))
+              (if (parse-condition
+                   e (if (vector? condition)
+                       condition
+                       [:= :% condition]))
                 (:result (evaluate-pattern e conseq))
-                (if (parse-condition
-                     e (if (vector? condition)
-                         condition
-                         [:= :% condition]))
-                  (:result (evaluate-pattern e conseq)))))))]
-    (make-result (if alias (env/bind-variable env alias result) env) result)))
+                (recur (rest (rest body)))))))))))
 
 (defn- expr-handler [env pat _]
   (let [[pat alias] (parse-expr-pattern pat)

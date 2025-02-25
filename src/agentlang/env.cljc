@@ -142,7 +142,11 @@
   (let [parts (li/path-parts path)
         p (:path parts)]
     (cond
-      p (lookup-by-alias env p)
+      p
+      (let [obj (lookup-by-alias env p)]
+        (if-let [refs (seq (:refs parts))]
+          (get-in obj refs)
+          obj))
 
       (seq (:refs parts))
       (first (follow-reference env parts))

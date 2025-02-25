@@ -646,9 +646,9 @@
             {:Bucket :String
              :Region :String}})
     (dataflow :AWS/CreateBucket
-              {:AWS/CreateBucketConfig {:LocationConstraint :AWS/CreateBucket.Region} :as :Config}
+              {:AWS/CreateBucketConfig {:LocationConstraint :AWS/CreateBucket.Region}}
               {:AWS/S3Bucket {:Bucket :AWS/CreateBucket.Bucket
-                              :CreateBucketConfiguration :Config}}))
+                              :CreateBucketConfiguration :AWS/CreateBucketConfig}}))
   ;(override-test-resolver :AWSS3Resolver :AWS/S3Bucket)
   (let [bucket "ftltestbucket11"
         region "us-east-1"
@@ -694,69 +694,68 @@
     (is (not (:X r2)))
     (is (= 10 (:A r2)))))
 
-;; (deftest alias-for-instances
-;;   (defcomponent :Alias
-;;     (entity {:Alias/E {:X :Int}})
-;;     (entity {:Alias/F {:Y :Int}})
-;;     (record {:Alias/R {:F :Alias/F}})
-;;     (event {:Alias/Evt {:Instance :Alias/E}})
-;;     (dataflow :Alias/Evt
-;;               {:Alias/F {:Y :Alias/Evt.Instance.X} :as :G}
-;;               {:Alias/R {:F :G}}))
-;;   (let [e (cn/make-instance :Alias/E {:X 100})
-;;         evt (cn/make-instance :Alias/Evt {:Instance e})
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :Alias/R result))
-;;     (is (cn/instance-of? :Alias/F (:F result)))
-;;     (is (= 100 (get-in result [:F :Y])))))
+(deftest alias-for-instances
+  (defcomponent :Alias
+    (entity {:Alias/E {:X :Int}})
+    (entity {:Alias/F {:Y :Int}})
+    (record {:Alias/R {:F :Alias/F}})
+    (event {:Alias/Evt {:Instance :Alias/E}})
+    (dataflow :Alias/Evt
+              {:Alias/F {:Y :Alias/Evt.Instance.X} :as :G}
+              {:Alias/R {:F :G}}))
+  (let [e (cn/make-instance :Alias/E {:X 100})
+        evt (cn/make-instance :Alias/Evt {:Instance e})
+        result (tu/invoke evt)]
+    (is (cn/instance-of? :Alias/R result))
+    (is (cn/instance-of? :Alias/F (:F result)))
+    (is (= 100 (get-in result [:F :Y])))))
 
-;; (deftest multi-alias
-;;   (defcomponent :MultiAlias
-;;     (entity {:MultiAlias/E {:X :Int}})
-;;     (entity {:MultiAlias/F {:A :Int
-;;                             :B :Int}})
-;;     (event {:MultiAlias/Evt {:EX1 :Int
-;;                              :EX2 :Int}})
-;;     (dataflow :MultiAlias/Evt
-;;               {:MultiAlias/E {:X :MultiAlias/Evt.EX1} :as :E1}
-;;               {:MultiAlias/E {:X :MultiAlias/Evt.EX2} :as :E2}
-;;               {:MultiAlias/F {:A :E1.X :B :E2.X}}))
-;;   (let [evt {:MultiAlias/Evt {:EX1 100 :EX2 10}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :MultiAlias/F result))
-;;     (is (= 100 (:A result)))
-;;     (is (= 10 (:B result)))))
+(deftest multi-alias
+  (defcomponent :MultiAlias
+    (entity {:MultiAlias/E {:X :Int}})
+    (entity {:MultiAlias/F {:A :Int :B :Int}})
+    (event {:MultiAlias/Evt {:EX1 :Int :EX2 :Int}})
+    (dataflow
+     :MultiAlias/Evt
+     {:MultiAlias/E {:X :MultiAlias/Evt.EX1} :as :E1}
+     {:MultiAlias/E {:X :MultiAlias/Evt.EX2} :as :E2}
+     {:MultiAlias/F {:A :E1.X :B :E2.X}}))
+  (let [evt {:MultiAlias/Evt {:EX1 100 :EX2 10}}
+        result (tu/invoke evt)]
+    (is (cn/instance-of? :MultiAlias/F result))
+    (is (= 100 (:A result)))
+    (is (= 10 (:B result)))))
 
-;; (defn- conditional-event-01 [i x]
-;;   (let [evt {:Cond/Evt {:I i}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :Cond/R result))
-;;     (is (= x (:X result)))))
+(defn- conditional-event-01 [i x]
+  (let [evt {:Cond/Evt {:I i}}
+        result (tu/invoke evt)]
+    (is (cn/instance-of? :Cond/R result))
+    (is (= x (:X result)))))
 
-;; (defn- conditional-event-02 [r predic]
-;;   (let [evt {:Cond/EvtWithInst {:R r}}
-;;         result (tu/fresult (e/eval-all-dataflows evt))]
-;;     (is (predic result))))
+(defn- conditional-event-02 [r predic]
+  (let [evt {:Cond/EvtWithInst {:R r}}
+        result (tu/invoke evt)]
+    (is (predic result))))
 
-;; (deftest conditional
-;;   (defcomponent :Cond
-;;     (record {:Cond/R {:X :Int}})
-;;     (event {:Cond/Evt {:I :Int}})
-;;     (dataflow :Cond/Evt
-;;               [:match :Cond/Evt.I
-;;                0 {:Cond/R {:X 100}}
-;;                1 {:Cond/R {:X 200}}
-;;                {:Cond/R {:X 300}}])
-;;     (event {:Cond/EvtWithInst {:R :Cond/R}})
-;;     (dataflow :Cond/EvtWithInst
-;;               {:Cond/R {:X 100} :as :R1}
-;;               [:match :Cond/EvtWithInst.R.X
-;;                :R1.X true]))
-;;   (conditional-event-01 0 100)
-;;   (conditional-event-01 1 200)
-;;   (conditional-event-01 3 300)
-;;   (conditional-event-02 (cn/make-instance :Cond/R {:X 200}) false?)
-;;   (conditional-event-02 (cn/make-instance :Cond/R {:X 100}) true?))
+(deftest conditional
+  (defcomponent :Cond
+    (record {:Cond/R {:X :Int}})
+    (event {:Cond/Evt {:I :Int}})
+    (dataflow :Cond/Evt
+              [:match :Cond/Evt.I
+               0 {:Cond/R {:X 100}}
+               1 {:Cond/R {:X 200}}
+               {:Cond/R {:X 300}}])
+    (event {:Cond/EvtWithInst {:R :Cond/R}})
+    (dataflow :Cond/EvtWithInst
+              {:Cond/R {:X 100} :as :R1}
+              [:match :Cond/EvtWithInst.R.X
+               :R1.X true]))
+  (conditional-event-01 0 100)
+  (conditional-event-01 1 200)
+  (conditional-event-01 3 300)
+  (conditional-event-02 (cn/make-instance :Cond/R {:X 200}) nil?)
+  (conditional-event-02 (cn/make-instance :Cond/R {:X 100}) true?))
 
 ;; (deftest conditional-boolean
 ;;   (defcomponent :CondBool
