@@ -199,7 +199,7 @@
         s0 (us/generate-code 10)
         state (if user-state (str s0 user-state-delim user-state) s0)
         url0 (str "https://" domain "/oauth2/" auth-server "/v1/authorize?client_id=" client-id
-                  "&response_type=code&scope=" (http/url-encode scope) "&redirect_uri="
+                  "&response_type=code&scope=" (http/url-encode-plain scope) "&redirect_uri="
                   (http/url-encode (or server-redirect-host authorize-redirect-url)) "&state=" state "&nonce=" nonce)
         url (if no-prompt (str url0 "&prompt=none") url0)]
     [(if session-token
@@ -397,7 +397,7 @@
                  :FirstName "profile.firstName"
                  :LastName "profile.lastName"
                  (name n))]
-      (http/url-encode (str attr " " opr " \"" (last clause) "\"")))))
+      (http/url-encode-plain (str attr " " opr " \"" (last clause) "\"")))))
 
 (defmethod auth/lookup-users tag [{domain :domain api-token :api-token :as config}]
   (when-not api-token
