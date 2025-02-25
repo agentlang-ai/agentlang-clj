@@ -75,6 +75,11 @@
        (.toASCIIString uri))
      :cljs s))
 
+(defn url-encode-plain [s]
+  #?(:clj
+     (URLEncoder/encode s)
+     :cljs s))
+
 (defn- remote-resolver-error [response]
   (u/throw-ex (str "remote service error - " (or (:error response) response))))
 
