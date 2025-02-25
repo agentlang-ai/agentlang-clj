@@ -745,7 +745,9 @@
               [:match :Cond/Evt.I
                0 {:Cond/R {:X 100}}
                1 {:Cond/R {:X 200}}
-               {:Cond/R {:X 300}}])
+               {:Cond/R {:X 300}}
+               :as :Result]
+              :Result)
     (event {:Cond/EvtWithInst {:R :Cond/R}})
     (dataflow :Cond/EvtWithInst
               {:Cond/R {:X 100} :as :R1}
@@ -757,79 +759,43 @@
   (conditional-event-02 (cn/make-instance :Cond/R {:X 200}) nil?)
   (conditional-event-02 (cn/make-instance :Cond/R {:X 100}) true?))
 
-;; (deftest conditional-boolean
-;;   (defcomponent :CondBool
-;;     (record {:CondBool/R {:X :Int}})
-;;     (event {:CondBool/Evt {:I :Boolean}})
-;;     (dataflow :CondBool/Evt
-;;               [:match :CondBool/Evt.I
-;;                true {:CondBool/R {:X 100}}
-;;                false {:CondBool/R {:X 200}}
-;;                {:CondBool/R {:X 300}}]))
-;;   (let [evt {:CondBool/Evt {:I true}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :CondBool/R result))
-;;     (is (= 100 (:X result))))
-;;   (let [evt {:CondBool/Evt {:I false}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :CondBool/R result))
-;;     (is (= 200 (:X result)))))
+(deftest conditional-boolean
+  (defcomponent :CondBool
+    (record {:CondBool/R {:X :Int}})
+    (event {:CondBool/Evt {:I :Any}})
+    (dataflow :CondBool/Evt
+              [:match :CondBool/Evt.I
+               true {:CondBool/R {:X 100}}
+               false {:CondBool/R {:X 200}}
+               {:CondBool/R {:X 300}} :as :R]
+              :R))
+  (let [chk (fn [i x]
+              (let [evt {:CondBool/Evt {:I i}}
+                    result (tu/invoke evt)]
+                (is (cn/instance-of? :CondBool/R result))
+                (is (= x (:X result)))))]
+    (chk true 100)
+    (chk false 200)
+    (chk 1 300)))
 
-;; (deftest conditional-pattern-list
-;;   (defcomponent :CondPatList
-;;     (record {:CondPatList/R {:X :Int}})
-;;     (event {:CondPatList/Evt {:I :Int}})
-;;     (dataflow :CondPatList/Evt
-;;               [:match :CondPatList/Evt.I
-;;                0 [{:CondPatList/R {:X 100}}
-;;                   {:CondPatList/R {:X 101}}]
-;;                1 {:CondPatList/R {:X 200}}
-;;                {:CondPatList/R {:X 300}}]))
-;;   (let [evt {:CondPatList/Evt {:I 0}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :CondPatList/R result))
-;;     (is (= 101 (:X result))))
-;;   (let [evt {:CondPatList/Evt {:I 1}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :CondPatList/R result))
-;;     (is (= 200 (:X result)))))
-
-;; (deftest match-with-alias
-;;   (defcomponent :MA
-;;     (record {:MA/R {:X :Int}})
-;;     (event {:MA/Evt {:I :Int}})
-;;     (dataflow :MA/Evt
-;;               [:match :MA/Evt.I
-;;                0 {:MA/R {:X 100}}
-;;                1 {:MA/R {:X 200}}
-;;                {:MA/R {:X 300}} :as :K]
-;;               :K))
-;;   (let [r01 (first (tu/fresult (e/eval-all-dataflows {:MA/Evt {:I 1}})))
-;;         r02 (first (tu/fresult (e/eval-all-dataflows {:MA/Evt {:I 0}})))
-;;         r03 (first (tu/fresult (e/eval-all-dataflows {:MA/Evt {:I 3}})))]
-;;     (is (cn/instance-of? :MA/R r01))
-;;     (is (= 200 (:X r01)))
-;;     (is (cn/instance-of? :MA/R r02))
-;;     (is (= 100 (:X r02)))
-;;     (is (cn/instance-of? :MA/R r03))
-;;     (is (= 300 (:X r03)))))
-
-;; (deftest match-with-alias-no-alternative-case
-;;   (defcomponent :MA2
-;;     (record {:MA2/R {:X :Int}})
-;;     (event {:MA2/Evt {:I :Int}})
-;;     (dataflow :MA2/Evt
-;;               [:match :MA2/Evt.I
-;;                0 {:MA2/R {:X 100}}
-;;                1 {:MA2/R {:X 200}} :as :K]
-;;               :K))
-;;   (let [r01 (first (tu/fresult (e/eval-all-dataflows {:MA2/Evt {:I 1}})))
-;;         r02 (first (tu/fresult (e/eval-all-dataflows {:MA2/Evt {:I 0}})))
-;;         r03 (first (tu/fresult (e/eval-all-dataflows {:MA2/Evt {:I 2}})))]
-;;     (is (cn/instance-of? :MA2/R r01))
-;;     (is (= 200 (:X r01)))
-;;     (is (cn/instance-of? :MA2/R r02))
-;;     (is (= 100 (:X r02)))))
+(deftest conditional-pattern-list
+  (defcomponent :CondPatList
+    (record {:CondPatList/R {:X :Int}})
+    (event {:CondPatList/Evt {:I :Int}})
+    (dataflow :CondPatList/Evt
+              [:match :CondPatList/Evt.I
+               0 [{:CondPatList/R {:X 100}}
+                  {:CondPatList/R {:X 101}}]
+               1 {:CondPatList/R {:X 200}}
+               {:CondPatList/R {:X 300}}]))
+  (let [evt {:CondPatList/Evt {:I 0}}
+        result (tu/invoke evt)]
+    (is (cn/instance-of? :CondPatList/R result))
+    (is (= 101 (:X result))))
+  (let [evt {:CondPatList/Evt {:I 1}}
+        result (tu/invoke evt)]
+    (is (cn/instance-of? :CondPatList/R result))
+    (is (= 200 (:X result)))))
 
 ;; (deftest alias-scope
 ;;   (defcomponent :AScope

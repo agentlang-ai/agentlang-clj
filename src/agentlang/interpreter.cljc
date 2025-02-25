@@ -582,24 +582,30 @@
 
 (defn- parse-condition [env condition]
   (let [args (mapv (partial realize-all-references env) (rest condition))
-        n (apply compare args)]
-    (case (first condition)
-      := (zero? n)
-      :<> (not (zero? n))
-      :< (neg? n)
-      :> (pos? n)
-      :<= (or (zero? n) (neg? n))
-      :>= (or (zero? n) (pos? n))
-      (u/throw-ex (str "Invalid operator " (first condition) " in " condition)))))
+        n (try
+            (apply compare args)
+            (catch #?(:clj Exception :cljs :default) ex
+              (log/warn (.getMessage ex)) nil))]
+    (when n
+      (case (first condition)
+        := (zero? n)
+        :<> (not (zero? n))
+        :< (neg? n)
+        :> (pos? n)
+        :<= (or (zero? n) (neg? n))
+        :>= (or (zero? n) (pos? n))
+        (u/throw-ex (str "Invalid operator " (first condition) " in " condition))))))
 
 (defn- handle-match [env & pat]
   (let [body (extract-body-patterns #{:as} (rest pat))
         r (:result (evaluate-pattern env (first pat)))
         e (env/bind-variable env :% r)]
-    (when r
+    (when-not (nil? r)
       (loop [body body]
-        (when-let [condition (first body)]
-          (let [c (second body), conseq (or c condition)]
+        (when (seq body)
+          (let [condition (first body)
+                c (second body)
+                conseq (if (nil? c) condition c)]
             (if-not c
               (:result (evaluate-pattern e conseq))
               (if (parse-condition
@@ -608,6 +614,13 @@
                        [:= :% condition]))
                 (:result (evaluate-pattern e conseq))
                 (recur (rest (rest body)))))))))))
+
+(defn- handle-patterns-vector [env & pats]
+  (loop [pats pats, e env, result nil]
+    (if-let [pat (first pats)]
+      (let [er (evaluate-pattern e pat)]
+        (recur (rest pats) (:env er) (:result er)))
+      result)))
 
 (defn- expr-handler [env pat _]
   (let [[pat alias] (parse-expr-pattern pat)
@@ -621,7 +634,7 @@
            :try handle-try
            :for-each handle-for-each
            :match handle-match
-           (u/throw-ex (str "Invalid expression - " pat)))
+           handle-patterns-vector)
          env (rest pat))
         env (if alias (env/bind-variable env alias result) env)]
     (make-result env result)))
