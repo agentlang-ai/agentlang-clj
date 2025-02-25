@@ -869,100 +869,98 @@
     (is (cn/instance-of? :ForEachAlias/R secondE))
     (is (= 11 (:A secondE)))))
 
-;; (deftest destructuring-alias
-;;   (defcomponent :DestructuringAlias
-;;     (entity {:DestructuringAlias/E {:X {:type    :Int
-;;                                         :indexed true}
-;;                                     :N :String}})
-;;     (record {:Result {:Values :Any}})
-;;     (event {:DestructuringAlias/Evt {:X :Int}})
+(deftest destructuring-alias
+  (defcomponent :DestructuringAlias
+    (entity {:DestructuringAlias/E {:X {:type :Int
+                                        :indexed true}
+                                    :N :String}})
+    (record {:Result {:Values :Any}})
+    (event {:DestructuringAlias/Evt {:X :Int}})
 
-;;     (dataflow :DestructuringAlias/Evt
-;;               {:DestructuringAlias/E {:X? :DestructuringAlias/Evt.X} :as [:R1 :R2 :_ :R4 :& :RS]}
-;;               {:DestructuringAlias/Result {:Values [:R1 :R2 :R4 :RS]}}))
-;;   (let [es [(cn/make-instance :DestructuringAlias/E {:X 1 :N "e01"})
-;;             (cn/make-instance :DestructuringAlias/E {:X 2 :N "e02"})
-;;             (cn/make-instance :DestructuringAlias/E {:X 1 :N "e03"})
-;;             (cn/make-instance :DestructuringAlias/E {:X 1 :N "e04"})
-;;             (cn/make-instance :DestructuringAlias/E {:X 1 :N "e05"})
-;;             (cn/make-instance :DestructuringAlias/E {:X 1 :N "e06"})
-;;             (cn/make-instance :DestructuringAlias/E {:X 1 :N "e07"})]
-;;         evts (map #(cn/make-instance :DestructuringAlias/Create_E {:Instance %}) es)
-;;         _    (doall (map (comp (comp first tu/fresult)
-;;                                #(e/eval-all-dataflows %))
-;;                          evts))
-;;         result (:Values (first (tu/fresult (e/eval-all-dataflows {:DestructuringAlias/Evt {:X 1}}))))]
-;;     (is (and (= "e01" (:N (first result)))
-;;              (= 1 (:X (first result)))))
-;;     (is (= "e03" (:N (nth result 1))))
-;;     (is (= 1 (:X (nth result 1))))
-;;     (is (= "e05" (:N (nth result 2))))
-;;     (is (= 1 (:X (nth result 2))))
-;;     (is (= ["e06" "e07"] (map :N (last result))))
-;;     (is (= [1 1] (map :X (last result))))))
+    (dataflow :DestructuringAlias/Evt
+              {:DestructuringAlias/E {:X? :DestructuringAlias/Evt.X} :as [:R1 :R2 :_ :R4 :& :RS]}
+              {:DestructuringAlias/Result {:Values [:R1 :R2 :R4 :RS]}}))
+  (let [cres [(cn/make-instance :DestructuringAlias/E {:X 1 :N "e01"})
+              (cn/make-instance :DestructuringAlias/E {:X 2 :N "e02"})
+              (cn/make-instance :DestructuringAlias/E {:X 1 :N "e03"})
+              (cn/make-instance :DestructuringAlias/E {:X 1 :N "e04"})
+              (cn/make-instance :DestructuringAlias/E {:X 1 :N "e05"})
+              (cn/make-instance :DestructuringAlias/E {:X 1 :N "e06"})
+              (cn/make-instance :DestructuringAlias/E {:X 1 :N "e07"})]
+        es (mapv #(tu/invoke {:DestructuringAlias/Create_E {:Instance %}}) cres)
+        _ (is (every? (partial cn/instance-of? :DestructuringAlias/E) es))
+        result (:Values (tu/invoke {:DestructuringAlias/Evt {:X 1}}))]
+    (is (and (= "e01" (:N (first result)))
+             (= 1 (:X (first result)))))
+    (is (= "e03" (:N (nth result 1))))
+    (is (= 1 (:X (nth result 1))))
+    (is (= "e05" (:N (nth result 2))))
+    (is (= 1 (:X (nth result 2))))
+    (is (= ["e06" "e07"] (map :N (last result))))
+    (is (= [1 1] (map :X (last result))))))
 
-;; (deftest delete-insts
-;;   (defcomponent :Del
-;;     (entity {:Del/E {:X :Int}}))
-;;   (let [e (cn/make-instance :Del/E {:X 100})
-;;         e01 (first (tu/fresult (e/eval-all-dataflows {:Del/Create_E {:Instance e}})))
-;;         id (cn/id-attr e01)
-;;         lookup-evt (cn/make-instance :Del/Lookup_E {cn/id-attr id})
-;;         e02 (first (tu/fresult (e/eval-all-dataflows lookup-evt)))
-;;         del-result (e/eval-all-dataflows {:Del/Delete_E {cn/id-attr id}})
-;;         r01 (str (cn/id-attr (first (tu/fresult del-result))))
-;;         r02 (e/eval-all-dataflows lookup-evt)]
-;;     (is (cn/instance-of? :Del/E e01))
-;;     (is (cn/same-instance? e01 e02))
-;;     (is (= id r01))
-;;     (is (= :not-found (:status (first r02))))))
+(defn- assert-le
+  ([n obj xs y]
+   (is (cn/instance-of? n obj))
+   (is (cn/id-attr obj))
+   (is (= xs (:Xs obj)))
+   (is (= y (:Y obj))))
+  ([obj xs y] (assert-le :L/E obj xs y)))
 
-;; (defn- assert-le
-;;   ([n obj xs y]
-;;    (is (cn/instance-of? n obj))
-;;    (is (cn/id-attr obj))
-;;    (is (= xs (:Xs obj)))
-;;    (is (= y (:Y obj))))
-;;   ([obj xs y] (assert-le :L/E obj xs y)))
+(deftest listof
+  (defcomponent :L
+    (entity {:L/E {:Xs {:listof :Int}
+                   :Y :Int}})
+    (event {:L/MakeE0 {:Xs {:listof :Int} :Y :Int}})
+    (dataflow :L/MakeE0
+              {:L/E {:Xs :L/MakeE0.Xs :Y :L/MakeE0.Y}})
+    (event {:L/MakeE1 {:X1 :Int :X2 :Int :Y :Int}})
+    (dataflow :L/MakeE1
+              {:L/E {:Xs [:L/MakeE1.X1 :L/MakeE1.X2] :Y :L/MakeE1.Y}})
+    (event {:L/MakeE2 {:X :Int :Y :Int}})
+    (dataflow :L/MakeE2
+              {:L/E {:Xs [(* 100 2) 780 :L/MakeE2.X] :Y :L/MakeE2.Y}})
+    (entity {:L/F {:Xs {:listof :Any}
+                   :Y :Int}}))
+  (let [e (cn/make-instance :L/E {:Xs [1 2 3] :Y 100})
+        evt {:L/Create_E {:Instance e}}
+        result (tu/invoke evt)]
+    (assert-le result [1 2 3] 100))
+  (let [evt {:L/MakeE0 {:Xs [10 20 30 40] :Y 1}}
+        result (tu/invoke evt)]
+    (assert-le result [10 20 30 40] 1))
+  (try
+    (let [evt {:L/MakeE0 {:Xs [10 "hi"] :Y 1}}
+          result (tu/invoke evt)]
+      (is (nil? result)))
+    (catch #?(:clj Exception :cljs :default) ex
+      (is ex)))
+  (let [evt {:L/MakeE1 {:X1 10 :X2 20 :Y 1}}
+        result (tu/invoke evt)]
+    (assert-le result [10 20] 1))
+  (let [evt {:L/MakeE2 {:X 10 :Y 90}}
+        result (tu/invoke evt)]
+    (assert-le result [200 780 10] 90))
+  (let [e (cn/make-instance :L/F {:Xs [10 "hi"] :Y 1})
+        evt {:L/Create_F {:Instance e}}
+        result (tu/invoke evt)]
+    (assert-le :L/F result [10 "hi"] 1)))
 
-;; (deftest listof
-;;   (defcomponent :L
-;;     (entity {:L/E {:Xs {:listof :Int}
-;;                    :Y :Int}})
-;;     (event {:L/MakeE0 {:Xs {:listof :Int} :Y :Int}})
-;;     (dataflow :L/MakeE0
-;;               {:L/E {:Xs :L/MakeE0.Xs :Y :L/MakeE0.Y}})
-;;     (event {:L/MakeE1 {:X1 :Int :X2 :Int :Y :Int}})
-;;     (dataflow :L/MakeE1
-;;               {:L/E {:Xs [:L/MakeE1.X1 :L/MakeE1.X2] :Y :L/MakeE1.Y}})
-;;     (event {:L/MakeE2 {:X :Int :Y :Int}})
-;;     (dataflow :L/MakeE2
-;;               {:L/E {:Xs [(* 100 2) 780 :L/MakeE2.X] :Y :L/MakeE2.Y}})
-;;     (entity {:L/F {:Xs {:listof :Any}
-;;                    :Y :Int}}))
-;;   (let [e (cn/make-instance :L/E {:Xs [1 2 3] :Y 100})
-;;         evt {:L/Create_E {:Instance e}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (assert-le result [1 2 3] 100))
-;;   (let [evt {:L/MakeE0 {:Xs [10 20 30 40] :Y 1}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (assert-le result [10 20 30 40] 1))
-;;   (try
-;;     (let [evt {:L/MakeE0 {:Xs [10 "hi"] :Y 1}}
-;;           result (tu/fresult (e/eval-all-dataflows evt))]
-;;       (is (nil? result)))
-;;     (catch #?(:clj Exception :cljs :default) ex
-;;       (is ex)))
-;;   (let [evt {:L/MakeE1 {:X1 10 :X2 20 :Y 1}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (assert-le result [10 20] 1))
-;;   (let [evt {:L/MakeE2 {:X 10 :Y 90}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (assert-le result [200 780 10] 90))
-;;   (let [e (cn/make-instance :L/F {:Xs [10 "hi"] :Y 1})
-;;         evt {:L/Create_F {:Instance e}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (assert-le :L/F result [10 "hi"] 1)))
+(deftest embedded-record
+  (defcomponent :ER
+    (record :ER/R {:X :Int})
+    (entity
+     :ER/E
+     {:Id {:type :Int :id true}
+      :R :ER/R})
+    (dataflow
+     :ER/MakeE
+     {:ER/E
+      {:Id :ER/MakeE.Id
+       :R {:ER/R {:X :ER/MakeE.X}}}}))
+  (let [e (tu/invoke {:ER/MakeE {:Id 1 :X 100}})]
+    (is (cn/instance-of? :ER/E e))
+    (is (cn/instance-of? :ER/R (:R e)))))
 
 ;; (deftest optional-attributes
 ;;   (defcomponent :OptAttr

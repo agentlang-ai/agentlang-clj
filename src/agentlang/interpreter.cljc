@@ -32,15 +32,27 @@
       (li/quoted-value v)
       v)))
 
+(def ^:dynamic query-mode false)
+
 (defn- evaluate-attribute-value [env k v]
   (cond
     (keyword? v) (follow-reference env v)
     (li/quoted? v) (:result (evaluate-pattern env v))
-    (vector? v) `[~(let [k (first v)]
-                     (if (su/sql-keyword? k)
-                       k
-                       (follow-reference env k)))
-                  ~@(mapv #(evaluate-attribute-value env k %) (rest v))]
+    (map? v)
+    (if query-mode
+      v
+      (if (cn/an-instance? v)
+        v
+        (:result (evaluate-pattern env v))))
+
+    (vector? v)
+    (let [f (first v)]
+      (if (keyword? f)
+        `[~(if (su/sql-keyword? f)
+             f
+             (follow-reference env f))
+          ~@(mapv #(evaluate-attribute-value env k %) (rest v))]
+        (mapv #(evaluate-attribute-value env k %) v)))
     (list? v) (evaluate-attr-expr env nil k v)
     :else v))
 
@@ -74,13 +86,14 @@
     (into {} res)))
 
 (defn- realize-all-references [env pat]
-   (if (keyword? pat)
-     (follow-reference env pat)
-     (w/postwalk
-      #(if (map? %)
-         (follow-references-in-map env %)
-         %)
-      pat)))
+  (binding [query-mode true]
+    (if (keyword? pat)
+      (follow-reference env pat)
+      (w/postwalk
+       #(if (map? %)
+          (follow-references-in-map env %)
+          %)
+       pat))))
 
 (defn- as-query-pattern [pat]
   (let [alias (:as pat)
