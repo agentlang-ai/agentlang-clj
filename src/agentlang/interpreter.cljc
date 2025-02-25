@@ -569,16 +569,20 @@
   (let [cond-pat (first pat)
         body (extract-body-patterns #{:as} (rest pat))]
     (loop [rs (:result (evaluate-pattern env cond-pat))
-           e env, result nil]
+           e env, result []]
       (if-let [r (first rs)]
-        (let [e (env/bind-variable e :% r)
+        (let [e0 (if (cn/an-instance? r)
+                   (env/bind-instance e r)
+                   e)
+              e (env/bind-variable e0 :% r)
               inner-result
               (loop [body body, e e, result nil]
                 (if-let [p (first body)]
                   (let [er (evaluate-pattern e p)]
                     (recur (rest body) (:env er) (:result er)))
                   result))]
-          (recur (rest rs) e inner-result))))))
+          (recur (rest rs) e (conj result inner-result)))
+        (when (seq result) result)))))
 
 (defn- parse-condition [env condition]
   (let [args (mapv (partial realize-all-references env) (rest condition))

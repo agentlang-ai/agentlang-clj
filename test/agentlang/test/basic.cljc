@@ -797,91 +797,77 @@
     (is (cn/instance-of? :CondPatList/R result))
     (is (= 200 (:X result)))))
 
-;; (deftest alias-scope
-;;   (defcomponent :AScope
-;;     (entity {:AScope/E {:X :Int}})
-;;     (record {:AScope/R {:A :Int :B :Int}})
-;;     (event {:AScope/Evt {:I :Int}})
-;;     (dataflow :AScope/Evt
-;;               {:AScope/E {:X :AScope/Evt.I} :as :E1}
-;;               {:AScope/E {:X '(+ :E1.X 1)} :as :E2}
-;;               {:AScope/R {:A :E1.X :B :E2.X}}))
-;;   (let [result (first (tu/fresult (e/eval-all-dataflows {:AScope/Evt {:I 10}})))]
-;;     (is (cn/instance-of? :AScope/R result))
-;;     (is (= 10 (:A result)))
-;;     (is (= 11 (:B result)))))
+(deftest for-each
+  (defcomponent :ForEach
+    (entity {:ForEach/E {:X :Int}})
+    (record {:ForEach/R {:A :Int}})
+    (event {:ForEach/Evt {:I :Int}})
+    (dataflow :ForEach/Evt
+              {:ForEach/E {:X :ForEach/Evt.I} :as :E1}
+              {:ForEach/E {:X '(+ :E1.X 1)}}
+              [:for-each {:ForEach/E? {}}
+               {:ForEach/R {:A :%.X}}]))
+  (let [result (tu/invoke {:ForEach/Evt {:I 10}})
+        firstE (first result)
+        secondE (second result)]
+    (is (= 2 (count result)))
+    (is (cn/instance-of? :ForEach/R firstE))
+    (is (= 10 (:A firstE)))
+    (is (cn/instance-of? :ForEach/R secondE))
+    (is (= 11 (:A secondE)))))
 
-;; (deftest for-each
-;;   (defcomponent :ForEach
-;;     (entity {:ForEach/E {:X :Int}})
-;;     (record {:ForEach/R {:A :Int}})
-;;     (event {:ForEach/Evt {:I :Int}})
-;;     (dataflow :ForEach/Evt
-;;               {:ForEach/E {:X :ForEach/Evt.I} :as :E1}
-;;               {:ForEach/E {:X '(+ :E1.X 1)} :as :E2}
-;;               [:for-each :ForEach/E?
-;;                {:ForEach/R {:A :ForEach/E.X}}]))
-;;   (let [result (tu/fresult (e/eval-all-dataflows {:ForEach/Evt {:I 10}}))
-;;         firstE (first result)
-;;         secondE (second result)]
-;;     (is (= 2 (count result)))
-;;     (is (cn/instance-of? :ForEach/R firstE))
-;;     (is (= 10 (:A firstE)))
-;;     (is (cn/instance-of? :ForEach/R secondE))
-;;     (is (= 11 (:A secondE)))))
+(deftest for-each-literal-result
+  (defcomponent :ForEachLR
+    (entity {:ForEachLR/E {:X :Int}})
+    (record {:ForEachLR/R {:A :Int}})
+    (event {:ForEachLR/Evt {:I :Int}})
+    (dataflow :ForEachLR/Evt
+              {:ForEachLR/E {:X :ForEachLR/Evt.I} :as :E1}
+              {:ForEachLR/E {:X '(+ :E1.X 1)} :as :E2}
+              [:for-each :ForEachLR/E?
+               {:ForEachLR/R {:A :ForEachLR/E.X}}
+               :ForEachLR/R.A]))
+  (let [result (tu/invoke {:ForEachLR/Evt {:I 10}})]
+    (is (= 2 (count result)))
+    (is (= 10 (first result)))
+    (is (= 11 (second result)))))
 
-;; (deftest for-each-literal-result
-;;   (defcomponent :ForEachLR
-;;     (entity {:ForEachLR/E {:X :Int}})
-;;     (record {:ForEachLR/R {:A :Int}})
-;;     (event {:ForEachLR/Evt {:I :Int}})
-;;     (dataflow :ForEachLR/Evt
-;;               {:ForEachLR/E {:X :ForEachLR/Evt.I} :as :E1}
-;;               {:ForEachLR/E {:X '(+ :E1.X 1)} :as :E2}
-;;               [:for-each :ForEachLR/E?
-;;                {:ForEachLR/R {:A :ForEachLR/E.X}}
-;;                :ForEachLR/R.A]))
-;;   (let [result (tu/fresult (e/eval-all-dataflows {:ForEachLR/Evt {:I 10}}))]
-;;     (is (= 2 (count result)))
-;;     (is (= 10 (first result)))
-;;     (is (= 11 (second result)))))
+(deftest for-each-basic-query
+  (defcomponent :ForEachBQ
+    (entity {:ForEachBQ/E {:X {:type :Int
+                               :indexed true}}})
+    (record {:ForEachBQ/R {:A :Int}})
+    (event {:ForEachBQ/Evt {:I :Int}})
+    (dataflow :ForEachBQ/Evt
+              {:ForEachBQ/E {:X :ForEachBQ/Evt.I} :as :E1}
+              {:ForEachBQ/E {:X '(+ :E1.X 1)} :as :E2}
+              [:for-each {:ForEachBQ/E {:X? 10}}
+               {:ForEachBQ/R {:A :ForEachBQ/E.X}}]))
+  (let [result (tu/invoke {:ForEachBQ/Evt {:I 10}})
+        firstE (first result)]
+    (is (= 1 (count result)))
+    (is (cn/instance-of? :ForEachBQ/R firstE))
+    (is (= 10 (:A firstE)))))
 
-;; (deftest for-each-basic-query
-;;   (defcomponent :ForEachBQ
-;;     (entity {:ForEachBQ/E {:X {:type :Int
-;;                                :indexed true}}})
-;;     (record {:ForEachBQ/R {:A :Int}})
-;;     (event {:ForEachBQ/Evt {:I :Int}})
-;;     (dataflow :ForEachBQ/Evt
-;;               {:ForEachBQ/E {:X :ForEachBQ/Evt.I} :as :E1}
-;;               {:ForEachBQ/E {:X '(+ :E1.X 1)} :as :E2}
-;;               [:for-each {:ForEachBQ/E {:X? 10}}
-;;                {:ForEachBQ/R {:A :ForEachBQ/E.X}}]))
-;;   (let [result (tu/fresult (e/eval-all-dataflows {:ForEachBQ/Evt {:I 10}}))
-;;         firstE (first result)]
-;;     (is (= 1 (count result)))
-;;     (is (cn/instance-of? :ForEachBQ/R firstE))
-;;     (is (= 10 (:A firstE)))))
-
-;; (deftest for-each-with-alias
-;;   (defcomponent :ForEachAlias
-;;     (entity {:ForEachAlias/E {:X :Int}})
-;;     (record {:ForEachAlias/R {:A :Int}})
-;;     (event {:ForEachAlias/Evt {:I :Int}})
-;;     (dataflow :ForEachAlias/Evt
-;;               {:ForEachAlias/E {:X :ForEachAlias/Evt.I} :as :E1}
-;;               {:ForEachAlias/E {:X '(+ :E1.X 1)} :as :E2}
-;;               [:for-each :ForEachAlias/E?
-;;                {:ForEachAlias/R {:A :ForEachAlias/E.X}} :as :L]
-;;               :L))
-;;   (let [result (tu/fresult (e/eval-all-dataflows {:ForEachAlias/Evt {:I 10}}))
-;;         firstE (first result)
-;;         secondE (second result)]
-;;     (is (= 2 (count result)))
-;;     (is (cn/instance-of? :ForEachAlias/R firstE))
-;;     (is (= 10 (:A firstE)))
-;;     (is (cn/instance-of? :ForEachAlias/R secondE))
-;;     (is (= 11 (:A secondE)))))
+(deftest for-each-with-alias
+  (defcomponent :ForEachAlias
+    (entity {:ForEachAlias/E {:X :Int}})
+    (record {:ForEachAlias/R {:A :Int}})
+    (event {:ForEachAlias/Evt {:I :Int}})
+    (dataflow :ForEachAlias/Evt
+              {:ForEachAlias/E {:X :ForEachAlias/Evt.I} :as :E1}
+              {:ForEachAlias/E {:X '(+ :E1.X 1)} :as :E2}
+              [:for-each :ForEachAlias/E?
+               {:ForEachAlias/R {:A :ForEachAlias/E.X}} :as :L]
+              :L))
+  (let [result (tu/invoke {:ForEachAlias/Evt {:I 10}})
+        firstE (first result)
+        secondE (second result)]
+    (is (= 2 (count result)))
+    (is (cn/instance-of? :ForEachAlias/R firstE))
+    (is (= 10 (:A firstE)))
+    (is (cn/instance-of? :ForEachAlias/R secondE))
+    (is (= 11 (:A secondE)))))
 
 ;; (deftest destructuring-alias
 ;;   (defcomponent :DestructuringAlias
