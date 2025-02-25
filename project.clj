@@ -23,7 +23,7 @@
                  [com.h2database/h2 "1.4.200"]
                  [redis.clients/jedis "5.1.2"]
                  [org.mindrot/jbcrypt "0.4"]
-                 [honeysql "1.0.461"]
+                 [com.github.seancorfield/honeysql "2.6.1270"]
                  [compojure "1.7.1"]
                  [http-kit "2.7.0"]
                  [cljs-http "0.1.48"]

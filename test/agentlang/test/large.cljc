@@ -317,11 +317,14 @@
 
 (event
  :ResourceAllocation.Core/GetTeamsWithAllocs
- {:StartDate :String :EndDate :String})
+ {:StartDate :String
+  :EndDate :String
+  :IsDistinct :Boolean})
 
 (dataflow
  :ResourceAllocation.Core/GetTeamsWithAllocs
  {:ResourceAllocation.Core/Team? {}
+  :distinct :ResourceAllocation.Core/GetTeamsWithAllocs.IsDistinct
   :ResourceAllocation.Core/TeamResource?
   {:ResourceAllocation.Core/Resource {}
    :ResourceAllocation.Core/ResourceAllocation
@@ -685,16 +688,26 @@
             is-into-res #(is (not (a? (first %))) (= (:Project (first %))))
             ts01 (tu/invoke
                   {:ResourceAllocation.Core/GetTeamsWithAllocs
-                   {:StartDate "2025-01-01"
+                   {:IsDistinct false
+                    :StartDate "2025-01-01"
                     :EndDate "2025-04-01"}})
             ts02 (tu/invoke
                   {:ResourceAllocation.Core/GetTeamsWithAllocs
-                   {:StartDate "2025-01-01"
-                    :EndDate "2025-01-01"}})]
+                   {:IsDistinct false
+                    :StartDate "2025-01-01"
+                    :EndDate "2025-01-01"}})
+            ts03 (tu/invoke
+                  {:ResourceAllocation.Core/GetTeamsWithAllocs
+                   {:IsDistinct true
+                    :StartDate "2025-01-01"
+                    :EndDate "2025-04-01"}})]
         (is (= 3 (count ts01)))
         (is (every? t? ts01))
         (is (= 2 (count ts02)))
         (is (every? t? ts02))
+        (is (= 2 (count ts03)))
+        (is (every? t? ts03))
+        (is (= 2 (count (set (mapv :Id ts03)))))
         (doseq [res [res0 res1 res2 res3]] (is (as? res)))
         (is (= (count res0) 3))
         (is (= (count res1) 1))        

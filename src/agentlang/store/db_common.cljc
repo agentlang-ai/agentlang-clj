@@ -375,7 +375,7 @@
 
 (defn- select-into [into-spec]
   (mapv (fn [[k v]]
-          [(ref-from-canonical-name v) (str "\"" (name k) "\"")])
+          [(ref-from-canonical-name v) (name k)])
         into-spec))
 
 (defn- entity-column-names [entity-name sql-alias]
@@ -489,12 +489,13 @@
          r1)))
    bjs))
 
-(defn- query-from-abstract [abstract-query into-spec]
+(defn- query-from-abstract [abstract-query into-spec distinct?]
   (let [[entity-name attrs] (:select abstract-query)
         entity-alias (keyword (as-table-name entity-name))
         q0 (merge
-            {:select (or (when into-spec (select-into into-spec))
-                         (entity-column-names entity-name entity-alias))
+            {(if distinct? :select-distinct :select)
+             (or (when into-spec (select-into into-spec))
+                 (entity-column-names entity-name entity-alias))
              :from [[(as-table-name entity-name) entity-alias]]}
             (or (:? attrs)
                 (when (seq attrs)
@@ -539,7 +540,7 @@
                       entity-name)
         entity-alias (keyword (as-table-name entity-name))
         into-spec (:into sub-query)
-        sql-pat0 (query-from-abstract (:abstract-query sub-query) into-spec)
+        sql-pat0 (query-from-abstract (:abstract-query sub-query) into-spec (:distinct sub-query))
         w0 (:where sql-pat0)
         w1 (if w0 (insert-deleted-clause w0 entity-alias) [:= (li/make-ref entity-alias stu/deleted-flag-col-kw) false])
         sql-pat0 (assoc sql-pat0 :where w1)

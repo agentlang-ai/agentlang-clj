@@ -225,7 +225,7 @@
     attr-scm))
 
 (def timeout-ms-tag :timeout-ms)
-(def ^:private instance-meta-keys [:as :meta :meta? :into])
+(def ^:private instance-meta-keys [:as :meta :meta? :into :distinct?])
 
 (defn normalize-instance-pattern [pat]
   (apply dissoc pat instance-meta-keys))

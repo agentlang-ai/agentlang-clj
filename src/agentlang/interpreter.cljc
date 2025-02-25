@@ -665,6 +665,7 @@
 (defn- maybe-lift-relationship-patterns [env pat]
   (let [alias (:as pat)
         into (:into pat)
+        distinct (:distinct pat)
         pat (li/normalize-instance-pattern pat)
         _ (li/reset-alias-db!)
         q (walk-query-pattern env pat false)
@@ -677,6 +678,10 @@
      {:cont-rels (when (seq cont-rels) cont-rels)
       :bet-rels (when (seq bet-rels) bet-rels)
       :abstract-query q
+      :distinct (when distinct
+                  (if (keyword? distinct)
+                    (follow-reference env distinct)
+                    distinct))
       :into into}]))
 
 (defn- maybe-preprocecss-pattern [env pat]
