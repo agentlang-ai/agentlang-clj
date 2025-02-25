@@ -584,7 +584,16 @@
         (make-result (if alias (env/bind-variable env alias result) env) result)))))
 
 (defn- parse-condition [env condition]
-  (u/throw-ex "parse-condition not implemented"))
+  (let [args (realize-all-references env (rest condition))
+        n (apply compare args)]
+    (case (first condition)
+      := (zero? n)
+      :<> (not (zero? n))
+      :< (neg? n)
+      :> (pos? n)
+      :<= (or (zero? n) (neg? n))
+      :>= (or (zero? n) (pos? n))
+      (u/throw-ex (str "Invalid operator " (first condition) " in " condition)))))
 
 (defn- handle-match [env pat]
   (let [alias (second (drop-while not-as pat))

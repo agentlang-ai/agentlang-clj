@@ -616,24 +616,6 @@
 ;;     (is (= (:X result) 100))
 ;;     (is (= (:Y result) 1000))))
 
-;; (deftest fire-event
-;;   (#?(:clj do
-;;       :cljs cljs.core.async/go)
-;;    (defcomponent :Df05
-;;      (entity {:Df05/E1 {:A :Int}})
-;;      (entity {:Df05/E2 {:B :Int}})
-;;      (event {:Df05/Evt01 {:E1 :Df05/E1}})
-;;      (event {:Df05/Evt02 {:E1 :Df05/E1}})
-;;      (dataflow :Df05/Evt01
-;;                {:Df05/Evt02 {:E1 :Df05/Evt01.E1}})
-;;      (dataflow :Df05/Evt02
-;;                {:Df05/E2 {:B :Df05/Evt02.E1.A}}))
-;;    (let [e1 (cn/make-instance :Df05/E1 {:A 100})
-;;          evt {:Df05/Evt01 {:E1 e1}}
-;;          result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;      (is (cn/instance-of? :Df05/E2 result))
-;;      (is (= (:B result) 100)))))
-
 ;; (deftest refcheck
 ;;   (defcomponent :RefCheck
 ;;     (entity {:RefCheck/E1 {:A :Int}})
@@ -653,64 +635,64 @@
 ;;       (is (cn/instance-of? :RefCheck/E2 inst))
 ;;       (is (= (:AId inst) id)))))
 
-;; (deftest s3-test
-;;   (defcomponent :AWS
-;;     (record {:AWS/CreateBucketConfig
-;;              {:LocationConstraint :String}})
-;;     (entity {:AWS/S3Bucket
-;;              {:Bucket :String
-;;               :CreateBucketConfiguration :AWS/CreateBucketConfig}})
-;;     (event {:AWS/CreateBucket
-;;             {:Bucket :String
-;;              :Region :String}}))
-;;   (dataflow :AWS/CreateBucket
-;;             {:AWS/CreateBucketConfig {:LocationConstraint :AWS/CreateBucket.Region}}
-;;             {:AWS/S3Bucket {:Bucket :AWS/CreateBucket.Bucket
-;;                             :CreateBucketConfiguration :AWS/CreateBucketConfig}})
-;;   ;(override-test-resolver :AWSS3Resolver :AWS/S3Bucket)
-;;   (let [bucket "ftltestbucket11"
-;;         region "us-east-1"
-;;         evt {:AWS/CreateBucket {:Bucket bucket :Region region}}
-;;         e1 (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :AWS/S3Bucket e1))
-;;     (is (= bucket (:Bucket e1)))
-;;     (is (cn/instance-of? :AWS/CreateBucketConfig (:CreateBucketConfiguration e1)))
-;;     (is (= region (get-in e1 [:CreateBucketConfiguration :LocationConstraint])))))
+(deftest s3-test
+  (defcomponent :AWS
+    (record {:AWS/CreateBucketConfig
+             {:LocationConstraint :String}})
+    (entity {:AWS/S3Bucket
+             {:Bucket :String
+              :CreateBucketConfiguration :AWS/CreateBucketConfig}})
+    (event {:AWS/CreateBucket
+            {:Bucket :String
+             :Region :String}})
+    (dataflow :AWS/CreateBucket
+              {:AWS/CreateBucketConfig {:LocationConstraint :AWS/CreateBucket.Region} :as :Config}
+              {:AWS/S3Bucket {:Bucket :AWS/CreateBucket.Bucket
+                              :CreateBucketConfiguration :Config}}))
+  ;(override-test-resolver :AWSS3Resolver :AWS/S3Bucket)
+  (let [bucket "ftltestbucket11"
+        region "us-east-1"
+        evt {:AWS/CreateBucket {:Bucket bucket :Region region}}
+        e1 (tu/invoke evt)]
+    (is (cn/instance-of? :AWS/S3Bucket e1))
+    (is (= bucket (:Bucket e1)))
+    (is (cn/instance-of? :AWS/CreateBucketConfig (:CreateBucketConfiguration e1)))
+    (is (= region (get-in e1 [:CreateBucketConfiguration :LocationConstraint])))))
 
-;; (deftest record-in-entity
-;;   (defcomponent :RecordEnt
-;;     (record {:RecordEnt/R {:A :Int}})
-;;     (entity {:RecordEnt/E {:Q :Int
-;;                            :R :RecordEnt/R}})
-;;     (event {:RecordEnt/PostE {:RA :Int}}))
-;;   (dataflow :RecordEnt/PostE
-;;             {:RecordEnt/R {:A :RecordEnt/PostE.RA}}
-;;             {:RecordEnt/E {:Q 100
-;;                            :R :RecordEnt/R}})
-;;   (let [evt {:RecordEnt/PostE {:RA 10}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :RecordEnt/E result))
-;;     (is (u/uuid-from-string (cn/id-attr result)))
-;;     (is (= 100 (:Q result)))
-;;     (is (= 10 (:A (:R result))))))
+(deftest record-in-entity
+  (defcomponent :RecordEnt
+    (record {:RecordEnt/R {:A :Int}})
+    (entity {:RecordEnt/E {:Q :Int
+                           :R :RecordEnt/R}})
+    (event {:RecordEnt/PostE {:RA :Int}}))
+  (dataflow :RecordEnt/PostE
+            {:RecordEnt/R {:A :RecordEnt/PostE.RA} :as :R}
+            {:RecordEnt/E {:Q 100
+                           :R :R}})
+  (let [evt {:RecordEnt/PostE {:RA 10}}
+        result (tu/invoke evt)]
+    (is (cn/instance-of? :RecordEnt/E result))
+    (is (u/uuid-from-string (cn/id-attr result)))
+    (is (= 100 (:Q result)))
+    (is (= 10 (:A (:R result))))))
 
-;; (deftest hidden-attributes
-;;   (defcomponent :H
-;;     (entity {:H/E {:A :Int
-;;                    :X {:type :String
-;;                        :secure-hash true
-;;                        :write-only true}}}))
-;;   (let [x "this is a secret"
-;;         e (cn/make-instance :H/E {:A 10 :X x})
-;;         evt {:H/Create_E {:Instance e}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))
-;;         r2 (cn/dissoc-write-only result)]
-;;     (is (cn/instance-of? :H/E result))
-;;     (is (sh/crypto-hash-eq? (:X result) x))
-;;     (is (= 10 (:A result)))
-;;     (is (cn/instance-of? :H/E r2))
-;;     (is (not (:X r2)))
-;;     (is (= 10 (:A r2)))))
+(deftest hidden-attributes
+  (defcomponent :H
+    (entity {:H/E {:A :Int
+                   :X {:type :String
+                       :secure-hash true
+                       :write-only true}}}))
+  (let [x "this is a secret"
+        e (cn/make-instance :H/E {:A 10 :X x})
+        evt {:H/Create_E {:Instance e}}
+        result (tu/invoke evt)
+        r2 (cn/dissoc-write-only result)]
+    (is (cn/instance-of? :H/E result))
+    (is (sh/crypto-hash-eq? (:X result) x))
+    (is (= 10 (:A result)))
+    (is (cn/instance-of? :H/E r2))
+    (is (not (:X r2)))
+    (is (= 10 (:A r2)))))
 
 ;; (deftest alias-for-instances
 ;;   (defcomponent :Alias
