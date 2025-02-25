@@ -84,7 +84,9 @@
    component-qualified names."
   [x is-recdef]
   (let [y (mapv (fn [[k v]]
-                  [(fq-name k) (fq-generic v is-recdef)])
+                  (if (= k :into)
+                    [k (into {} (mapv (fn [[k v]] [k (fq-generic v is-recdef)]) v))]
+                    [(fq-name k) (fq-generic v is-recdef)]))
                 x)]
     (into {} y)))
 

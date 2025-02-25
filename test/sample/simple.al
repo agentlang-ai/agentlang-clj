@@ -35,7 +35,7 @@
  {:C? {}
   :AC? {:A {:Id :FindAC.A} :as :A1}
   :into
-  {:AX :A1.X
+  {:A :A1.X
    :CZ :C.Z}})
 
 ;; Enable for testing auth+rbac
