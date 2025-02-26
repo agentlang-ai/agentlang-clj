@@ -530,6 +530,7 @@
    pat))
 
 (defn- call-function [env pat]
+  ;; TODO: add support for :check
   (let [fname (first pat)
         args (mapv #(:result (evaluate-pattern env %)) (rest pat))]
     (li/evaluate `(~fname ~@args))))
@@ -549,6 +550,7 @@
 (def ^:private not-as (partial not-kw :as))
 (def ^:private not-not-found (partial not-kw :not-found))
 (def ^:private not-error (partial not-kw :error))
+(def ^:private not-case (partial not-kw :case))
 
 (defn- extract-body-patterns [sentries pat]
   (take-while #(not (some #{%} sentries)) pat))
@@ -645,7 +647,7 @@
         result
         (apply
          (case tag
-           :> call-function
+           :call call-function
            :delete delete-instances
            :q# handle-quote
            :try handle-try
@@ -737,10 +739,32 @@
         (maybe-lift-relationship-patterns env pat)))
     [pat]))
 
-(defn- maybe-normalize-pattern [pat]
-  (if (li/query-pattern? pat)
-    {pat {}}
+(defn- parse-case [pat]
+  (cond
+    (map? pat)
+    (when-let [cases (:case pat)]
+      [cases (:as pat) (dissoc pat :case :as)])
+
+    (and (vector? pat) (= (first pat) :delete))
+    (when-let [cases (first (rest (drop-while not-case pat)))]
+      [cases (first (rest (drop-while not-as pat)))
+       (let [p0 (take-while not-case pat)]
+         (vec (concat p0 (rest (drop-while not-case (rest p0))))))])))
+
+(defn- maybe-case-to-try [pat]
+  (if-let [[cases alias pat] (parse-case pat)]
+    (vec (concat [:try pat]
+                 (when-let [cs (seq cases)]
+                   (flatten cs))
+                 (when alias
+                   [:as alias])))
     pat))
+
+(defn- maybe-normalize-pattern [pat]
+  (maybe-case-to-try
+   (if (li/query-pattern? pat)
+     {pat {}}
+     pat)))
 
 (defn- literal? [x]
   (or (number? x) (string? x) (boolean? x)))

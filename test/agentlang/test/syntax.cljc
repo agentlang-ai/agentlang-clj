@@ -151,7 +151,7 @@
     (is (= d (ls/introspect r)))))
 
 (deftest syntax-eval
-  #_[:> '(agentlang.test.fixes03/i585-f1 :I585/E)
+  #_[:call '(agentlang.test.fixes03/i585-f1 :I585/E)
      :check :I585/R :as :Result]
   (let [f (ls/introspect '(f :E))
         e (ls/_eval {ls/exp-tag f
@@ -163,7 +163,7 @@
     (is (= :K (ls/check-tag e)))
     (is (= :R (ls/alias-tag e)))
     (let [r (ls/raw e)]
-      (is (= r [:> '(quote (f :E)) :check :K :as :R]))
+      (is (= r [:call '(quote (f :E)) :check :K :as :R]))
       (is (= e (ls/introspect r))))))
 
 (deftest query-introspect

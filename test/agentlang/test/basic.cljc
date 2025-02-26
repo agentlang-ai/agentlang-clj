@@ -463,10 +463,10 @@
      [:before :create :PPE/E]
      {:PPE/F {:Id :Instance.Id
               :Z :Instance.X}}
-     [:> '(agentlang.test.basic/ppe-update-y :Instance)])
+     [:call '(agentlang.test.basic/ppe-update-y :Instance)])
     (dataflow
      [:before :update :PPE/E]
-     [:> '(agentlang.test.basic/ppe-update-y :Instance)])
+     [:call '(agentlang.test.basic/ppe-update-y :Instance)])
     (dataflow
      [:after :update :PPE/E]
      {:PPE/F {:Id? :Instance.Id
@@ -524,7 +524,7 @@
   (defcomponent :Fnc
     (dataflow
      :Fnc/CallF
-     [:> '(agentlang.test.basic/f :Fnc/CallF.X 100) :as :R]
+     [:call '(agentlang.test.basic/f :Fnc/CallF.X 100) :as :R]
      :R))
   (is (= 105 (tu/invoke {:Fnc/CallF {:X 5}}))))
 
