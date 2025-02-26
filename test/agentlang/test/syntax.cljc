@@ -6,6 +6,7 @@
             [agentlang.lang
              :refer [component attribute event
                      entity record dataflow relationship]]
+            [agentlang.lang.internal :as li]
             [agentlang.lang.syntax :as ls]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
@@ -151,7 +152,7 @@
     (is (= d (ls/introspect r)))))
 
 (deftest syntax-eval
-  #_[:call '(agentlang.test.fixes03/i585-f1 :I585/E)
+  #_[li/call-fn '(agentlang.test.fixes03/i585-f1 :I585/E)
      :check :I585/R :as :Result]
   (let [f (ls/introspect '(f :E))
         e (ls/_eval {ls/exp-tag f
@@ -163,7 +164,7 @@
     (is (= :K (ls/check-tag e)))
     (is (= :R (ls/alias-tag e)))
     (let [r (ls/raw e)]
-      (is (= r [:call '(quote (f :E)) :check :K :as :R]))
+      (is (= r [li/call-fn '(quote (f :E)) :check :K :as :R]))
       (is (= e (ls/introspect r))))))
 
 (deftest query-introspect

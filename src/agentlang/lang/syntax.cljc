@@ -649,7 +649,7 @@
    ir
    (vec
     (concat
-     [:call (raw ($exp ir))]
+     [li/call-fn (raw ($exp ir))]
      (when-let [c (check-tag ir)]
        [:check c])))))
 
@@ -672,7 +672,7 @@
    :query introspect-query
    :delete introspect-delete
    :await introspect-await
-   :call introspect-eval
+   li/call-fn introspect-eval
    :entity introspect-entity})
 
 (defn- introspect-attrs [attrs]

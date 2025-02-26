@@ -66,6 +66,8 @@
        (every? string? (keys obj))
        (every? privs-list? (vals obj))))
 
+(def call-fn :call)
+
 (def cmpr-oprs [:= :< :> :<= :>= :<>])
 (def query-cmpr-oprs (conj cmpr-oprs :like))
 (def sql-keywords [:where :from :order-by
@@ -75,7 +77,7 @@
 (def oprs (concat query-cmpr-oprs sql-keywords [:not :and :or :between :in]))
 
 (def macro-names #{:match :try :throws :rethrow-after :for-each :delete
-                   :query :await :entity :call :? :suspend})
+                   :query :await :entity call-fn :? :suspend})
 
 (def property-names #{:meta :ui :rbac})
 

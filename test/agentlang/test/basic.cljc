@@ -463,10 +463,10 @@
      [:before :create :PPE/E]
      {:PPE/F {:Id :Instance.Id
               :Z :Instance.X}}
-     [:call '(agentlang.test.basic/ppe-update-y :Instance)])
+     [li/call-fn '(agentlang.test.basic/ppe-update-y :Instance)])
     (dataflow
      [:before :update :PPE/E]
-     [:call '(agentlang.test.basic/ppe-update-y :Instance)])
+     [li/call-fn '(agentlang.test.basic/ppe-update-y :Instance)])
     (dataflow
      [:after :update :PPE/E]
      {:PPE/F {:Id? :Instance.Id
@@ -527,20 +527,43 @@
       (record :Fnc/R {:X :Int})
       (dataflow
        :Fnc/CallF1
-       [:call '(agentlang.test.basic/f1 :Fnc/CallF1.X 100) :as :R]
+       [li/call-fn '(agentlang.test.basic/f1 :Fnc/CallF1.X 100) :as :R]
        :R)
       (dataflow
        :Fnc/CallF2
-       [:call '(agentlang.test.basic/f2 :Fnc/CallF2.X) :check :Fnc/R :as :R]
+       [li/call-fn '(agentlang.test.basic/f2 :Fnc/CallF2.X) :check :Fnc/R :as :R]
        :R)
       (dataflow
        :Fnc/CallF3
-       [:call '(agentlang.test.basic/f2 :Fnc/CallF3.X) :check (fn [r] (and (r? r) (= 10 (:X r)))) :as :R]
+       [li/call-fn '(agentlang.test.basic/f2 :Fnc/CallF3.X) :check (fn [r] (and (r? r) (= 10 (:X r)))) :as :R]
        :R))
     (is (= 105 (tu/invoke {:Fnc/CallF1 {:X 5}})))
     (is (r? (tu/invoke {:Fnc/CallF2 {:X 10}})))
     (is (r? (tu/invoke {:Fnc/CallF3 {:X 10}})))
     (tu/is-error "check for :X failed" #(tu/invoke {:Fnc/CallF3 {:X 11}}))))
+
+(deftest queries
+  (defcomponent :Qs
+    (entity :Qs/E {:Name {:type :String :id true} :X :Int})
+    (dataflow
+     :Qs/FindE
+     {:Qs/E {:Name? [:in :Qs/FindE.Names]}}))
+  (let [es (mapv (fn [n x]
+                   (tu/invoke
+                    {:Qs/Create_E
+                     {:Instance
+                      {:Qs/E {:Name n :X x}}}}))
+                 ["a" "b" "c" "d" "e"]
+                 [1 2 3 4 5])
+        e? (partial cn/instance-of? :Qs/E)
+        chkes (fn [n sum-x es]
+                (is (= n (count es)))
+                (is (every? e? es))
+                (is (= sum-x (apply + (mapv :X es)))))]
+    (chkes 5 15 es)
+    (chkes 3 8 (tu/invoke {:Qs/FindE {:Names ["a" "c" "d"]}})))
+  ;; TODO: more query tests here
+  )
 
 ;; (deftest compound-attributes
 ;;   (defcomponent :Df04
