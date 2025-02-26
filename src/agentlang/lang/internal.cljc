@@ -542,7 +542,7 @@
       (= x :Agentlang.Kernel.Lang/Path)))
 
 (defn normalize-upsert-pattern [pat]
-  (dissoc pat :from :as))
+  (dissoc pat :from :as :case :into))
 
 (defn keyword-name [n]
   (if (keyword? n) n (make-path n)))

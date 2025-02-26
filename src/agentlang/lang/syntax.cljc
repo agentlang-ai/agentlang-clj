@@ -2,6 +2,7 @@
   (:require [clojure.walk :as w]
             [clojure.string :as s]
             [agentlang.util :as u]
+            [agentlang.component :as cn]
             [agentlang.lang.internal :as li]
             [agentlang.datafmt.json :as json]
             [agentlang.datafmt.transit :as t]))
@@ -20,6 +21,7 @@
 (def record-tag :record)
 (def attrs-tag :attrs)
 (def query-tag :query)
+(def query-upsert-tag :query-upsert)
 (def alias-tag :as)
 (def value-tag :value)
 (def cases-tag :cases)
@@ -28,11 +30,11 @@
 (def path-tag :path)
 (def name-tag :name)
 (def meta-tag :meta)
-(def throws-tag :throws)
+(def throws-tag :case)
 (def error-tag :error)
 (def not-found-tag :not-found)
 
-(def rel-tag nil)
+(def rel-tag :relationships)
 (def timeout-ms-tag li/timeout-ms-tag)
 
 (def attributes attrs-tag)
@@ -48,6 +50,9 @@
 (def ^:private $cases (partial get-spec-val cases-tag))
 (def ^:private $body (partial get-spec-val body-tag))
 (def ^:private $query (partial get-spec-val query-tag))
+
+(defn- cast-type [tag obj]
+  (assoc obj type-tag tag))
 
 (defn- skip-root-component [n]
   (let [parts (s/split (name n) #"\.")]
@@ -169,13 +174,13 @@
 
 (declare introspect introspect-attrs)
 
-(defn- introspect-rels [r]
-  (mapv introspect r))
-
 (defn- introspect-relationship [r]
-  (if (vector? (first r))
-    (mapv introspect-rels r)
-    (u/throw-ex (str "invalid relationship object, expected vector - " (first r)))))
+  (into
+   {}
+   (mapv
+    (fn [[k v]]
+      [(introspect k) (introspect v)])
+    r)))
 
 (defn- introspect-throws [throws]
   (when throws
@@ -229,7 +234,7 @@
    {($record ir)
     (raw-walk ($attrs ir))}
    (when-let [meta (meta-tag ir)] {meta-tag meta})
-   (when-let [rel (rel-tag ir)] {rel-tag (raw-relationship rel)})
+   (when-let [rel (rel-tag ir)] (raw-relationship rel))
    (when-let [als (alias-tag ir)] {alias-tag als})
    (when-let [throws (throws-tag ir)] {throws-tag (raw-throws throws)})))
 
@@ -263,7 +268,7 @@
      (u/throw-ex (str "meta must be a map - " meta)))
    (validate-alias! rec-alias)
    (as-syntax-object
-    :query-upsert
+    query-upsert-tag
     (merge
      {record-tag recname}
      (if (map? attrs)
@@ -274,7 +279,7 @@
      (when rec-alias {alias-tag rec-alias})
      (when throws {throws-tag (introspect-throws throws)})))))
 
-(def query-upsert? (partial has-type? :query-upsert))
+(def query-upsert? (partial has-type? query-upsert-tag))
 
 (defn- raw-query-upsert [ir]
   (let [path (path-tag ir)
@@ -285,15 +290,15 @@
      {($record ir)
       (or path (raw-walk obj))}
      (when-let [meta (meta-tag ir)] {meta-tag meta})
-     (when-let [rel (rel-tag ir)] {rel-tag (raw-relationship rel)})
+     (when-let [rel (rel-tag ir)] (raw-relationship rel))
      (when-let [als (alias-tag ir)] {alias-tag als})
      (when-let [t (throws-tag ir)] {throws-tag (raw-throws t)}))))
 
 (def raw-relationship raw-walk)
 
-(defn- maybe-assoc-relationship [obj pattern]
-  (if-let [r (rel-tag pattern)]
-    (assoc obj rel-tag (introspect-relationship r))
+(defn- maybe-assoc-relationship [obj rels]
+  (if rels
+    (assoc obj rel-tag (introspect-relationship rels))
     obj))
 
 (defn- dissoc-tags [pat]
@@ -302,8 +307,15 @@
 (defn- recname-from-map [pat]
   (first (keys (dissoc-tags pat))))
 
+(defn- dissoc-rel-pats [pat]
+  (if-let [ks (seq (filter cn/relationship? (keys pat)))]
+    [(into {} (mapv (fn [k] [k (k pat)]) ks))
+     (apply dissoc pat ks)]
+    [nil pat]))
+
 (defn- introspect-query-upsert [pattern]
-  (let [pat (li/normalize-upsert-pattern pattern)
+  (let [pat0 (li/normalize-upsert-pattern pattern)
+        [rels pat] (dissoc-rel-pats pat0)
         recname (recname-from-map pat)
         attrs (recname pat)]
     (when-not (li/name? recname)
@@ -321,7 +333,7 @@
          alias-tag (alias-tag pattern)
          meta-tag (meta-tag pattern)
          throws-tag (introspect-throws (throws-tag pattern))})
-       pattern))))
+       rels))))
 
 (defn query-object [spec]
   (let [recname (record-tag spec)
@@ -532,50 +544,45 @@
      ~(raw-walk ($body ir))
      ~@(apply concat (mapv (fn [[k v]] [k (raw-walk v)]) ($cases ir)))]))
 
-(defn- relspec-for-delete? [obj]
-  (and (vector? obj) (= rel-tag (first obj))))
+(def query? (partial has-type? :query))
 
 (defn delete
   ([spec]
    (delete
-    ($record spec)
-    (attrs-tag spec)
+    (or (query-upsert-tag spec) (name-tag spec))
     (alias-tag spec)
     (throws-tag spec)))
-  ([recname attrs result-alias throws]
-   (let [amap (map? attrs)]
-     (when-not (li/name? recname)
-       (u/throw-ex (str "invalid record-name in delete - " recname)))
-     (if amap
-       (when-not (every? valid-attr-spec? attrs)
-         (u/throw-ex (str "invalid attribute spec in delete - " attrs)))
-       (when-not (or (= :purge attrs) (= :* attrs))
-         (u/throw-ex (str "invalid delete option - " attrs))))
-     (validate-alias! result-alias)
-     (as-syntax-object
-      :delete
-      (merge
-       {record-tag recname}
-       {attrs-tag (if amap (introspect-attrs attrs) attrs)}
-       (when result-alias {alias-tag result-alias})
-       (when throws {throws-tag (introspect-throws throws)}))))))
+  ([query-obj result-alias throws-expr]
+   (when-not (keyword? query-obj)
+     (when-not (or (query? query-obj) (query-upsert? query-obj))
+       (u/throw-ex (str "Not a query - " query-obj))))
+   (validate-alias! result-alias)
+   (as-syntax-object
+    :delete
+    (merge
+     (if (keyword? query-obj)
+       {name-tag query-obj}
+       {query-upsert-tag (cast-type :query query-obj)})
+     (when result-alias {alias-tag result-alias})
+     (when throws-expr {throws-tag result-alias})))))
 
 (def delete? (partial has-type? :delete))
 
 (defn- introspect-delete [obj]
-  (delete (second obj)
-          (nth obj 2)
-          (special-form-alias obj)
-          (special-form-throws obj)))
+  (let [p (second obj)]
+    (if (keyword? p)
+      (do (when-not (some #{:purge} (rest obj))
+            (u/throw-ex (str "Entity name required for purge, instead found " p)))
+          (delete p (special-form-alias obj) (special-form-throws obj)))
+      (let [q (introspect-query-upsert p)]
+        (delete q (special-form-alias obj) (special-form-throws obj))))))
 
 (defn- raw-delete [ir]
   (raw-special-form
    ir
-   [:delete ($record ir)
-    (let [attrs (attrs-tag ir)]
-      (if (or (= :purge attrs) (= :* attrs))
-        attrs
-        (raw-walk attrs)))]))
+   (if-let [n (name-tag ir)]
+     [:delete n :purge]
+     [:delete (raw-query-upsert (query-upsert-tag ir))])))
 
 (defn query
   ([spec]
@@ -600,8 +607,6 @@
         :else query-pat)
       alias-tag result-alias}
      (when throws {throws-tag (introspect-throws throws)})))))
-
-(def query? (partial has-type? :query))
 
 (defn- introspect-query [obj]
   (query (second obj) (special-form-alias obj) (special-form-throws obj)))
@@ -644,7 +649,7 @@
    ir
    (vec
     (concat
-     [:eval (raw ($exp ir))]
+     [:> (raw ($exp ir))]
      (when-let [c (check-tag ir)]
        [:check c])))))
 
@@ -667,7 +672,7 @@
    :query introspect-query
    :delete introspect-delete
    :await introspect-await
-   :eval introspect-eval
+   :> introspect-eval
    :entity introspect-entity})
 
 (defn- introspect-attrs [attrs]
