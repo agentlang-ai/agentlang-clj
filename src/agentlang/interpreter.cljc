@@ -373,10 +373,47 @@
         env2 (if alias (env/bind-instance-to-alias env1 alias result) env1)]
     (make-result env2 result)))
 
+(defn- extension-attribute-to-pattern [record-name inst-alias extn-attrs attr-name attr-val]
+  (if (vector? attr-val)
+    (if (li/quoted? attr-val)
+      (extension-attribute-to-pattern record-name inst-alias extn-attrs attr-name (second attr-val))
+      (apply concat (mapv (partial extension-attribute-to-pattern record-name inst-alias extn-attrs attr-name) attr-val)))
+    (let [{reltype :ext-reltype rel :ext-rel}
+          (cn/extension-attribute-info (first (filter #(= attr-name (first %)) extn-attrs)))
+          is-contains (cn/contains-relationship? rel)]
+      (if (map? attr-val)
+        (if is-contains
+          [(assoc {reltype attr-val} rel inst-alias)]
+          (if (= rel reltype)
+            (let [betattrs (set (cn/between-attribute-names reltype))
+                  node (first (set/difference betattrs (set (keys attr-val))))]
+              [{reltype (assoc attr-val node (li/make-ref inst-alias (cn/identity-attribute-name record-name)))}])
+            [(assoc {reltype attr-val} rel inst-alias)]))
+        (if-not is-contains
+          (let [ident-attr (cn/identity-attribute-name record-name)]
+            [{rel {(cn/maybe-between-node-as-attribute rel record-name) (li/make-ref inst-alias li/path-attr)
+                   (cn/maybe-between-node-as-attribute rel reltype) attr-val}}])
+          (u/throw-ex (str "cannot establish contains relationship " rel " by identity value alone: " attr-val)))))))
+
+(defn- maybe-upsert-relationships-from-extensions [env record-name inst]
+  (let [[cn alias] (li/split-path record-name)
+        extn-attrs (cn/find-extension-attributes record-name)
+        extn-attr-names (mapv cn/extension-attribute-name extn-attrs)]
+    (when (some (set extn-attr-names) (keys (us/dissoc-nils inst)))
+      (let [env (env/bind-instance-to-alias env alias inst)
+            pats (apply concat (us/nonils
+                                (mapv #(when-let [attr-val (get inst %)]
+                                         (extension-attribute-to-pattern
+                                          record-name alias extn-attrs %
+                                          attr-val)) extn-attr-names)))]
+        ;; (gs/with-no-post-events
+        (:result (#_evaluate-pattern u/pprint #_env pats))))))
+
 (defn- handle-entity-create-pattern [env recname attrs alias]
   (if-not (rbac/can-create? recname)
     (make-result env {:status :forbidden})
-    (let [inst (cn/make-instance recname (realize-attribute-values env recname attrs))
+    (let [extn-attrs (cn/find-extension-attribute-names recname)
+          inst (cn/make-instance recname (realize-attribute-values env recname (apply dissoc attrs extn-attrs)))
           resolver (rr/resolver-for-path recname)
           store (env/get-store env)
           store-f #(when-let [inst (store/create-instance store %)] inst)
@@ -390,6 +427,7 @@
           env0 (env/bind-instance env recname final-inst)
           env1 (if alias (env/bind-variable env0 alias final-inst) env0)
           _ (maybe-create-audit-trail env :create [final-inst])]
+      (maybe-upsert-relationships-from-extensions env recname attrs)
       (make-result env1 final-inst))))
 
 (defn- handle-event-pattern [env recname attrs alias]
@@ -429,7 +467,7 @@
             (let [ppath (li/path-attr result)]
               (assoc recattrs
                      li/parent-attr ppath
-                     li/path-attr (str ppath "," (li/vec-to-path [relname recname li/id-attr])))))
+                     li/path-attr (str ppath "," (li/vec-to-path [relname recname li/id-attr-placeholder])))))
         (u/throw-ex (str "Failed to lookup " parent " for " recname))))))
 
 (defn- create-between-relationships [env bet-rels recname result]

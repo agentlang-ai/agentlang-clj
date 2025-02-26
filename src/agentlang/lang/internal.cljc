@@ -9,7 +9,7 @@
                [cljs.js :refer [eval empty-state js-eval]])))
 
 (def id-attr :__Id__)
-(def id-attr? :__Id__?)
+(def id-attr-placeholder id-attr)
 (def id-attr-s (str id-attr))
 (def with-types-tag :with-types)
 (def except-tag :case)

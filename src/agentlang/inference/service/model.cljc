@@ -279,7 +279,6 @@
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
  (fn [pat]
-   (u/pprint pat)
    (let [attrs (maybe-cast-to-planner (li/record-attributes pat))
          nm (:Name attrs)
          input (preproc-agent-input-spec nm (:Input attrs))
