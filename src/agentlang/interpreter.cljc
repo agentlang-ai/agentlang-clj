@@ -406,6 +406,7 @@
                                          (extension-attribute-to-pattern
                                           record-name alias extn-attrs %
                                           attr-val)) extn-attr-names)))]
+        ;; TODO: evaluate attribute patterns
         ;; (gs/with-no-post-events
         (:result (#_evaluate-pattern u/pprint #_env pats))))))
 
@@ -654,26 +655,28 @@
         (when (seq result) result)))))
 
 (defn- parse-condition [env condition]
-  (let [opr (first condition)]
-    (case opr
-      :and (every? true? (map (partial parse-condition env) (rest condition)))
-      :or (some true? (map (partial parse-condition env) (rest condition)))
-      :not (not (parse-condition env (second condition)))
-      :empty (seq (follow-reference env :%))
-      (let [args (mapv (partial realize-all-references env) (rest condition))
-            n (try
-                (apply compare args)
-                (catch #?(:clj Exception :cljs :default) ex
-                  (log/warn (.getMessage ex)) nil))]
-        (when n
-          (case opr
-            := (zero? n)
-            :<> (not (zero? n))
-            :< (neg? n)
-            :> (pos? n)
-            :<= (or (zero? n) (neg? n))
-            :>= (or (zero? n) (pos? n))
-            (u/throw-ex (str "Invalid operator " (first condition) " in " condition))))))))
+  (if (fn? condition)
+    (condition (follow-reference env :%))
+    (let [opr (first condition)]
+      (case opr
+        :and (every? true? (map (partial parse-condition env) (rest condition)))
+        :or (some true? (map (partial parse-condition env) (rest condition)))
+        :not (not (parse-condition env (second condition)))
+        :empty (seq (follow-reference env :%))
+        (let [args (mapv (partial realize-all-references env) (rest condition))
+              n (try
+                  (apply compare args)
+                  (catch #?(:clj Exception :cljs :default) ex
+                    (log/warn (.getMessage ex)) nil))]
+          (when n
+            (case opr
+              := (zero? n)
+              :<> (not (zero? n))
+              :< (neg? n)
+              :> (pos? n)
+              :<= (or (zero? n) (neg? n))
+              :>= (or (zero? n) (pos? n))
+              (u/throw-ex (str "Invalid operator " (first condition) " in " condition)))))))))
 
 (defn- handle-match [env & pat]
   (let [body (extract-body-patterns #{:as} (rest pat))
@@ -688,11 +691,23 @@
             (if-not c
               (:result (evaluate-pattern e conseq))
               (if (parse-condition
-                   e (if (vector? condition)
-                       condition
-                       [:= :% condition]))
+                   e (cond
+                       (fn? condition) condition
+                       (vector? condition)
+                       (case (count condition)
+                         2 `[~(first condition) :% ~(last condition)]
+                         3 condition
+                         (u/throw-ex (str "Invalid condition " condition " in " pat)))
+                       :else [:= :% condition]))
                 (:result (evaluate-pattern e conseq))
                 (recur (rest (rest body)))))))))))
+
+(defn- handle-filter [env & pats]
+  (let [predic (first pats)
+        rs (:result (evaluate-pattern env (first (rest pats))))]
+    (filterv
+     #(:result (evaluate-pattern (env/bind-variable env :% %) predic))
+     rs)))
 
 (defn- handle-patterns-vector [env & pats]
   (loop [pats pats, e env, result nil]
@@ -713,6 +728,7 @@
            :try handle-try
            :for-each handle-for-each
            :match handle-match
+           :filter handle-filter
            handle-patterns-vector)
          env (rest pat))
         env (if alias (env/bind-variable env alias result) env)]

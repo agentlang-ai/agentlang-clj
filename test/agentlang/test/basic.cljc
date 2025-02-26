@@ -565,6 +565,31 @@
   ;; TODO: more query tests here
   )
 
+(deftest filter-test
+  (defcomponent :Ft
+    (entity :Ft/E {:Id {:type :Int :id true} :X :Int})
+    (dataflow
+     :Ft/FindOddEs
+     {:Ft/E? {} :as :Es}
+     [:filter [:match :%.X
+               odd? true
+               false]
+      :Es]))
+  (let [mke (fn [id x]
+              (tu/invoke
+               {:Ft/Create_E
+                {:Instance
+                 {:Ft/E {:Id id :X x}}}}))
+        es (mapv mke [1 2 3 4 5] [11 12 13 14 15])
+        e? (partial cn/instance-of? :Ft/E)
+        chkes (fn [es n]
+                (is (= n (count es)))
+                (is (every? e? es)))]
+    (chkes es 5)
+    (let [es (tu/invoke {:Ft/FindOddEs {}})]
+      (chkes es 3)
+      (is (every? #(odd? (:X %)) es)))))
+
 ;; (deftest compound-attributes
 ;;   (defcomponent :Df04
 ;;     (entity {:Df04/E1 {:A :Int}})
