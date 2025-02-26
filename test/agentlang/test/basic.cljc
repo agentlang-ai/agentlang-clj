@@ -501,7 +501,7 @@
     (is (e? e1))
     (is (= 100 (:Y e1)))
     (chkfs 1)
-    (tu/is-error #(cre 1 10) "duplicate PPE/E.Id")
+    (tu/is-error "duplicate PPE/E.Id" #(cre 1 10))
     (chkfs 1)
     (is (e? (cre 2 20)))
     (chkfs 2)
@@ -518,15 +518,29 @@
     (is (nil? (findf 1)))
     (chkf 2 20)))
 
-(defn f [x y] (+ x y))
+(defn f1 [x y] (+ x y))
+(defn f2 [x] (cn/make-instance :Fnc/R {:X x}))
 
 (deftest fncall
-  (defcomponent :Fnc
-    (dataflow
-     :Fnc/CallF
-     [:call '(agentlang.test.basic/f :Fnc/CallF.X 100) :as :R]
-     :R))
-  (is (= 105 (tu/invoke {:Fnc/CallF {:X 5}}))))
+  (let [r? (partial cn/instance-of? :Fnc/R)]
+    (defcomponent :Fnc
+      (record :Fnc/R {:X :Int})
+      (dataflow
+       :Fnc/CallF1
+       [:call '(agentlang.test.basic/f1 :Fnc/CallF1.X 100) :as :R]
+       :R)
+      (dataflow
+       :Fnc/CallF2
+       [:call '(agentlang.test.basic/f2 :Fnc/CallF2.X) :check :Fnc/R :as :R]
+       :R)
+      (dataflow
+       :Fnc/CallF3
+       [:call '(agentlang.test.basic/f2 :Fnc/CallF3.X) :check (fn [r] (and (r? r) (= 10 (:X r)))) :as :R]
+       :R))
+    (is (= 105 (tu/invoke {:Fnc/CallF1 {:X 5}})))
+    (is (r? (tu/invoke {:Fnc/CallF2 {:X 10}})))
+    (is (r? (tu/invoke {:Fnc/CallF3 {:X 10}})))
+    (tu/is-error "check for :X failed" #(tu/invoke {:Fnc/CallF3 {:X 11}}))))
 
 ;; (deftest compound-attributes
 ;;   (defcomponent :Df04

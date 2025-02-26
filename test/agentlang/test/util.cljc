@@ -36,7 +36,7 @@
     :else nil))
 
 (defn is-error
-  ([f errmsg]
+  ([errmsg f]
    (is (try
          (if-let [r (maybe-result-map (f))]
            (:error r)
@@ -45,7 +45,7 @@
                    (report-expected-ex ex errmsg))
             :cljs (catch js/Error e
                     (report-expected-ex e errmsg))))))
-  ([f] (is-error f nil)))
+  ([f] (is-error nil f)))
 
 (defn is-forbidden [r] (= :forbidden (:status r)))
 

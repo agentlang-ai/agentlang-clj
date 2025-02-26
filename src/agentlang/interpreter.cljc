@@ -529,14 +529,36 @@
       %)
    pat))
 
-(defn- call-function [env pat]
-  ;; TODO: add support for :check
-  (let [fname (first pat)
-        args (mapv #(:result (evaluate-pattern env %)) (rest pat))]
-    (li/evaluate `(~fname ~@args))))
+(defn- not-kw [kw x] (not= kw x))
+(def ^:private not-as (partial not-kw :as))
+(def ^:private not-not-found (partial not-kw :not-found))
+(def ^:private not-error (partial not-kw :error))
+(def ^:private not-case (partial not-kw li/except-tag))
+(def ^:private not-check (partial not-kw :check))
+
+(defn- call-function [env & args]
+  (let [pat (first args)
+        ps0 (rest args)
+        check (when (seq ps0)
+                (if (= :check (first ps0))
+                  (or (second ps0) (u/throw-ex (str "Missing :check argument in " args)))
+                  (u/throw-ex (str "Unexpected entry " (first ps0) " in " args))))
+        fname (first pat)
+        args (mapv #(:result (evaluate-pattern env %)) (rest pat))
+        result (li/evaluate `(~fname ~@args))]
+    (when check
+      (cond
+        (keyword? check)
+        (when-not (cn/instance-of? check result)
+          (u/throw-ex (str "Expression " pat " failed, " result " is not of type " check)))
+
+        (fn? check)
+        (when-not (check result)
+          (u/throw-ex (str "Expression " pat " failed, check predicate returned false for " result)))))
+    result))
 
 (defn- parse-expr-pattern [pat]
-  (let [[h t] (split-with #(not= % :as) pat)]
+  (let [[h t] (split-with not-as pat)]
     (if (seq t)
       (let [t (rest t)]
         (when-not (seq t)
@@ -545,12 +567,6 @@
           (u/throw-ex (str "Alias must appear last in " pat)))
         [(vec h) (first t)])
       [(vec h) nil])))
-
-(defn- not-kw [kw x] (not= kw x))
-(def ^:private not-as (partial not-kw :as))
-(def ^:private not-not-found (partial not-kw :not-found))
-(def ^:private not-error (partial not-kw :error))
-(def ^:private not-case (partial not-kw :case))
 
 (defn- extract-body-patterns [sentries pat]
   (take-while #(not (some #{%} sentries)) pat))
@@ -739,32 +755,23 @@
         (maybe-lift-relationship-patterns env pat)))
     [pat]))
 
-(defn- parse-case [pat]
-  (cond
-    (map? pat)
-    (when-let [cases (:case pat)]
-      [cases (:as pat) (dissoc pat :case :as)])
+(defn- maybe-extract-condition-handlers [pat]
+  (or
+   (cond
+     (map? pat)
+     (when-let [cases (li/except-tag pat)]
+       [cases (dissoc pat li/except-tag)])
 
-    (and (vector? pat) (= (first pat) :delete))
-    (when-let [cases (first (rest (drop-while not-case pat)))]
-      [cases (first (rest (drop-while not-as pat)))
-       (let [p0 (take-while not-case pat)]
-         (vec (concat p0 (rest (drop-while not-case (rest p0))))))])))
-
-(defn- maybe-case-to-try [pat]
-  (if-let [[cases alias pat] (parse-case pat)]
-    (vec (concat [:try pat]
-                 (when-let [cs (seq cases)]
-                   (flatten cs))
-                 (when alias
-                   [:as alias])))
-    pat))
+     (and (vector? pat) (= (first pat) :delete))
+     (when-let [cases (first (rest (drop-while not-case pat)))]
+       [cases (let [p0 (take-while not-case pat)]
+                (vec (concat p0 (rest (drop-while not-case (rest p0))))))]))
+   [nil pat]))
 
 (defn- maybe-normalize-pattern [pat]
-  (maybe-case-to-try
-   (if (li/query-pattern? pat)
-     {pat {}}
-     pat)))
+  (if (li/query-pattern? pat)
+    {pat {}}
+    pat))
 
 (defn- literal? [x]
   (or (number? x) (string? x) (boolean? x)))
@@ -775,10 +782,7 @@
      (make-result env pat)
      (let [env (or env (env/make (store/get-default-store) nil))
            pat (maybe-normalize-pattern pat)
-           [condition-handlers pat]
-           (if (map? pat)
-             [(li/except-tag pat) (dissoc pat li/except-tag)]
-             [nil pat])
+           [condition-handlers pat] (maybe-extract-condition-handlers pat)
            [pat sub-pats] (maybe-preprocecss-pattern env pat)]
        (if-let [handler (pattern-handler pat)]
          (try
