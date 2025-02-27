@@ -186,10 +186,10 @@
 
 (defn- eval-event
   ([event callback atomic?]
-   (when-let [result (first ((if atomic?
-                               gs/evaluate-dataflow-atomic
-                               gs/evaluate-dataflow)
-                             event))]
+   (when-let [result ((if atomic?
+                        gs/evaluate-dataflow-atomic
+                        gs/evaluate-dataflow)
+                      event)]
      (callback (:result result))))
   ([event callback] (eval-event event callback true))
   ([event] (eval-event event identity)))

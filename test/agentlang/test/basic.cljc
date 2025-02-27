@@ -842,22 +842,30 @@
 
 (deftest conditional-pattern-list
   (defcomponent :CondPatList
+    (entity {:CondPatList/E {:Id {:type :Int :id true} :Y :Int}})
     (record {:CondPatList/R {:X :Int}})
     (event {:CondPatList/Evt {:I :Int}})
     (dataflow :CondPatList/Evt
               [:match :CondPatList/Evt.I
-               0 [{:CondPatList/R {:X 100}}
+               0 [{:CondPatList/E {:Id 1 :Y 100}}
                   {:CondPatList/R {:X 101}}]
                1 {:CondPatList/R {:X 200}}
                {:CondPatList/R {:X 300}}]))
   (let [evt {:CondPatList/Evt {:I 0}}
-        result (tu/invoke evt)]
+        result (tu/invoke evt)
+        chkes (fn []
+                (let [es (tu/invoke {:CondPatList/LookupAll_E {}})]
+                  (is (= 1 (count es)))
+                  (is (cn/instance-of? :CondPatList/E (first es)))
+                  (is (= 100 (:Y (first es))))))]
     (is (cn/instance-of? :CondPatList/R result))
-    (is (= 101 (:X result))))
-  (let [evt {:CondPatList/Evt {:I 1}}
-        result (tu/invoke evt)]
-    (is (cn/instance-of? :CondPatList/R result))
-    (is (= 200 (:X result)))))
+    (is (= 101 (:X result)))
+    (chkes)
+    (let [evt {:CondPatList/Evt {:I 1}}
+          result (tu/invoke evt)]
+      (is (cn/instance-of? :CondPatList/R result))
+      (is (= 200 (:X result))))
+    (chkes)))
 
 (deftest for-each
   (defcomponent :ForEach

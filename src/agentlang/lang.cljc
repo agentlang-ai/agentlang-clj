@@ -704,8 +704,8 @@
         pfn (:with-prompt-fn spec)
         rh (:with-response-handler spec)
         pfns (when (or pfn rh)
-               `[li/call-fn (agentlang.lang/instance-assoc :Agent "PromptFn" ~pfn "ResponseHandler" ~rh) :as :Agent])
-        p1 `[li/call-fn (agentlang.inference/run-inference-for-event ~inference-name :Agent)]]
+               `[~li/call-fn (agentlang.lang/instance-assoc :Agent "PromptFn" ~pfn "ResponseHandler" ~rh) :as :Agent])
+        p1 `[~li/call-fn (agentlang.inference/run-inference-for-event ~inference-name :Agent)]]
     (cn/register-dataflow inference-name nil (if pfns [p0 pfns p1] [p0 p1]))
     inference-name))
 
@@ -1210,8 +1210,8 @@
         pat))
     pat))
 
-(defn standalone-pattern-error [error pat]
-  (log/warn (u/pretty-str (assoc error :pattern (second pat)))))
+(defn standalone-pattern-error [pat]
+  (log/warn (str "Error in pattern:\n" (u/pretty-str (second pat)))))
 
 (defn- cleanup-standalone-pattern [pat]
   (if (map? pat)
@@ -1232,15 +1232,13 @@
             (let [raw-pat {entity-name (assoc attrs (li/name-as-query-pattern id-attr-name) id-attr)}]
               `[:try
                 ~raw-pat
-                :error [li/call-fn (~'quote (~'agentlang.lang/standalone-pattern-error
-                                             :Error [:q# ~raw-pat]))]])))))))
+                :error [~li/call-fn (~'agentlang.lang/standalone-pattern-error [:q# ~raw-pat])]])))))))
 
 (defn pattern [raw-pat]
   (let [pat (preprocess-standalone-pattern raw-pat)
         update-pat (maybe-update-old-instance pat)
         final-pat [:try pat :error
                    (or update-pat
-                       [li/call-fn `(~'quote (~'agentlang.lang/standalone-pattern-error
-                                              :Error [:q# ~(cleanup-standalone-pattern raw-pat)]))])]]
+                       [li/call-fn `(~'agentlang.lang/standalone-pattern-error [:q# ~(cleanup-standalone-pattern raw-pat)])])]]
     (gs/install-init-pattern! final-pat)
     (raw/pattern raw-pat)))

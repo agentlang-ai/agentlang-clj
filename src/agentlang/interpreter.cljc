@@ -395,20 +395,18 @@
                    (cn/maybe-between-node-as-attribute rel reltype) attr-val}}])
           (u/throw-ex (str "cannot establish contains relationship " rel " by identity value alone: " attr-val)))))))
 
-(defn- maybe-upsert-relationships-from-extensions [env record-name inst]
+(defn- maybe-upsert-relationships-from-extensions [env record-name orig-attrs inst]
   (let [[cn alias] (li/split-path record-name)
         extn-attrs (cn/find-extension-attributes record-name)
         extn-attr-names (mapv cn/extension-attribute-name extn-attrs)]
-    (when (some (set extn-attr-names) (keys (us/dissoc-nils inst)))
+    (when (some (set extn-attr-names) (keys (us/dissoc-nils orig-attrs)))
       (let [env (env/bind-instance-to-alias env alias inst)
-            pats (apply concat (us/nonils
-                                (mapv #(when-let [attr-val (get inst %)]
-                                         (extension-attribute-to-pattern
-                                          record-name alias extn-attrs %
-                                          attr-val)) extn-attr-names)))]
-        ;; TODO: evaluate attribute patterns
-        ;; (gs/with-no-post-events
-        (:result (#_evaluate-pattern u/pprint #_env pats))))))
+            pats (vec (apply concat (us/nonils
+                                     (mapv #(when-let [attr-val (get orig-attrs %)]
+                                              (extension-attribute-to-pattern
+                                               record-name alias extn-attrs %
+                                               attr-val)) extn-attr-names))))]
+        (:result (evaluate-pattern env pats))))))
 
 (defn- handle-entity-create-pattern [env recname attrs alias]
   (if-not (rbac/can-create? recname)
@@ -428,7 +426,7 @@
           env0 (env/bind-instance env recname final-inst)
           env1 (if alias (env/bind-variable env0 alias final-inst) env0)
           _ (maybe-create-audit-trail env :create [final-inst])]
-      (maybe-upsert-relationships-from-extensions env recname attrs)
+      (maybe-upsert-relationships-from-extensions env recname attrs final-inst)
       (make-result env1 final-inst))))
 
 (defn- handle-event-pattern [env recname attrs alias]
@@ -575,8 +573,13 @@
 (def ^:private not-case (partial not-kw li/except-tag))
 (def ^:private not-check (partial not-kw :check))
 
+(defn- normalize-fncall [exp]
+  (if (= 'quote (first exp))
+    (second exp)
+    exp))
+
 (defn- call-function [env & args]
-  (let [pat (first args)
+  (let [pat (normalize-fncall (first args))
         ps0 (rest args)
         check (when (seq ps0)
                 (if (= :check (first ps0))
@@ -709,7 +712,7 @@
      #(:result (evaluate-pattern (env/bind-variable env :% %) predic))
      rs)))
 
-(defn- handle-patterns-vector [env & pats]
+(defn- handle-patterns-vector [env pats]
   (loop [pats pats, e env, result nil]
     (if-let [pat (first pats)]
       (let [er (evaluate-pattern e pat)]
@@ -719,18 +722,20 @@
 (defn- expr-handler [env pat _]
   (let [[pat alias] (parse-expr-pattern pat)
         tag (first pat)
+        handler
+        (case tag
+          :call call-function
+          :delete delete-instances
+          :q# handle-quote
+          :try handle-try
+          :for-each handle-for-each
+          :match handle-match
+          :filter handle-filter
+          nil)
         result
-        (apply
-         (case tag
-           :call call-function
-           :delete delete-instances
-           :q# handle-quote
-           :try handle-try
-           :for-each handle-for-each
-           :match handle-match
-           :filter handle-filter
-           handle-patterns-vector)
-         env (rest pat))
+        (if handler
+          (apply handler env (rest pat))
+          (handle-patterns-vector env pat))
         env (if alias (env/bind-variable env alias result) env)]
     (make-result env result)))
 
@@ -754,6 +759,15 @@
   (when-let [xs (seq (filter (fn [[k _]] (li/query-pattern? k)) attrs))]
     (into {} xs)))
 
+(defn- ref-to-subpat [env p]
+  (if (keyword? p)
+    (if-let [v (follow-reference env p)]
+      (if (cn/an-instance? v)
+        {(cn/instance-type-kw v) {li/path-attr (li/path-attr v)}}
+        v)
+      p)
+    p))
+
 (defn- walk-query-pattern [env pat qmode]
   (let [ks (keys pat)
         names (mapv li/normalize-name ks)
@@ -764,7 +778,7 @@
         f (fn [r]
             (let [subpat (or (get pat r)
                              (get pat (li/name-as-query-pattern r)))
-                  [alias subpat] (if (map? subpat) [(:as subpat) (dissoc subpat :as)] [nil subpat])]
+                  [alias subpat] (if (map? subpat) [(:as subpat) (dissoc subpat :as)] [nil (ref-to-subpat env subpat)])]
               (when (and alias (cn/relationship? r))
                 (li/register-alias! r (li/record-name subpat) alias))
               [r (walk-query-pattern env (rf subpat) true) alias]))]
