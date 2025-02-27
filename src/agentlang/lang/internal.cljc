@@ -58,7 +58,7 @@
 (def oprs (concat query-cmpr-oprs sql-keywords [:not :and :or :between :in]))
 
 (def macro-names #{:match :try :throws :rethrow-after :for-each :delete
-                   :query :await :entity :eval :? :suspend})
+                   :query :await :entity :eval :? :suspend :filter})
 
 (def property-names #{:meta :ui :rbac})
 

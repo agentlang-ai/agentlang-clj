@@ -152,6 +152,9 @@
          (for-each
           [[bind-pattern-code match-alias body-code result-alias]]
           "Execute code for the binding pattern and the iteration.")
+         (filter_
+          [[predicate-pattern-code seq-code result-alias]]
+          "Filter the seq by the predicate.")
          (instance-from
           [[record-name inst-opcode data-opcode alias-name]]
           "Execute the opcode to get attributes map, construct a record instance")

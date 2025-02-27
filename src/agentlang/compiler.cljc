@@ -48,6 +48,9 @@
 (defn- emit-for-each [bind-pattern-code elem-alias body-code alias]
   (op/for-each [bind-pattern-code elem-alias body-code alias]))
 
+(defn- emit-filter [predic-code seq-code alias]
+  (op/filter_ [predic-code seq-code alias]))
+
 (defn- emit-delete [recname id-pat-code]
   (op/delete-instance [recname id-pat-code]))
 
@@ -658,6 +661,14 @@
       (ctx/add-alias! ctx alias))
     (emit-for-each bind-pat-code elem-alias body-code alias)))
 
+(defn- compile-filter [ctx pat]
+  (ctx/add-alias! ctx :%)
+  (let [predic-code (compile-pattern ctx (first pat))
+        [seq-pat alias] (special-form-alias (rest pat))
+        seq-code (compile-pattern ctx (first seq-pat))]
+    (when alias (ctx/add-alias! ctx alias))
+    (emit-filter predic-code seq-code alias)))
+
 (defn- extract-match-clauses [pat]
   (let [[pat alias] (special-form-alias pat)]
     (loop [pat pat, result []]
@@ -683,7 +694,7 @@
        (rest cases)
        (conj
         cases-code
-        [[(compile-pattern ctx case-pat)]
+        [(if (fn? case-pat) case-pat [(compile-pattern ctx case-pat)])
          [(compile-maybe-pattern-list ctx (normalize-and-preproc conseq))]]))
       cases-code)))
 
@@ -998,6 +1009,7 @@
    :throws (partial compile-try true)
    :rethrow-after compile-rethrow-after
    :for-each compile-for-each
+   :filter compile-filter
    :query compile-query-command
    :delete compile-delete
    :await compile-await
