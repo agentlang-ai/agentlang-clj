@@ -378,8 +378,7 @@
   {:Agentlang.Core/ChatSession
    {:Id :Agentlang.Core/CreateAgentChatSession.ChatId
     :Messages :Agentlang.Core/CreateAgentChatSession.Messages}
-   :Agentlang.Core/AgentChatSession
-   {:Agentlang.Core/Agent {:Name? :Agentlang.Core/CreateAgentChatSession.Agent}}}
+   :Agentlang.Core/AgentChatSession :Agentlang.Core/CreateAgentChatSession.Agent}
   :error {:Agentlang.Core/LookupAgentChatSessions {:Agent :Agentlang.Core/CreateAgentChatSession.Agent}}])
 
 (dataflow

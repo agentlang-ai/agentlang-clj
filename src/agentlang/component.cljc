@@ -1669,6 +1669,9 @@
 (defn entity? [recname]
   (and (entity-schema recname) true))
 
+(defn record? [recname]
+  (and (record-schema recname) true))
+
 (defn authentication-event? [rec-name]
   (and (event? rec-name)
        (:authenticate (fetch-meta rec-name))))

@@ -413,6 +413,7 @@
     (make-result env {:status :forbidden})
     (let [extn-attrs (cn/find-extension-attribute-names recname)
           inst (cn/make-instance recname (realize-attribute-values env recname (apply dissoc attrs extn-attrs)))
+          _ (when-not inst (u/throw-ex (str "Failed to initialize instance for " recname " from " attrs)))
           resolver (rr/resolver-for-path recname)
           store (env/get-store env)
           store-f #(when-let [inst (store/create-instance store %)] inst)
@@ -457,7 +458,7 @@
 (defn- maybe-set-parent [env relpat recname recattrs]
   (let [k (first (keys relpat))]
     #_(when-not (li/query-pattern? k)
-      (u/throw-ex (str "Relationship name " k " should be a query in " relpat)))
+        (u/throw-ex (str "Relationship name " k " should be a query in " relpat)))
     (let [relname (li/normalize-name k)
           parent (fetch-parent relname recname relpat)]
       (if-let [result (realize-pattern env (k relpat))]
@@ -847,8 +848,24 @@
     {pat {}}
     pat))
 
+(declare literal?)
+
+(defn- normal-map? [x]
+  (and (map? x)
+       (and (nil? (seq (select-keys x li/instance-meta-keys)))
+            (some #(or (literal? %)
+                       (if-let [n (and (keyword? %) (li/normalize-name %))]
+                         (not (or (cn/entity? n)
+                                  (cn/event? n)
+                                  (cn/relationship? n)
+                                  (cn/record? n)))
+                         true))
+                  (keys x)))))
+
 (defn- literal? [x]
-  (or (number? x) (string? x) (boolean? x)))
+  (or (number? x) (string? x) (boolean? x)
+      (normal-map? x) (nil? x)
+      (and (vector? x) (literal? (first x)))))
 
 (defn evaluate-pattern
   ([env pat]

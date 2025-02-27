@@ -227,7 +227,7 @@
     attr-scm))
 
 (def timeout-ms-tag :timeout-ms)
-(def ^:private instance-meta-keys [:as :meta :meta? :into :distinct?])
+(def instance-meta-keys [:as :meta :meta? :into :distinct except-tag :from])
 
 (defn normalize-instance-pattern [pat]
   (apply dissoc pat instance-meta-keys))
@@ -543,8 +543,7 @@
   (or (= x :Agentlang.Kernel.Lang/Keyword)
       (= x :Agentlang.Kernel.Lang/Path)))
 
-(defn normalize-upsert-pattern [pat]
-  (dissoc pat :from :as :case :into))
+(def normalize-upsert-pattern normalize-instance-pattern)
 
 (defn keyword-name [n]
   (if (keyword? n) n (make-path n)))
