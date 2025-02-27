@@ -14,12 +14,12 @@
 
 (defn- maybe-signup-user [evaluator names email password]
   (if-let [user (first
-                 (u/safe-ok-result
+                 (:result
                   (evaluator
                    {:Agentlang.Kernel.Identity/FindUser
                     {:Email email}})))]
     user
-    (u/safe-ok-result
+    (:result
      (evaluator {:Agentlang.Kernel.Identity/SignUp
                  {:User
                   {:Agentlang.Kernel.Identity/User

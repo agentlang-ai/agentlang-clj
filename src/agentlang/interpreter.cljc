@@ -365,7 +365,7 @@
                         :follow-up-operation (or (when qfordel? :delete)
                                                  (when update-attrs :update))}}
         result0 (if (and resolver (not (rr/composed? resolver)))
-                  (r/call-resolver-query resolver env qparams)
+                  (:result (r/call-resolver-query resolver env qparams))
                   (store/do-query (env/get-store env) nil qparams))
         env0 (if (seq result0) (env/bind-instances env recname result0) env)
         result (if update-attrs (handle-upsert env0 resolver recname update-attrs result0) result0)

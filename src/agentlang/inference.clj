@@ -26,12 +26,13 @@
     (let [env (env/bind-instance env/EMPTY context-event)]
       (loop [pats (as-vec agentlang-patterns), env env, result nil]
         (if-let [p (first pats)]
-          (let [r (gs/evaluate-pattern env p)]
-            (if (u/safe-ok-result r)
-              (recur (rest pats) (:env r) r)
-              (do (log/error (str "inferred-pattern " p " failed with result " r))
-                  r)))
-          (do (log/info (str "inference succeeded with result " result))
+          (let [r (gs/evaluate-pattern env p)
+                rs (:result r)]
+            (if rs
+              (recur (rest pats) (:env r) rs)
+              (do (log/error (str "inferred-pattern " p " failed with result " rs))
+                  rs)))
+          (do (log/debug (str "inference succeeded with result " result))
               result))))
     agentlang-patterns))
 

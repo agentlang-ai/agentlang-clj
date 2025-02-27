@@ -75,20 +75,6 @@
        (println msg)
        (.log js/console (.-stack e)))))
 
-(defn ok-result
-  ([result safe]
-   (let [f (if (map? result) result (first result))]
-     (if-let [rs (:result f)]
-       rs
-       (let [msg (str "unexpected result: " result)]
-         (if safe
-           (do (log/warn msg) nil)
-           (throw-ex msg))))))
-  ([result] (ok-result result false)))
-
-(defn safe-ok-result [result]
-  (ok-result result true))
-
 (macros/deftime
   (defmacro passthru
     "If the predicate function returns true for exp1, return exp1, otherwise return

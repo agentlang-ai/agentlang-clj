@@ -19,7 +19,7 @@
 
 (def ^:private default-path "[]")
 
-(defn default-path? [s] (= s default-path))
+(defn default-path? [s] (or (nil? (seq s)) (= s default-path)))
 
 (def path-attr-spec
   {:type :Agentlang.Kernel.Lang/String
