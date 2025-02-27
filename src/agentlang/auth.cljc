@@ -63,10 +63,10 @@
        [:Agentlang.Kernel.Rbac/Role
         :Agentlang.Kernel.Rbac/RoleAssignment]
        r-roles)
-      #_(when-not (maybe-signup-user
-                   evaluator (email-to-names admin-email "superuser")
-                   admin-email admin-password)
-          (log/error (str "failed to create local user for " admin-email)))
+      (when-not (maybe-signup-user
+                 evaluator (email-to-names admin-email "superuser")
+                 admin-email admin-password)
+        (log/error (str "failed to create local user for " admin-email)))
       (when-not (setup-cache-resolver (:cache config))
         (log/warn "failed to setup cache for authentication"))
       true)))
