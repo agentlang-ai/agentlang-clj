@@ -1260,7 +1260,8 @@
         (if-let [rs (ok-result result)]
           (let [final-rs (filterv #(let [r (eval-opcode self (env/bind-to-alias env :% %) predic-code)]
                                      (ok-result r))
-                                  rs)]
+                                  rs)
+                env (if result-alias (env/bind-to-alias env result-alias final-rs) env)]
             (i/ok final-rs env))
           (i/ok nil env))))
 

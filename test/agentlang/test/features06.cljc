@@ -188,7 +188,9 @@
      [:filter [:match :%.X
                odd? true
                false]
-      :Es]))
+      :Es
+      :as :K]
+     :K))
   (let [mke (fn [id x]
               (tu/first-result
                {:Filt/Create_E
