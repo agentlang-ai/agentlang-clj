@@ -410,7 +410,7 @@
 
 (defn- handle-entity-create-pattern [env recname attrs alias]
   (if-not (rbac/can-create? recname)
-    (make-result env {:status :forbidden})
+    (u/throw-ex (str "Not allowed to create instance of " recname) :forbidden)
     (let [extn-attrs (cn/find-extension-attribute-names recname)
           inst (cn/make-instance recname (realize-attribute-values env recname (apply dissoc attrs extn-attrs)))
           _ (when-not inst (u/throw-ex (str "Failed to initialize instance for " recname " from " attrs)))
@@ -468,7 +468,7 @@
               (assoc recattrs
                      li/parent-attr ppath
                      li/path-attr (str ppath "," (li/vec-to-path [relname recname li/id-attr-placeholder])))))
-        (u/throw-ex (str "Failed to lookup " parent " for " recname))))))
+        (u/throw-ex (str "Failed to lookup " parent " for " recname) :forbidden)))))
 
 (defn- create-between-relationships [env bet-rels recname result]
   (when-let [inst (when-let [r (:result result)]
@@ -869,6 +869,7 @@
 
 (defn evaluate-pattern
   ([env pat]
+   (gs/reset-error-code!)
    (if (literal? pat)
      (make-result env pat)
      (let [env (or env (env/make (store/get-default-store) nil))

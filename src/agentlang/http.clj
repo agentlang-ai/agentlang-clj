@@ -96,11 +96,11 @@
 
 (defn- unauthorized
   ([msg data-fmt errtype]
-   (response {:reason msg :type errtype} 401 data-fmt))
-  ([data-fmt errtype]
-   (unauthorized "not authorized to access this resource" data-fmt errtype))
+   (response {:reason msg :type errtype :status :unauthorized} 401 data-fmt))
+  ([msg data-fmt]
+   (unauthorized msg data-fmt "UNAUTHORIZED"))
   ([data-fmt]
-   (unauthorized "not authorized to access this resource" data-fmt "UNAUTHORIZED")))
+   (unauthorized "not authorized to access this resource" data-fmt)))
 
 (defn- _not-found
   ([s data-fmt] (response {:reason s :status :not-found} 404 data-fmt))
@@ -205,7 +205,9 @@
 (defn- generic-exception-handler
   ([ex data-fmt]
    (log/exception ex)
-   (internal-error "Runtime error, please see server logs for details." data-fmt))
+   (internal-error {:messasge "Runtime error, please see server logs for details."
+                    :exception (.getMessage ex)}
+                   data-fmt))
   ([ex] (generic-exception-handler ex :json)))
 
 (defn- maybe-ok
@@ -214,13 +216,20 @@
      (let [result (exp)]
        (if (map? result)
          (let [s (:status result)]
-           (cond
-             (number? s) result
-             (= :forbidden s) (forbidden "User is not allowed to perform this action.")
-             :else (wrap-result on-no-perm (:result result) data-fmt)))
+           (if (number? s)
+             result
+             (wrap-result on-no-perm (:result result) data-fmt)))
          result))
      (catch Exception ex
-       (generic-exception-handler ex data-fmt))))
+       (if-let [c (gs/get-error-code)]
+         (let [s (.getMessage ex)]
+           ((case c
+              :forbidden forbidden
+              :not-found _not-found
+              :unauthorized unauthorized
+              internal-error)
+            s data-fmt))
+         (generic-exception-handler ex data-fmt)))))
   ([data-fmt exp]
    (maybe-ok nil data-fmt exp)))
 

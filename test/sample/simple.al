@@ -23,7 +23,8 @@
        :X "secret"
        :Y '(agentlang.lang.datetime/now)}})
 
-(entity :A {:Id {:type :Int :id true} :X :Int})
+(entity :A {:Id {:type :Int :id true} :X :Int
+            :rbac [{:roles ["user"] :allow [:create]}]})
 (entity :B {:Id {:type :Int :id true} :Y :Int})
 (relationship :AB {:meta {:contains [:A :B]}})
 
@@ -39,8 +40,22 @@
    :CZ :C.Z}})
 
 ;; Enable for testing auth+rbac
-#_(dataflow
+(dataflow
  :Agentlang.Kernel.Lang/AppInit
- [:> '(agentlang.util/getenv "SAMPLE_USER") :as :U]
+ [:call '(agentlang.util/getenv "SAMPLE_USER") :as :U]
  {:Agentlang.Kernel.Identity/User {:Email :U}}
  {:Agentlang.Kernel.Rbac/RoleAssignment {:Role "user" :Assignee :U}})
+
+(dataflow
+ :AssignPrivs
+ {:B? {}
+  :AB?
+  {:A {:Id :AssignPrivs.Id}}
+  :as :As}
+ [:for-each :As
+  {:Agentlang.Kernel.Rbac/AssignInstancePrivilege
+   {:ResourcePath :%.__path__
+    :Assignee :AssignPrivs.Email
+    :CanRead :AssignPrivs.CanRead
+    :CanUpdate :AssignPrivs.CanUpdate
+    :CanDelete :AssignPrivs.CanDelete}}])

@@ -120,28 +120,36 @@
                  (cn/register-dataflow event-name pats))
         (try
           (evaluator {event-name {}})
+          (catch Exception ex
+            (log/error ex))
           (finally
             (gs/uninstall-standalone-patterns!)
             (cn/remove-event event-name)))))))
 
 (defn trigger-appinit-event! [evaluator data]
-  (let [result (evaluator
-                (cn/make-instance
-                 {:Agentlang.Kernel.Lang/AppInit
-                  {:Data (or data {})}}))]
-    (log-app-init-result! result)))
+  (try
+    (let [result (evaluator
+                  (cn/make-instance
+                   {:Agentlang.Kernel.Lang/AppInit
+                    {:Data (or data {})}}))]
+      (log-app-init-result! result))
+    (catch Exception ex
+      (log/error ex))))
 
 (defn- run-configuration-patterns! [evaluator config]
-  (doseq [[llm-name llm-attrs] (:llms config)]
-    (let [r (first (evaluator
-                    (cn/make-instance
-                     {:Agentlang.Core/Create_LLM
-                      {:Instance
-                       (ln/preprocess-standalone-pattern
-                        {:Agentlang.Core/LLM
-                         (merge {:Name llm-name} llm-attrs)})}})))]
-      (when (not= :ok (:status r))
-        (log/error (str "failed to initialize LLM - " llm-name))))))
+  (try
+    (doseq [[llm-name llm-attrs] (:llms config)]
+      (let [r (first (evaluator
+                      (cn/make-instance
+                       {:Agentlang.Core/Create_LLM
+                        {:Instance
+                         (ln/preprocess-standalone-pattern
+                          {:Agentlang.Core/LLM
+                           (merge {:Name llm-name} llm-attrs)})}})))]
+        (when (not= :ok (:status r))
+          (log/error (str "failed to initialize LLM - " llm-name)))))
+    (catch Exception ex
+      (log/error ex))))
 
 (defn- run-pending-timers! []
   (when (:timer-manager (gs/get-app-config))
@@ -223,25 +231,27 @@
 (defn get-runtime-init-result [] @runtime-inited)
 
 (defn init-runtime [model config]
-  (let [store (store-from-config config)
-        ev (partial ev/evaluate-dataflow store)
-        ins (:interceptors config)
-        embeddings-config (:embeddings config)]
-    (when embeddings-config (ec/init embeddings-config))
-    (when (or (not (init-schema? config)) (store/init-all-schema store))
-      (let [resolved-config (run-initconfig config ev)]
-        (if (:rbac-enabled config)
-          (lr/finalize-events)
-          (lr/reset-events!))
-        (u/run-init-fns)
-        (register-resolvers! config ev)
-        (when (seq (:resolvers resolved-config))
-          (register-resolvers! resolved-config ev))
-        (isc/init)
-        (run-appinit-tasks! ev (or (:init-data model)
-                                   (:init-data config)))
-        (when embeddings-config (isc/setup-agent-documents))
-        [ev store]))))
+  (gs/kernel-call
+   (fn []
+     (let [store (store-from-config config)
+           ev (partial ev/evaluate-dataflow store)
+           ins (:interceptors config)
+           embeddings-config (:embeddings config)]
+       (when embeddings-config (ec/init embeddings-config))
+       (when (or (not (init-schema? config)) (store/init-all-schema store))
+         (let [resolved-config (run-initconfig config ev)]
+           (if (:rbac-enabled config)
+             (lr/finalize-events)
+             (lr/reset-events!))
+           (u/run-init-fns)
+           (register-resolvers! config ev)
+           (when (seq (:resolvers resolved-config))
+             (register-resolvers! resolved-config ev))
+           (isc/init)
+           (run-appinit-tasks! ev (or (:init-data model)
+                                      (:init-data config)))
+           (when embeddings-config (isc/setup-agent-documents))
+           [ev store]))))))
 
 (defn finalize-config [model config]
   (let [final-config (merge (:config model) config)]

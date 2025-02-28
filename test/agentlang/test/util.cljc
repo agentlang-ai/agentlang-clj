@@ -47,7 +47,12 @@
                     (report-expected-ex e errmsg))))))
   ([f] (is-error nil f)))
 
-(defn is-forbidden [r] (= :forbidden (:status r)))
+(defn is-forbidden [f]
+  (is
+   (try
+     (and (f) false)
+     (catch Exception _
+       (= :forbidden (gs/get-error-code))))))
 
 (defn- finalize-kernel-components []
   (doseq [cn [:Agentlang.Kernel.Lang

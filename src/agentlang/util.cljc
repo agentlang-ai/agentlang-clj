@@ -7,6 +7,7 @@
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
             #?(:cljs [cljs.reader :as reader])
+            [agentlang.global-state :as gs]
             [agentlang.datafmt.json :as json])
   #?(:clj
      (:require [net.cgrand.macrovich :as macros])
@@ -67,13 +68,15 @@
   (= @script-extn (file-extension (str f))))
 
 (defn throw-ex
-  [msg]
-  #?(:clj
-     (throw (Exception. msg))
-     :cljs
-     (let [e (js/Error. msg)]
-       (println msg)
-       (.log js/console (.-stack e)))))
+  ([msg status]
+   (when status (gs/set-error-code! status))
+   #?(:clj
+      (throw (Exception. msg))
+      :cljs
+      (let [e (js/Error. msg)]
+        (println msg)
+        (.log js/console (.-stack e)))))
+  ([msg] (throw-ex msg nil)))
 
 (macros/deftime
   (defmacro passthru

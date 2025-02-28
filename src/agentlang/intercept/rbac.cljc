@@ -30,11 +30,10 @@
         path (str path0 "%")
         entity-name (li/entity-name-from-path path)
         inst-priv-entity (stu/inst-priv-entity entity-name)
-        owners (find-owners env inst-priv-entity path)
         current-user (gs/active-user)]
-    (if (some #{current-user} owners)
+    (if (or (ri/superuser-email? current-user) (some #{current-user} (find-owners env inst-priv-entity path)))
       [path inst-priv-entity]
-      (u/throw-ex (str "Only an owner can assign or remove instance-privileges on " path0)))))
+      (u/throw-ex (str "Only an owner can assign or remove instance-privileges on " path0) :forbidden))))
 
 (defn handle-instance-privilege-assignment [env inst]
   (let [[path inst-priv-entity] (fetch-inst-priv-info env inst)
