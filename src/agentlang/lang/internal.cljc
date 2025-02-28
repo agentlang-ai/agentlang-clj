@@ -69,20 +69,26 @@
 (def call-fn :call)
 
 (def cmpr-oprs [:= :< :> :<= :>= :<>])
+(def logical-oprs [:not :and :or :between :in :empty])
 (def query-cmpr-oprs (conj cmpr-oprs :like))
 (def sql-keywords [:where :from :order-by
                    :group-by :having :limit
                    :offset :join :left-join
                    :right-join :desc])
-(def oprs (concat query-cmpr-oprs sql-keywords [:not :and :or :between :in]))
+(def oprs (concat query-cmpr-oprs sql-keywords logical-oprs))
 
 (def macro-names #{:match :try :throws :rethrow-after :for-each :delete
                    :query :await :entity call-fn :? :filter :suspend})
 
 (def property-names #{:meta :ui :rbac})
 
-(defn operator? [x]
-  (some #{x} oprs))
+(defn operator? [x] (some #{x} oprs))
+
+(def match-oprs (set (concat cmpr-oprs logical-oprs)))
+
+(defn match-operator? [x]
+  (and (keyword? x)
+       (some #{x} match-oprs)))
 
 (def ^:private special-form-names
   (set (concat oprs macro-names property-names)))

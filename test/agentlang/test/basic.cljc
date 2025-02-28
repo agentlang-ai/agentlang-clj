@@ -788,38 +788,54 @@
     (is (= 100 (:A result)))
     (is (= 10 (:B result)))))
 
-(defn- conditional-event-01 [i x]
-  (let [evt {:Cond/Evt {:I i}}
-        result (tu/invoke evt)]
-    (is (cn/instance-of? :Cond/R result))
-    (is (= x (:X result)))))
-
-(defn- conditional-event-02 [r predic]
-  (let [evt {:Cond/EvtWithInst {:R r}}
-        result (tu/invoke evt)]
-    (is (predic result))))
-
 (deftest conditional
   (defcomponent :Cond
     (record {:Cond/R {:X :Int}})
     (event {:Cond/Evt {:I :Int}})
-    (dataflow :Cond/Evt
-              [:match :Cond/Evt.I
-               0 {:Cond/R {:X 100}}
-               1 {:Cond/R {:X 200}}
-               {:Cond/R {:X 300}}
-               :as :Result]
-              :Result)
+    (dataflow
+     :Cond/Evt
+     [:match :Cond/Evt.I
+      0 {:Cond/R {:X 100}}
+      1 {:Cond/R {:X 200}}
+      {:Cond/R {:X 300}}
+      :as :Result]
+     :Result)
     (event {:Cond/EvtWithInst {:R :Cond/R}})
-    (dataflow :Cond/EvtWithInst
-              {:Cond/R {:X 100} :as :R1}
-              [:match :Cond/EvtWithInst.R.X
-               :R1.X true]))
-  (conditional-event-01 0 100)
-  (conditional-event-01 1 200)
-  (conditional-event-01 3 300)
-  (conditional-event-02 (cn/make-instance :Cond/R {:X 200}) nil?)
-  (conditional-event-02 (cn/make-instance :Cond/R {:X 100}) true?))
+    (dataflow
+     :Cond/EvtWithInst
+     {:Cond/R {:X 100} :as :R1}
+     [:match :Cond/EvtWithInst.R.X
+      :R1.X true])
+    (dataflow
+     :Cond/Evt2
+     [:match
+      [:= :Cond/Evt2.X 10] {:Cond/R {:X 100}}
+      [:>= :Cond/Evt2.X 5] {:Cond/R {:X 50}}
+      {:Cond/R {:X 0}}]))
+  (let [conditional-event-01
+        (fn [i x]
+          (let [evt {:Cond/Evt {:I i}}
+                result (tu/invoke evt)]
+            (is (cn/instance-of? :Cond/R result))
+            (is (= x (:X result)))))
+        conditional-event-02
+        (fn [r predic]
+          (let [evt {:Cond/EvtWithInst {:R r}}
+                result (tu/invoke evt)]
+            (is (predic result))))
+        conditional-event-03
+        (fn [x]
+          (let [r (tu/invoke {:Cond/Evt2 {:X x}})]
+            (is (cn/instance-of? :Cond/R r))
+            (is (= (* x 10) (:X r)))))]
+    (conditional-event-01 0 100)
+    (conditional-event-01 1 200)
+    (conditional-event-01 3 300)
+    (conditional-event-02 (cn/make-instance :Cond/R {:X 200}) nil?)
+    (conditional-event-02 (cn/make-instance :Cond/R {:X 100}) true?)
+    (conditional-event-03 10)
+    (conditional-event-03 5)
+    (conditional-event-03 0)))
 
 (deftest conditional-boolean
   (defcomponent :CondBool

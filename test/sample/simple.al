@@ -40,13 +40,13 @@
    :CZ :C.Z}})
 
 ;; Enable for testing auth+rbac
-(dataflow
+#_(dataflow
  :Agentlang.Kernel.Lang/AppInit
  [:call '(agentlang.util/getenv "SAMPLE_USER") :as :U]
  {:Agentlang.Kernel.Identity/User {:Email :U}}
  {:Agentlang.Kernel.Rbac/RoleAssignment {:Role "user" :Assignee :U}})
 
-(dataflow
+#_(dataflow
  :AssignPrivs
  {:B? {}
   :AB?

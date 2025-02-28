@@ -673,7 +673,7 @@
         :and (every? true? (map (partial parse-condition env) (rest condition)))
         :or (some true? (map (partial parse-condition env) (rest condition)))
         :not (not (parse-condition env (second condition)))
-        :empty (seq (follow-reference env :%))
+        :empty (seq (realize-all-references env (second condition)))
         (let [args (mapv (partial realize-all-references env) (rest condition))
               n (try
                   (apply compare args)
@@ -689,29 +689,31 @@
               :>= (or (zero? n) (pos? n))
               (u/throw-ex (str "Invalid operator " (first condition) " in " condition)))))))))
 
+(defn- conditional? [pat]
+  (and (vector? pat) (li/match-operator? (first pat))))
+
 (defn- handle-match [env & pat]
-  (let [body (extract-body-patterns #{:as} (rest pat))
-        r (:result (evaluate-pattern env (first pat)))
-        e (env/bind-variable env :% r)]
-    (when-not (nil? r)
-      (loop [body body]
-        (when (seq body)
-          (let [condition (first body)
-                c (second body)
-                conseq (if (nil? c) condition c)]
-            (if-not c
+  (let [has-value? (not (conditional? (first pat)))
+        body (extract-body-patterns #{:as} (if has-value? (rest pat) pat))
+        e
+        (if has-value?
+          (let [r (:result (evaluate-pattern env (first pat)))]
+            (env/bind-variable env :% r))
+          env)]
+    (loop [body body]
+      (when (seq body)
+        (let [condition (first body)
+              c (second body)
+              conseq (if (nil? c) condition c)]
+          (if-not c
+            (:result (evaluate-pattern e conseq))
+            (if (parse-condition
+                 e (cond
+                     (fn? condition) condition
+                     (vector? condition) condition
+                     :else [:= :% condition]))
               (:result (evaluate-pattern e conseq))
-              (if (parse-condition
-                   e (cond
-                       (fn? condition) condition
-                       (vector? condition)
-                       (case (count condition)
-                         2 `[~(first condition) :% ~(last condition)]
-                         3 condition
-                         (u/throw-ex (str "Invalid condition " condition " in " pat)))
-                       :else [:= :% condition]))
-                (:result (evaluate-pattern e conseq))
-                (recur (rest (rest body)))))))))))
+              (recur (rest (rest body))))))))))
 
 (defn- handle-filter [env & pats]
   (let [predic (first pats)
@@ -824,7 +826,7 @@
   (if (map? pat)
     (if-let [from (:from pat)]
       (let [alias (:as pat)
-            pat (dissoc pat :from :alias)
+            pat (dissoc pat :from :as)
             data0 (if (keyword? from) (follow-reference env from) from)
             data1 (if (map? data0) data0 (u/throw-ex (str "Failed to resolve " from " in " pat)))
             data (if (cn/an-instance? data1) (cn/instance-attributes data1) data1)
