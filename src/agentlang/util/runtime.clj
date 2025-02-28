@@ -101,17 +101,7 @@
     (loader/read-model n)))
 
 (defn log-app-init-result! [result]
-  (cond
-    (map? result)
-    (let [f (if (= :ok (:status result))
-              #(log/info %)
-              #(log/error %))]
-      (f (str "app-init: " result)))
-
-    (seqable? result)
-    (doseq [r result] (log-app-init-result! r))
-
-    :else (log/error (str "app-init: " result))))
+  (log/info (str "app-init: " (u/pretty-str result))))
 
 (defn- run-standalone-patterns! [evaluator]
   (when-let [pats (seq @gs/standalone-patterns)]
@@ -128,10 +118,12 @@
 
 (defn trigger-appinit-event! [evaluator data]
   (try
-    (let [result (evaluator
-                  (cn/make-instance
-                   {:Agentlang.Kernel.Lang/AppInit
-                    {:Data (or data {})}}))]
+    (let [result
+          (:result
+           (evaluator
+            (cn/make-instance
+             {:Agentlang.Kernel.Lang/AppInit
+              {:Data (or data {})}})))]
       (log-app-init-result! result))
     (catch Exception ex
       (log/error ex))))

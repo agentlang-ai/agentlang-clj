@@ -226,16 +226,19 @@
 (defn- process-query-attribute-value [env [k v]]
   [k (parse-query-value env k v)])
 
+(defn- rewrite-select-clause [env attr-names clause]
+  (w/postwalk #(if (keyword? %)
+                 (if (su/sql-keyword? %)
+                   %
+                   (if (some #{%} attr-names)
+                     (as-column-name %)
+                     (follow-reference env %)))
+                 %)
+              clause))
+
 (defn- preprocess-select-clause [env entity-name clause]
   (let [attr-names (cn/entity-attribute-names entity-name)]
-    (w/postwalk #(if (keyword? %)
-                   (if (su/sql-keyword? %)
-                     %
-                     (if (some #{%} attr-names)
-                       (as-column-name %)
-                       (follow-reference env %)))
-                   %)
-                clause)))
+    (rewrite-select-clause env attr-names clause)))
 
 (defn- query-attribute? [[k _]] (li/query-pattern? k))
 
@@ -390,9 +393,13 @@
               [{reltype (assoc attr-val node (li/make-ref inst-alias (cn/identity-attribute-name record-name)))}])
             [(assoc {reltype attr-val} rel inst-alias)]))
         (if-not is-contains
-          (let [ident-attr (cn/identity-attribute-name record-name)]
-            [{rel {(cn/maybe-between-node-as-attribute rel record-name) (li/make-ref inst-alias li/path-attr)
-                   (cn/maybe-between-node-as-attribute rel reltype) attr-val}}])
+          (let [ident-attr (cn/identity-attribute-name record-name)
+                relt-alias :__R]
+            [{reltype
+              {(li/name-as-query-pattern (cn/identity-attribute-name reltype)) attr-val}
+              :as [relt-alias]}
+             {rel {(cn/maybe-between-node-as-attribute rel record-name) (li/make-ref inst-alias li/path-attr)
+                   (cn/maybe-between-node-as-attribute rel reltype) (li/make-ref relt-alias li/path-attr)}}])
           (u/throw-ex (str "cannot establish contains relationship " rel " by identity value alone: " attr-val)))))))
 
 (defn- maybe-upsert-relationships-from-extensions [env record-name orig-attrs inst]
