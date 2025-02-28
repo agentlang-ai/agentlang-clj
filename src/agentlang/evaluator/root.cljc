@@ -704,13 +704,17 @@
    result-alias
    (loop [cases-code cases-code, env env]
      (if-let [[condition consequent] (first cases-code)]
-       (let [result (eval-opcode evaluator env condition)
-             r (ok-result result)]
-         (if (not (nil? r))
-           (if (match-object-to-result? match-obj r)
-             (eval-opcode-list evaluator (:env result) eval-opcode consequent)
-             (recur (rest cases-code) (:env result)))
-           result))
+       (if (fn? condition)
+         (if (condition match-obj)
+           (eval-opcode-list evaluator env eval-opcode consequent)
+           (recur (rest cases-code) env))
+         (let [result (eval-opcode evaluator env condition)
+               r (ok-result result)]
+           (if (not (nil? r))
+             (if (match-object-to-result? match-obj r)
+               (eval-opcode-list evaluator (:env result) eval-opcode consequent)
+               (recur (rest cases-code) (:env result)))
+             result)))
        (if (first alternative-code)
          (eval-opcode-list evaluator env eval-opcode alternative-code)
          (i/ok false env))))))
@@ -1250,6 +1254,16 @@
         (if-let [r (ok-result result)]
           (eval-for-each self (:env result) eval-opcode r body-code elem-alias result-alias)
           result)))
+
+    (do-filter_ [self env [predic-code seq-code result-alias]]
+      (let [result (eval-opcode self env seq-code)]
+        (if-let [rs (ok-result result)]
+          (let [final-rs (filterv #(let [r (eval-opcode self (env/bind-to-alias env :% %) predic-code)]
+                                     (ok-result r))
+                                  rs)
+                env (if result-alias (env/bind-to-alias env result-alias final-rs) env)]
+            (i/ok final-rs env))
+          (i/ok nil env))))
 
     (do-instance-from [self env [record-name inst-opcode data-opcode inst-alias]]
       (let [[inst-result inst-err new-env]

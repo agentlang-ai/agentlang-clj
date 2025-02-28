@@ -178,3 +178,30 @@
                               {:Id s2 :Value (assoc a2 :Flag false)}}))
     (is (nil? (tu/result {:Agentlang.Kernel.Eval/RestartSuspension
                           {:Id s1 :Value (assoc a1 :Flag false)}})))))
+
+(deftest filter-test
+  (defcomponent :Filt
+    (entity :Filt/E {:Id {:type :Int :guid true} :X :Int})
+    (dataflow
+     :Filt/FindOddEs
+     {:Filt/E? {} :as :Es}
+     [:filter [:match :%.X
+               odd? true
+               false]
+      :Es
+      :as :K]
+     :K))
+  (let [mke (fn [id x]
+              (tu/first-result
+               {:Filt/Create_E
+                {:Instance
+                 {:Filt/E {:Id id :X x}}}}))
+        es (mapv mke [1 2 3 4 5] [11 12 13 14 15])
+        e? (partial cn/instance-of? :Filt/E)
+        chkes (fn [es n]
+                (is (= n (count es)))
+                (is (every? e? es)))]
+    (chkes es 5)
+    (let [es (tu/result {:Filt/FindOddEs {}})]
+      (chkes es 3)
+      (is (every? #(odd? (:X %)) es)))))
