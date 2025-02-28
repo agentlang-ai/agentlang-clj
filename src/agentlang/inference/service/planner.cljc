@@ -63,7 +63,7 @@
 
 (defn- merge-contains [entity-name contains-rel-name parent-id]
   (if-let [parent-name (first (cn/relationship-nodes contains-rel-name))]
-    {:-> [[contains-rel-name {parent-name {(li/name-as-query-pattern (cn/identity-attribute-name parent-name)) parent-id}}]]}
+    {contains-rel-name {parent-name {(li/name-as-query-pattern (cn/identity-attribute-name parent-name)) parent-id}}}
     (u/throw-ex (str "failed to fetch parent for " entity-name " via " contains-rel-name))))
 
 (defn- parse-make-child [[n attrs contains-rel parent-id :as expr] alias]
