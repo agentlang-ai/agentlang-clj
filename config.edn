@@ -10,12 +10,12 @@
  ;; :rbac-enabled true
  ;; :authentication {:service :cognito
  ;;                  :is-identity-store true
- ;;                  :superuser-email #$ FRACTL_SUPERUSER_EMAIL
- ;;                  :region          #$ AWS_REGION
- ;;                  :access-key      #$ AWS_ACCESS_KEY
- ;;                  :secret-key      #$ AWS_SECRET_KEY
- ;;                  :client-id       #$ AWS_COGNITO_CLIENT_ID
- ;;                  :user-pool-id    #$ AWS_COGNITO_USER_POOL_ID
- ;;                  :whitelist?      false}
+ ;;                  :superuser-email (env FRACTL_SUPERUSER_EMAIL)
+ ;;                  :region (env AWS_REGION)
+ ;;                  :access-key (env_ACCESS_KEY)
+ ;;                  :secret-key (env AWS_SECRET_KEY)
+ ;;                  :client-id (env AWS_COGNITO_CLIENT_ID)
+ ;;                  :user-pool-id (env AWS_COGNITO_USER_POOL_ID)
+ ;;                  :whitelist? false}
  }
  

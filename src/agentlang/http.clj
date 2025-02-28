@@ -573,16 +573,17 @@
           (if-not (whitelisted? (:Email (:User evobj)) auth-config)
             (unauthorized "Your email is not whitelisted yet." data-fmt "NOT_WHITELISTED")
             (try
-              (let [r (:result (gs/evaluate-dataflow evobj))]
+              (let [r (gs/kernel-call #(:result (gs/evaluate-dataflow evobj)))]
                 (when (not r) (throw (Exception. "Signup failed")))
                 (let [user (if (map? r) r (first r))
                       post-signup-result
                       (when call-post-signup
-                        (:result
-                         (gs/evaluate-dataflow
-                          (assoc
-                           (create-event :Agentlang.Kernel.Identity/PostSignUp)
-                           :SignupResult r :SignupRequest evobj))))]
+                        (gs/kernel-call
+                         #(:result
+                           (gs/evaluate-dataflow
+                            (assoc
+                             (create-event :Agentlang.Kernel.Identity/PostSignUp)
+                             :SignupResult r :SignupRequest evobj)))))]
                   (if user
                     (ok (or (when (seq post-signup-result) post-signup-result)
                             (dissoc user :Password)) data-fmt)
