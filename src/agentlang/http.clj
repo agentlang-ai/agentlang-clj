@@ -331,7 +331,7 @@
         (if (= :ok (:status final-result))
           (ok final-result)
           (internal-error final-result)))
-      (ok {:result "done"}))))
+      (ok "done"))))
 
 (defn- process-gpt-chat [[_ maybe-unauth] request]
   (or (maybe-unauth request)
@@ -646,7 +646,7 @@
                           (assoc
                            auth-config
                            :event evobj))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "Resending confirmation code failed. "
@@ -673,7 +673,7 @@
                           (assoc
                            auth-config
                            :event evobj))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "Verify user failed. "
@@ -700,7 +700,7 @@
                           (assoc
                            auth-config
                            :event evobj))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "Forgot Password failed. "
@@ -727,7 +727,7 @@
                           (assoc
                            auth-config
                            :event evobj))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "Confirm Forgot Password failed. "
@@ -754,7 +754,7 @@
                           (assoc
                            auth-config
                            :event evobj))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "Change Password failed. "
@@ -777,11 +777,11 @@
           (when cookie
             (when-not (sess/session-cookie-delete cookie)
               (log/warn (str "session-cookie not deleted for " cookie))))
-          (ok {:result result} data-fmt))
+          (ok result data-fmt))
         (catch Exception ex
           (log/warn ex)
           (unauthorized (str "logout failed. " (ex-message ex)) data-fmt "LOGOUT_FAILED")))
-      (ok {:result :bye} data-fmt))
+      (ok :bye data-fmt))
     (unsupported-media-type request)))
 
 (defn- process-get-user [auth-config request]
@@ -793,7 +793,7 @@
                     (assoc auth-config :request request))
               result (auth/get-user
                       (assoc auth-config :user user))]
-          (ok {:result result} data-fmt))
+          (ok result data-fmt))
         (catch Exception ex
           (log/warn ex)
           (unauthorized (str "get-user failed" (ex-message ex)) data-fmt "GET_USER_FAILED")))
@@ -823,7 +823,7 @@
                            auth-config
                            :instance evobj
                            :user user))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "update-user failed. " (ex-message ex)) data-fmt "UPDATE_USER_FAILED")))))
@@ -852,7 +852,7 @@
                            auth-config
                            :event evobj
                            :user user))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "refresh-token failed. " (ex-message ex)) data-fmt "REFRESH_TOKEN_FAILED")))))
