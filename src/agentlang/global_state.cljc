@@ -128,3 +128,20 @@
        (finally
          (set-active-txn! txn)))))
   ([event-instance] (evaluate-dataflow-atomic evaluate-dataflow event-instance)))
+
+#?(:clj
+   (def ^:private dataflow-suspend-flag (ThreadLocal.))
+   :cljs
+   (def ^:dynamic dataflow-suspend-flag nil))
+
+(defn set-dataflow-suspended! [flag]
+  #?(:clj
+     (.set dataflow-suspend-flag flag)
+     :cljs
+     (reset! dataflow-suspend-flag flag)))
+
+(defn dataflow-suspended? []
+  #?(:clj
+     (.get dataflow-suspend-flag)
+     :cljs
+     @dataflow-suspend-flag))

@@ -17,6 +17,7 @@
             [agentlang.resolver.registry :as rr]
             [agentlang.resolver.core :as r]
             [agentlang.datafmt.json :as json]
+            [agentlang.suspension :as susp]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
@@ -900,6 +901,12 @@
          (u/throw-ex (str "Cannot handle invalid pattern " pat))))))
   ([pat] (evaluate-pattern nil pat)))
 
+(defn- alias-from-pattern [pat]
+  (cond
+    (map? pat) (:as pat)
+    (vector? pat) (second (drop-while not-as pat))
+    :else nil))
+
 (defn evaluate-dataflow
   ([store env event-instance-or-patterns]
    (let [patterns (when (vector? event-instance-or-patterns)
@@ -929,8 +936,11 @@
                      (if-let [pat (first df-patterns)]
                        (let [pat-count (inc pat-count)
                              env (env/bind-eval-state env pat pat-count)
-                             {env1 :env r :result} (evaluate-pattern env pat)]
-                         (recur (rest df-patterns) pat-count env1 r))
+                             {env1 :env r :result :as er} (evaluate-pattern env pat)]
+                         (if-let [susp-pats (and (susp/dataflow-suspended?) (seq (rest df-patterns)))]
+                           (and (susp/save env1 (vec susp-pats) (alias-from-pattern pat))
+                                er)
+                           (recur (rest df-patterns) pat-count env1 r)))
                        (make-result env result)))
                    (finally
                      (when txn-set? (gs/set-active-txn! nil)))))))))))))

@@ -22,6 +22,8 @@
          store-tag store
          resolver-tag resolver))
 
+(def merge-envs merge)
+
 (defn maybe-enrich [env store resolver]
   (let [env0 (if-not (store-tag env) (assoc env store-tag store) env)]
     (if-not (resolver-tag env0) (assoc env0 resolver-tag resolver) env0)))
