@@ -147,16 +147,50 @@
                 (u/throw-ex (str "invalid import directive - " (first import-spec))))
               (rest import-spec))))))
 
+     (defn- lang-construct? [tag exp]
+       (and (seqable? exp) (= tag (first exp))))
+
+     (def ^:private dataflow? (partial lang-construct? 'dataflow))
+     (def ^:private component? (partial lang-construct? 'component))
+
+     (defn- component-spec [exp]
+       (first (nthrest exp 2)))
+
+     (defn- set-component-spec [exp spec]
+       `(~(first exp) ~(second exp) ~spec))
+
+     (defn- maybe-fix-expression [exp]
+       (cond
+         (dataflow? exp)
+         `(~'dataflow ~(second exp)
+           ~@(mapv (fn [exp]
+                     (if (and (vector? exp) (= li/call-fn (first exp))
+                              (not (= 'quote (first (second exp)))))
+                       `[~li/call-fn (~'quote ~(second exp)) ~@(nthrest exp 2)]
+                       exp))
+                   (nthrest exp 2)))
+
+         (component? exp)
+         (let [spec (component-spec exp)]
+           (if-let [clj-import (:clj-import spec)]
+             (if-not (= 'quote (first clj-import))
+               (set-component-spec exp (assoc spec :clj-import `(~'quote ~clj-import)))
+               exp)
+             exp))
+
+         :else exp))
+
      (defn evaluate-expression [exp]
-       (when (and (seqable? exp) (= 'component (first exp)))
+       (when (component? exp)
          (eval `(ns ~(component-name-as-ns (second exp))))
          (use-lang)
-         (let [spec (first (nthrest exp 2))]
+         (let [spec (component-spec exp)]
            (do-clj-imports (:clj-import spec))
            (doseq [dep (:refer spec)]
              (let [dep-ns (component-name-as-ns dep)]
                (require [dep-ns])))))
-       (eval exp))
+       (let [exp (maybe-fix-expression exp)]
+         (eval exp)))
 
      (defn read-expressions
   "Read expressions in sequence from a agentlang component file. Each expression read
