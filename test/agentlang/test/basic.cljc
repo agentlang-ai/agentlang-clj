@@ -8,9 +8,9 @@
             [agentlang.lang
              :as ln
              :refer [component attribute event relationship
-                     entity record dataflow inference]]
+                     entity record dataflow inference resolver]]
             [agentlang.lang.internal :as li]
-            [agentlang.api :as api]
+            [agentlang.suspension :as sp]
             [agentlang.lang.datetime :as dt]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
@@ -590,112 +590,41 @@
       (chkes es 3)
       (is (every? #(odd? (:X %)) es)))))
 
-;; (deftest compound-attributes
-;;   (defcomponent :Df04
-;;     (entity {:Df04/E1 {:A :Int}})
-;;     (entity {:Df04/E2 {:AId {:ref (tu/append-id :Df04/E1)}
-;;                        :X :Int
-;;                        :Y {:type :Int
-;;                            :expr '(* :X :AId.A)}}})
-;;     (event {:Df04/PostE2 {:E1 :Df04/E1}}))
-;;   (dataflow :Df04/PostE2
-;;             {:Df04/E2 {:AId (tu/append-id :Df04/PostE2.E1)
-;;                        :X 500}})
-;;   (let [e (cn/make-instance :Df04/E1 {:A 100})
-;;         evt (cn/make-instance :Df04/Create_E1 {:Instance e})
-;;         e1 (tu/invoke evt)
-;;         id (cn/id-attr e1)
-;;         e2 (cn/make-instance :Df04/E2 {:AId (cn/id-attr e1)
-;;                                        :X 20})
-;;         evt (cn/make-instance :Df04/PostE2 {:E1 e1})
-;;         result (tu/invoke evt)]
-;;     (is (cn/instance-of? :Df04/E2 result))
-;;     (is (u/uuid-from-string (cn/id-attr result)))
-;;     (is (= (:AId result) id))
-;;     (is (= (:X result) 500))
-;;     (is (= (:Y result) 50000))))
-
-;; (deftest compound-attributes-non-id
-;;   (defcomponent :Df04NID
-;;     (entity {:Df04NID/E1 {:A :Int
-;;                           :Name {:type :String
-;;                                  :unique true}}})
-;;     (entity {:Df04NID/E2 {:E1 {:ref :Df04NID/E1.Name}
-;;                           :X :Int
-;;                           :Y {:type :Int
-;;                               :expr '(* :X :E1.A)}}})
-;;     (event {:Df04NID/PostE2 {:E1Name :String}}))
-;;   (dataflow :Df04NID/PostE2
-;;             {:Df04NID/E2 {:E1 :Df04NID/PostE2.E1Name
-;;                           :X 500}})
-;;   (let [e (cn/make-instance :Df04NID/E1 {:A 100
-;;                                          :Name "E1-A"})
-;;         evt (cn/make-instance :Df04NID/Create_E1 {:Instance e})
-;;         e1 (first (tu/fresult (e/eval-all-dataflows evt)))
-;;         e1-name (:Name e1)
-;;         evt (cn/make-instance :Df04NID/PostE2 {:E1Name e1-name})
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :Df04NID/E2 result))
-;;     (is (u/uuid-from-string (cn/id-attr result)))
-;;     (is (= (:E1 result) e1-name))
-;;     (is (= (:X result) 500))
-;;     (is (= (:Y result) 50000))))
-
-;; (defn- assert-ca-e! [result]
-;;   (is (cn/instance-of? :CA/E result))
-;;   (is (= 20 (:A result)))
-;;   (is (= 200 (:B result))))
-
-;; (deftest compound-attributes-with-default-events
-;;   (defcomponent :CA
-;;     (entity {:CA/E {:A :Int
-;;                     :B {:type :Int
-;;                         :expr '(* :A 10)}}}))
-;;   (let [e (cn/make-instance :CA/E {:A 20})
-;;         evt {:CA/Create_E {:Instance e}}
-;;         r (e/eval-all-dataflows evt)
-;;         result (first (tu/fresult r))]
-;;     (assert-ca-e! result)
-;;     (let [id (cn/id-attr result)
-;;           evt {:CA/Lookup_E {cn/id-attr id}}
-;;           r (e/eval-all-dataflows evt)
-;;           result (first (tu/fresult r))]
-;;       (assert-ca-e! result))))
-
-;; (deftest compound-attributes-literal-arg
-;;   (defcomponent :Df041
-;;     (record {:Df041/R {:A :Int}})
-;;     (entity {:Df041/E {:X :Int
-;;                        :Y {:type :Int
-;;                            :expr '(* :X 10)}}})
-;;     (event {:Df041/PostE {:R :Df041/R}}))
-;;   (dataflow :Df041/PostE
-;;             {:Df041/E {:X :Df041/PostE.R.A}})
-;;   (let [r (cn/make-instance :Df041/R {:A 100})
-;;         evt (cn/make-instance :Df041/PostE {:R r})
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :Df041/E result))
-;;     (is (= (:X result) 100))
-;;     (is (= (:Y result) 1000))))
-
-;; (deftest refcheck
-;;   (defcomponent :RefCheck
-;;     (entity {:RefCheck/E1 {:A :Int}})
-;;     (entity {:RefCheck/E2 {:AId {:ref (tu/append-id :RefCheck/E1)}
-;;                            :X :Int}}))
-;;   (let [e (cn/make-instance :RefCheck/E1 {:A 100})
-;;         id (cn/id-attr e)
-;;         e2 (cn/make-instance :RefCheck/E2 {:AId (cn/id-attr e) :X 20})
-;;         evt (cn/make-instance :RefCheck/Create_E2 {:Instance e2})]
-;;     (is (= :not-found (:status (first (e/eval-all-dataflows evt)))))
-;;     (let [evt (cn/make-instance :RefCheck/Create_E1 {:Instance e})
-;;           e1 (first (tu/fresult (e/eval-all-dataflows evt)))
-;;           id (cn/id-attr e1)
-;;           e2 (cn/make-instance :RefCheck/E2 {:AId (cn/id-attr e1) :X 20})
-;;           evt (cn/make-instance :RefCheck/Create_E2 {:Instance e2})
-;;           inst (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;       (is (cn/instance-of? :RefCheck/E2 inst))
-;;       (is (= (:AId inst) id)))))
+(deftest dataflow-suspension
+  (defcomponent :DfSusp
+    (entity :DfSusp/A {:Id {:type :Int :id true} :X :Int :Flag {:type :Boolean :default false}})
+    (entity :DfSusp/B {:Id {:type :Int :id true} :Y :Int})
+    (dataflow
+     :DfSusp/MakeB
+     {:DfSusp/A {:Id :DfSusp/MakeB.Id :X :DfSusp/MakeB.X} :as :A}
+     [:match :A.Flag
+      true {:DfSusp/B {:Id 1 :Y 100}}
+      false {:DfSusp/B {:Id 2 :Y 200}}]))
+  (resolver
+   :DfSusp/R
+   {:with-methods
+    {:create #(sp/as-suspended (assoc % :Flag (odd? (:X %))))}
+    :paths [:DfSusp/A]})
+  (u/run-init-fns)
+  (let [chkb (fn [id inst]
+               (is (cn/instance-of? :DfSusp/B inst))
+               (is (= (:Id inst) id))
+               (is (= (:Y inst) (* 100 id))))
+        susp? (partial cn/instance-of? :Agentlang.Kernel.Eval/Suspension)
+        parse-susp-result (fn [r]
+                            (is (cn/instance-of? :DfSusp/A (:suspended-with r)))
+                            (is (string? (:suspension-id r)))
+                            [(:suspended-with r) (:suspension-id r)])
+        [a1 s1] (parse-susp-result (tu/invoke {:DfSusp/MakeB {:Id 101 :X 1}}))
+        [a2 s2] (parse-susp-result (tu/invoke {:DfSusp/MakeB {:Id 102 :X 2}}))]
+    (is susp? (tu/invoke {:Agentlang.Kernel.Eval/LoadSuspension {:Id s1}}))
+    (is susp? (tu/invoke {:Agentlang.Kernel.Eval/LoadSuspension {:Id s2}}))
+    (chkb 1 (tu/invoke {:Agentlang.Kernel.Eval/RestartSuspension
+                        {:Id s1 :Value (assoc a1 :Flag true)}}))
+    (chkb 2 (tu/invoke {:Agentlang.Kernel.Eval/RestartSuspension
+                        {:Id s2 :Value (assoc a2 :Flag false)}}))
+    (is (nil? (tu/invoke {:Agentlang.Kernel.Eval/RestartSuspension
+                          {:Id s1 :Value (assoc a1 :Flag false)}})))))
 
 (deftest s3-test
   (defcomponent :AWS
@@ -1047,6 +976,140 @@
   (let [e (tu/invoke {:ER/MakeE {:Id 1 :X 100}})]
     (is (cn/instance-of? :ER/E e))
     (is (cn/instance-of? :ER/R (:R e)))))
+
+(deftest try_
+  (defcomponent :Try
+    (entity
+     :Try/E
+     {:Id {:type :Int :id true}
+      :X {:type :Int :indexed true}})
+    (record
+     :Try/R
+     {:Y :Int})
+    (dataflow
+     :Try/Find
+     [:try
+      {:Try/E {:X? :Try/Find.X}}
+      :error {:Try/R {:Y 1}}
+      :not-found {:Try/R {:Y 0}}
+      :as :Result]
+     :Result))
+  (let [r1 (tu/invoke {:Try/Find {:X 100}})
+        e0 (cn/make-instance {:Try/E {:Id 1 :X 100}})
+        e1 (tu/invoke {:Try/Create_E {:Instance e0}})
+        e? (partial cn/instance-of? :Try/E)
+        _ (is e? e1)
+        e2 (first (tu/invoke {:Try/Find {:X 100}}))
+        r? (partial cn/instance-of? :Try/R)]
+    (is (and (r? r1) (= 0 (:Y r1))))
+    (is (e? e2))))
+
+;; (deftest compound-attributes
+;;   (defcomponent :Df04
+;;     (entity {:Df04/E1 {:A :Int}})
+;;     (entity {:Df04/E2 {:AId {:ref (tu/append-id :Df04/E1)}
+;;                        :X :Int
+;;                        :Y {:type :Int
+;;                            :expr '(* :X :AId.A)}}})
+;;     (event {:Df04/PostE2 {:E1 :Df04/E1}}))
+;;   (dataflow :Df04/PostE2
+;;             {:Df04/E2 {:AId (tu/append-id :Df04/PostE2.E1)
+;;                        :X 500}})
+;;   (let [e (cn/make-instance :Df04/E1 {:A 100})
+;;         evt (cn/make-instance :Df04/Create_E1 {:Instance e})
+;;         e1 (tu/invoke evt)
+;;         id (cn/id-attr e1)
+;;         e2 (cn/make-instance :Df04/E2 {:AId (cn/id-attr e1)
+;;                                        :X 20})
+;;         evt (cn/make-instance :Df04/PostE2 {:E1 e1})
+;;         result (tu/invoke evt)]
+;;     (is (cn/instance-of? :Df04/E2 result))
+;;     (is (u/uuid-from-string (cn/id-attr result)))
+;;     (is (= (:AId result) id))
+;;     (is (= (:X result) 500))
+;;     (is (= (:Y result) 50000))))
+
+;; (deftest compound-attributes-non-id
+;;   (defcomponent :Df04NID
+;;     (entity {:Df04NID/E1 {:A :Int
+;;                           :Name {:type :String
+;;                                  :unique true}}})
+;;     (entity {:Df04NID/E2 {:E1 {:ref :Df04NID/E1.Name}
+;;                           :X :Int
+;;                           :Y {:type :Int
+;;                               :expr '(* :X :E1.A)}}})
+;;     (event {:Df04NID/PostE2 {:E1Name :String}}))
+;;   (dataflow :Df04NID/PostE2
+;;             {:Df04NID/E2 {:E1 :Df04NID/PostE2.E1Name
+;;                           :X 500}})
+;;   (let [e (cn/make-instance :Df04NID/E1 {:A 100
+;;                                          :Name "E1-A"})
+;;         evt (cn/make-instance :Df04NID/Create_E1 {:Instance e})
+;;         e1 (first (tu/fresult (e/eval-all-dataflows evt)))
+;;         e1-name (:Name e1)
+;;         evt (cn/make-instance :Df04NID/PostE2 {:E1Name e1-name})
+;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
+;;     (is (cn/instance-of? :Df04NID/E2 result))
+;;     (is (u/uuid-from-string (cn/id-attr result)))
+;;     (is (= (:E1 result) e1-name))
+;;     (is (= (:X result) 500))
+;;     (is (= (:Y result) 50000))))
+
+;; (defn- assert-ca-e! [result]
+;;   (is (cn/instance-of? :CA/E result))
+;;   (is (= 20 (:A result)))
+;;   (is (= 200 (:B result))))
+
+;; (deftest compound-attributes-with-default-events
+;;   (defcomponent :CA
+;;     (entity {:CA/E {:A :Int
+;;                     :B {:type :Int
+;;                         :expr '(* :A 10)}}}))
+;;   (let [e (cn/make-instance :CA/E {:A 20})
+;;         evt {:CA/Create_E {:Instance e}}
+;;         r (e/eval-all-dataflows evt)
+;;         result (first (tu/fresult r))]
+;;     (assert-ca-e! result)
+;;     (let [id (cn/id-attr result)
+;;           evt {:CA/Lookup_E {cn/id-attr id}}
+;;           r (e/eval-all-dataflows evt)
+;;           result (first (tu/fresult r))]
+;;       (assert-ca-e! result))))
+
+;; (deftest compound-attributes-literal-arg
+;;   (defcomponent :Df041
+;;     (record {:Df041/R {:A :Int}})
+;;     (entity {:Df041/E {:X :Int
+;;                        :Y {:type :Int
+;;                            :expr '(* :X 10)}}})
+;;     (event {:Df041/PostE {:R :Df041/R}}))
+;;   (dataflow :Df041/PostE
+;;             {:Df041/E {:X :Df041/PostE.R.A}})
+;;   (let [r (cn/make-instance :Df041/R {:A 100})
+;;         evt (cn/make-instance :Df041/PostE {:R r})
+;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
+;;     (is (cn/instance-of? :Df041/E result))
+;;     (is (= (:X result) 100))
+;;     (is (= (:Y result) 1000))))
+
+;; (deftest refcheck
+;;   (defcomponent :RefCheck
+;;     (entity {:RefCheck/E1 {:A :Int}})
+;;     (entity {:RefCheck/E2 {:AId {:ref (tu/append-id :RefCheck/E1)}
+;;                            :X :Int}}))
+;;   (let [e (cn/make-instance :RefCheck/E1 {:A 100})
+;;         id (cn/id-attr e)
+;;         e2 (cn/make-instance :RefCheck/E2 {:AId (cn/id-attr e) :X 20})
+;;         evt (cn/make-instance :RefCheck/Create_E2 {:Instance e2})]
+;;     (is (= :not-found (:status (first (e/eval-all-dataflows evt)))))
+;;     (let [evt (cn/make-instance :RefCheck/Create_E1 {:Instance e})
+;;           e1 (first (tu/fresult (e/eval-all-dataflows evt)))
+;;           id (cn/id-attr e1)
+;;           e2 (cn/make-instance :RefCheck/E2 {:AId (cn/id-attr e1) :X 20})
+;;           evt (cn/make-instance :RefCheck/Create_E2 {:Instance e2})
+;;           inst (first (tu/fresult (e/eval-all-dataflows evt)))]
+;;       (is (cn/instance-of? :RefCheck/E2 inst))
+;;       (is (= (:AId inst) id)))))
 
 ;; (deftest optional-attributes
 ;;   (defcomponent :OptAttr
@@ -1486,33 +1549,6 @@
 ;;      (let [r (cn/make-instance :UserAccount/Total {:Total 100000})
 ;;            evt (cn/make-instance :UserAccount/IncreaseLoan {:Balance r})]
 ;;        (is (thrown? Exception (cn/instance-of? :UserAccount/Estimate (first (tu/fresult (e/eval-all-dataflows evt)))))))))
-
-(deftest try_
-  (defcomponent :Try
-    (entity
-     :Try/E
-     {:Id {:type :Int :id true}
-      :X {:type :Int :indexed true}})
-    (record
-     :Try/R
-     {:Y :Int})
-    (dataflow
-     :Try/Find
-     [:try
-      {:Try/E {:X? :Try/Find.X}}
-      :error {:Try/R {:Y 1}}
-      :not-found {:Try/R {:Y 0}}
-      :as :Result]
-     :Result))
-  (let [r1 (tu/invoke {:Try/Find {:X 100}})
-        e0 (cn/make-instance {:Try/E {:Id 1 :X 100}})
-        e1 (tu/invoke {:Try/Create_E {:Instance e0}})
-        e? (partial cn/instance-of? :Try/E)
-        _ (is e? e1)
-        e2 (first (tu/invoke {:Try/Find {:X 100}}))
-        r? (partial cn/instance-of? :Try/R)]
-    (is (and (r? r1) (= 0 (:Y r1))))
-    (is (e? e2))))
 
 ;; (deftest password-match
 ;;   (defcomponent :PM

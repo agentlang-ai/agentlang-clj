@@ -5,8 +5,7 @@
             [agentlang.component :as cn]
             [agentlang.env :as env]            
             [agentlang.lang :as ln]
-            [agentlang.resolver.core :as r]
-            [agentlang.store :as store]))
+            [agentlang.resolver.core :as r]))
 
 (ln/component :Agentlang.Kernel.Eval)
 
@@ -34,7 +33,7 @@
      :cljs
      @sid))
 
-(defn suspension-id [flag]
+(defn suspension-id []
   (or (get-suspension-id)
       (let [id (u/uuid-string)]
         (set-suspension-id! id)
@@ -55,29 +54,46 @@
   (let [r (gs/evaluate-pattern
            {:Agentlang.Kernel.Eval/Suspension
             {:Id (or (suspension-id) (u/uuid-string))
-             :Patterns patterns
-             :Env (env/cleanup env false)
+             :Patterns [:q# patterns]
+             :Env [:q# (env/cleanup env false)]
              :ValueAlias alias}})]
       (set-suspension-id! nil)
       r))
 
+(ln/event :Agentlang.Kernel.Eval/LoadSuspension {:Id :String})
+
+(ln/dataflow
+ :Agentlang.Kernel.Eval/LoadSuspension
+ {:Agentlang.Kernel.Eval/Suspension {:Id? :Agentlang.Kernel.Eval/LoadSuspension.Id} :as [:S]}
+ :S)
+
+(defn- delete-suspension [suspension]
+  (gs/evaluate-patterns
+   [[:delete {:Agentlang.Kernel.Eval/Suspension {:Id? (:Id suspension)}}]
+    [:delete :Agentlang.Kernel.Eval/Suspension :purge]]))
+
 (defn- maybe-bind-restart-value [env suspension restart-value]
   (if-let [alias (:ValueAlias suspension)]
-    (env/bind-to-alias env (keyword alias) restart-value)
+    (let [k (keyword alias)
+          v0 (env/lookup-by-alias env k)
+          v (if (and v0 (map? v0)) (merge v0 restart-value) restart-value)]
+      (env/bind-to-alias env k v))
     env))
 
 (defn restart-suspension [suspension restart-value]
-  (let [store (store/get-default-store)
-        env (maybe-bind-restart-value (:Env suspension) suspension restart-value)
-        patterns (:Patterns suspension)]
-    (:result (gs/evaluate-dataflow store env patterns))))
+  (when suspension
+    (let [env (maybe-bind-restart-value (:Env suspension) suspension restart-value)
+          patterns (:Patterns suspension)
+          r (:result (gs/evaluate-dataflow env patterns))]
+      (delete-suspension suspension)
+      r)))
 
 (ln/event :Agentlang.Kernel.Eval/RestartSuspension {:Id :String :Value :Any})
 
 (ln/dataflow
  :Agentlang.Kernel.Eval/RestartSuspension
  {:Agentlang.Kernel.Eval/Suspension {:Id? :Agentlang.Kernel.Eval/RestartSuspension.Id} :as [:S]}
- [:call '(agentlang.evaluator.suspend/restart-suspension :S :Agentlang.Kernel.Eval/RestartSuspension.Value)])
+ [:call '(agentlang.suspension/restart-suspension :S :Agentlang.Kernel.Eval/RestartSuspension.Value)])
 
 (ln/entity
  :Agentlang.Kernel.Eval/Continue

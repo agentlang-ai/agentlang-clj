@@ -369,6 +369,7 @@
                             (cond
                               (map? v) (if unmake-insts? (cn/unmake-instance v) v)
                               (string? v) v
+                              (list? v) (vec v)
                               (seqable? v) (if unmake-insts? (mapv cn/unmake-instance v) v)
                               :else v)])
                          df-vals)]

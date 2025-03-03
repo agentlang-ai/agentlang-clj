@@ -140,41 +140,4 @@
     (let [a @a]
       (is (cn/instance-of? :Await/A a))
       (is (= 1 (:Id a)))
-      (is (= 100 (:X a))))))
-
-(deftest dataflow-suspension
-  (defcomponent :DfSusp
-    (entity :DfSusp/A {:Id {:type :Int :guid true} :X :Int :Flag {:type :Boolean :default false}})
-    (entity :DfSusp/B {:Id {:type :Int :guid true} :Y :Int})
-    (dataflow
-     :DfSusp/MakeB
-     {:DfSusp/A {:Id 1 :X :DfSusp/MakeB.X} :as :A}
-     [:match :A.Flag
-      true {:DfSusp/B {:Id 1 :Y 100}}
-      false {:DfSusp/B {:Id 2 :Y 200}}]))
-  (resolver
-   :DfSusp/R
-   {:with-methods
-    {:create #(e/as-suspended (assoc % :Flag (odd? (:X %))))}
-    :paths [:DfSusp/A]})
-  (u/run-init-fns)
-  (let [chkb (fn [id inst]
-               (is (cn/instance-of? :DfSusp/B inst))
-               (is (= (:Id inst) id))
-               (is (= (:Y inst) (* 100 id))))
-        susp? (partial cn/instance-of? :Agentlang.Kernel.Eval/Suspension)
-        parse-susp-result (fn [r]
-                            (is (= :ok (:status r)))
-                            (is (cn/instance-of? :DfSusp/A (first (:result r))))
-                            (is (seq (:suspension-id r)))
-                            [(first (:result r)) (:suspension-id r)])
-        [a1 s1] (parse-susp-result (first (tu/eval-all-dataflows {:DfSusp/MakeB {:X 1}})))
-        [a2 s2] (parse-susp-result (first (tu/eval-all-dataflows {:DfSusp/MakeB {:X 2}})))]
-    (is susp? (tu/first-result {:Agentlang.Kernel.Eval/LoadSuspension {:Id s1}}))
-    (is susp? (tu/first-result {:Agentlang.Kernel.Eval/LoadSuspension {:Id s2}}))
-    (chkb 1 (tu/first-result {:Agentlang.Kernel.Eval/RestartSuspension
-                              {:Id s1 :Value (assoc a1 :Flag true)}}))
-    (chkb 2 (tu/first-result {:Agentlang.Kernel.Eval/RestartSuspension
-                              {:Id s2 :Value (assoc a2 :Flag false)}}))
-    (is (nil? (tu/result {:Agentlang.Kernel.Eval/RestartSuspension
-                          {:Id s1 :Value (assoc a1 :Flag false)}}))))))
+      (is (= 100 (:X a)))))))

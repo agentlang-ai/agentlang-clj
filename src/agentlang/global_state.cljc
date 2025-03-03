@@ -104,8 +104,11 @@
 (defn set-evaluate-dataflow-fn! [f] (reset! evaluate-dataflow-fn f))
 (defn set-evaluate-pattern-fn! [f] (reset! evaluate-pattern-fn f))
 
-(defn evaluate-dataflow [event-instance]
-  (@evaluate-dataflow-fn event-instance))
+(defn evaluate-dataflow
+  ([event-instance]
+   (@evaluate-dataflow-fn event-instance))
+  ([env event-instance]
+   (@evaluate-dataflow-fn nil env event-instance)))
 
 (defn evaluate-dataflow-internal [event-instance]
   (kernel-call #(evaluate-dataflow event-instance)))

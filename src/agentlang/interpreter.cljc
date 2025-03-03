@@ -17,7 +17,7 @@
             [agentlang.resolver.registry :as rr]
             [agentlang.resolver.core :as r]
             [agentlang.datafmt.json :as json]
-            [agentlang.suspension :as susp]
+            [agentlang.suspension :as sp]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
@@ -919,9 +919,9 @@
      (gs/call-with-event-context
       (:EventContext event-instance)
       (fn []
-        (let [env0 (or env (env/bind-instance (env/make store nil) event-instance))
-              env (env/assoc-active-event env0 event-instance)
-              store (or (env/get-store env) store)]
+        (let [store (or store (env/get-store env) (store/get-default-store))
+              env0 (or env (env/bind-instance (env/make store nil) event-instance))
+              env (env/assoc-active-event env0 event-instance)]
           (store/call-in-transaction
            store
            (fn [txn]
@@ -937,15 +937,16 @@
                        (let [pat-count (inc pat-count)
                              env (env/bind-eval-state env pat pat-count)
                              {env1 :env r :result :as er} (evaluate-pattern env pat)]
-                         (if-let [susp-pats (and (susp/dataflow-suspended?) (seq (rest df-patterns)))]
-                           (and (susp/save env1 (vec susp-pats) (alias-from-pattern pat))
-                                er)
+                         (if-let [susp-pats (and (sp/dataflow-suspended?) (seq (rest df-patterns)))]
+                           (let [sid (sp/suspension-id)]
+                             (and (sp/save env1 (vec susp-pats) (alias-from-pattern pat))
+                                  (assoc er :result {:suspension-id sid :suspended-with r})))
                            (recur (rest df-patterns) pat-count env1 r)))
                        (make-result env result)))
                    (finally
                      (when txn-set? (gs/set-active-txn! nil)))))))))))))
   ([store event-instance] (evaluate-dataflow store nil event-instance))
-  ([event-instance] (evaluate-dataflow (store/get-default-store) nil event-instance)))
+  ([event-instance] (evaluate-dataflow nil nil event-instance)))
 
 (defn evaluate-dataflow-in-environment [env event-instance]
   (evaluate-dataflow nil env event-instance))
