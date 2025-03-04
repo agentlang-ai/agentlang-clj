@@ -2,6 +2,7 @@
   "Components of a model."
   (:require [clojure.set :as set]
             [clojure.string :as s]
+            [clojure.walk :as w]
             [agentlang.lang.datetime :as dt]
             [agentlang.lang.internal :as li]
             [agentlang.lang.raw :as raw]
@@ -991,10 +992,18 @@
       (deserialize-instance x)
       x)
 
-    (string? x) x
+    (or (string? x) (li/sealed? x)) x
 
     (set? x)
     (set (map #(maybe-instance % validate?) x))
+
+    (li/quoted? x)
+    (w/prewalk
+     #(if (li/unquoted? %)
+        (let [obj (second %)]
+          (if (map? obj) (maybe-instance obj validate?) obj))
+        %)
+     x)
 
     (vector? x)
     (vec (map #(maybe-instance % validate?) x))
@@ -1669,7 +1678,7 @@
 (defn entity? [recname]
   (and (entity-schema recname) true))
 
-(defn record? [recname]
+(defn rec? [recname]
   (and (record-schema recname) true))
 
 (defn authentication-event? [rec-name]

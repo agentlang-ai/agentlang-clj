@@ -157,6 +157,16 @@
 (def quoted-value second)
 (def unquoted-value second)
 
+(def sealed-tag :s#)
+
+(defn sealed [obj] [sealed-tag obj])
+
+(defn sealed? [x]
+  (and (vector? x)
+       (= sealed-tag (first x))))
+
+(def sealed-value second)
+
 (defn special-form? [x]
   (and (vector? x)
        (some #{(first x)} special-form-names)))

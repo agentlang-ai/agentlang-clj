@@ -275,11 +275,13 @@
    [:between
     :ResourceAllocation.Core/GetProjectAllocationsForPeriod.StartDate
     :ResourceAllocation.Core/GetProjectAllocationsForPeriod.EndDate]}
+  :ResourceAllocation.Core/ResourceAllocation? {:ResourceAllocation.Core/Resource? {}}
   :into
   {:Allocation :ResourceAllocation.Core/Allocation.Id
    :Project :ResourceAllocation.Core/Allocation.Project
    :ProjectName :ResourceAllocation.Core/Allocation.ProjectName
    :Resource :ResourceAllocation.Core/Allocation.Resource
+   :ResourceName :ResourceAllocation.Core/Resource.FullName
    :Period :ResourceAllocation.Core/Allocation.Period
    :Duration :ResourceAllocation.Core/Allocation.Duration
    :AllocationEntered :ResourceAllocation.Core/Allocation.AllocationEntered}})
@@ -560,9 +562,9 @@
                  {:ResourceAllocation.Core/Resource
                   {:Id "r03"
                    :FirstName "user"
-                   :LastName "01"
-                   :FullName "user 02"
-                   :Email "user01@acme.com"
+                   :LastName "03"
+                   :FullName "user 03"
+                   :Email "user03@acme.com"
                    :PhoneNumber "111-222-3333"
                    :Department "Engineering"
                    :Role "Software Engineer"
@@ -588,9 +590,9 @@
                  {:ResourceAllocation.Core/Resource
                   {:Id "r04"
                    :FirstName "user"
-                   :LastName "02"
-                   :FullName "user 02"
-                   :Email "user02@acme.com"
+                   :LastName "04"
+                   :FullName "user 04"
+                   :Email "user04@acme.com"
                    :PhoneNumber "222-333-4444"
                    :Department "Finance"
                    :Role "Analyst"

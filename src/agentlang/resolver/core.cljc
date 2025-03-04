@@ -134,7 +134,7 @@
 
 (def query-entity-name :entity-name)
 
-(defn- col-name-to-attr-name [x]
+(defn as-attribute-name [x]
   (if (keyword? x)
     (let [s (name x)]
       (if (s/starts-with? s "_")
@@ -148,7 +148,7 @@
      {}
      (mapv (fn [[k v]]
              [k (if (vector? v)
-                  `[~(first v) ~@(mapv col-name-to-attr-name (rest v))]
+                  `[~(first v) ~@(mapv as-attribute-name (rest v))]
                   v)])
            qattrs))))
 

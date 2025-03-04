@@ -5,6 +5,7 @@
             [agentlang.component :as cn]
             [agentlang.env :as env]            
             [agentlang.lang :as ln]
+            [agentlang.lang.internal :as li]
             [agentlang.resolver.core :as r]))
 
 (ln/component :Agentlang.Kernel.Eval)
@@ -13,8 +14,8 @@
  :Agentlang.Kernel.Eval/Suspension
  {:Id {:type :String :id true}
   :Patterns :Any
-  :Env :Map
-  :ValueAlias {:type :Keyword :optional true}})
+  :Env :Any
+  :ValueAlias {:type :String :optional true}})
 
 #?(:clj
    (def ^:private sid (ThreadLocal.))
@@ -54,9 +55,9 @@
   (let [r (gs/evaluate-pattern
            {:Agentlang.Kernel.Eval/Suspension
             {:Id (or (suspension-id) (u/uuid-string))
-             :Patterns [:q# patterns]
-             :Env [:q# (env/cleanup env false)]
-             :ValueAlias alias}})]
+             :Patterns (li/sealed patterns)
+             :Env (li/sealed (env/cleanup env false))
+             :ValueAlias (when alias (name alias))}})]
       (set-suspension-id! nil)
       r))
 
@@ -82,8 +83,8 @@
 
 (defn restart-suspension [suspension restart-value]
   (when suspension
-    (let [env (maybe-bind-restart-value (:Env suspension) suspension restart-value)
-          patterns (:Patterns suspension)
+    (let [env (maybe-bind-restart-value (li/sealed-value (:Env suspension)) suspension restart-value)
+          patterns (li/sealed-value (:Patterns suspension))
           r (:result (gs/evaluate-dataflow env patterns))]
       (delete-suspension suspension)
       r)))
@@ -106,9 +107,17 @@
       [sid (into {} (mapv #(let [[k v] (s/split % #":")] [(keyword k) (read-string v)]) (s/split vs #",")))]
       r)))
 
+(defn- extract-id-from-path [path]
+  (let [idx (s/index-of path ",")]
+    (subs path (inc idx))))
+
 (defn- query-suspension-restarter [params]
   (let [qattrs (r/query-attributes params)
-        [_ _ id] (first (vals qattrs))]
+        [_ attr val] (first (vals qattrs))
+        id (cond
+             (= attr :Id) val
+             (= attr li/path-attr) (extract-id-from-path val)
+             :else (u/throw-ex (str "Cannot query continuation by " attr)))]
     (let [[susp-id value] (parse-restarter-id id)
           result
           (gs/evaluate-dataflow

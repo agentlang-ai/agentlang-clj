@@ -39,6 +39,7 @@
   (cond
     (keyword? v) (follow-reference env v)
     (li/quoted? v) (:result (evaluate-pattern env v))
+    (li/sealed? v) v
     (map? v)
     (if query-mode
       v
@@ -575,6 +576,8 @@
       %)
    pat))
 
+(defn- handle-sealed [_ pat] pat)
+
 (defn- not-kw [kw x] (not= kw x))
 (def ^:private not-as (partial not-kw :as))
 (def ^:private not-not-found (partial not-kw :not-found))
@@ -738,6 +741,7 @@
           :call call-function
           :delete delete-instances
           :q# handle-quote
+          :s# handle-sealed
           :try handle-try
           :for-each handle-for-each
           :match handle-match
@@ -868,13 +872,13 @@
                          (not (or (cn/entity? n)
                                   (cn/event? n)
                                   (cn/relationship? n)
-                                  (cn/record? n)))
+                                  (cn/rec? n)))
                          true))
                   (keys x)))))
 
 (defn- literal? [x]
   (or (number? x) (string? x) (boolean? x)
-      (normal-map? x) (nil? x)
+      (normal-map? x) (nil? x) (li/sealed? x)
       (and (vector? x) (literal? (first x)))))
 
 (defn evaluate-pattern
@@ -920,7 +924,7 @@
       (:EventContext event-instance)
       (fn []
         (let [store (or store (env/get-store env) (store/get-default-store))
-              env0 (or env (env/bind-instance (env/make store nil) event-instance))
+              env0 (env/maybe-enrich (or env (env/bind-instance (env/make store nil) event-instance)) store)
               env (env/assoc-active-event env0 event-instance)]
           (store/call-in-transaction
            store
