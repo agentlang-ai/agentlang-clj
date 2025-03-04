@@ -1,4 +1,5 @@
-(ns agentlang.test.syntax
+#_(do
+    (ns agentlang.test.syntax
   (:require #?(:clj [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [agentlang.util :as u]
@@ -127,20 +128,6 @@
                 :as :K]))
       (is (= t (ls/introspect r))))))
 
-(deftest syntax-query-2
-  (let [p (ls/query-object {ls/record-tag :E?
-                            ls/query-tag {:where [:>= :X 20]
-                                          :order-by [:Y]}})
-        q (ls/query {ls/query-tag p ls/alias-tag :R})]
-    (is (ls/query? q))
-    (is (= p (ls/query-tag q)))
-    (is (= :R (ls/alias-tag q)))
-    (let [r (ls/raw q)]
-      (is (= r [:query
-                {:E? {:where [:>= :X 20] :order-by [:Y]}}
-                :as :R]))
-      (is (= q (ls/introspect r))))))
-
 (deftest syntax-delete
   (let [q (ls/introspect {:E {:id? :Find:E}})
         d (ls/delete {ls/query-upsert-tag q
@@ -205,3 +192,4 @@
             [:delete :Acme.Core/Employee :purge :as :Es]]
         irs (mapv ls/introspect ps)]
     (is (= ps (mapv ls/raw irs)))))
+)

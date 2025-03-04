@@ -2476,3 +2476,8 @@
 
 (defn force-cast-instance-type [new-type inst]
   (assoc inst type-key new-type))
+
+(defn all-attribute-names [recname]
+  (concat (keys (fetch-user-schema recname))
+          (when (entity? recname)
+            (find-extension-attributes recname))))

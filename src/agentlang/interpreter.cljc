@@ -14,6 +14,7 @@
             [agentlang.global-state :as gs]
             [agentlang.lang.internal :as li]
             [agentlang.lang.datetime :as dt]
+            [agentlang.lang.syntax :as syn]
             [agentlang.resolver.registry :as rr]
             [agentlang.resolver.core :as r]
             [agentlang.datafmt.json :as json]
@@ -578,13 +579,6 @@
 
 (defn- handle-sealed [_ pat] pat)
 
-(defn- not-kw [kw x] (not= kw x))
-(def ^:private not-as (partial not-kw :as))
-(def ^:private not-not-found (partial not-kw :not-found))
-(def ^:private not-error (partial not-kw :error))
-(def ^:private not-case (partial not-kw li/except-tag))
-(def ^:private not-check (partial not-kw :check))
-
 (defn- normalize-fncall [exp]
   (if (= 'quote (first exp))
     (second exp)
@@ -611,29 +605,8 @@
           (u/throw-ex (str "Expression " pat " failed, check predicate returned false for " result)))))
     result))
 
-(defn- parse-expr-pattern [pat]
-  (let [[h t] (split-with not-as pat)]
-    (if (seq t)
-      (let [t (rest t)]
-        (when-not (seq t)
-          (u/throw-ex (str "Alias not specified after `:as` in " pat)))
-        (when (> (count t) 1)
-          (u/throw-ex (str "Alias must appear last in " pat)))
-        [(vec h) (first t)])
-      [(vec h) nil])))
-
-(defn- extract-body-patterns [sentries pat]
-  (take-while #(not (some #{%} sentries)) pat))
-
-(defn- parse-try [pat]
-  (let [body (extract-body-patterns #{:as :not-found :error} pat)]
-    [body
-     (second (drop-while not-as pat))
-     {:not-found (second (drop-while not-not-found pat))
-      :error (second (drop-while not-error pat))}]))
-
 (defn- handle-try [env & pat]
-  (let [[body _ handlers] (parse-try pat)
+  (let [[body _ handlers] (syn/parse-try pat)
         not-found (:not-found handlers)
         err (:error handlers)]
     (try
@@ -652,7 +625,7 @@
 
 (defn- handle-for-each [env & pat]
   (let [cond-pat (first pat)
-        body (extract-body-patterns #{:as} (rest pat))]
+        body (syn/extract-body-patterns #{:as} (rest pat))]
     (loop [rs (:result (evaluate-pattern env cond-pat))
            e env, result []]
       (if-let [r (first rs)]
@@ -693,12 +666,9 @@
               :>= (or (zero? n) (pos? n))
               (u/throw-ex (str "Invalid operator " (first condition) " in " condition)))))))))
 
-(defn- conditional? [pat]
-  (and (vector? pat) (li/match-operator? (first pat))))
-
 (defn- handle-match [env & pat]
-  (let [has-value? (not (conditional? (first pat)))
-        body (extract-body-patterns #{:as} (if has-value? (rest pat) pat))
+  (let [has-value? (not (syn/conditional? (first pat)))
+        body (syn/extract-body-patterns #{:as} (if has-value? (rest pat) pat))
         e
         (if has-value?
           (let [r (:result (evaluate-pattern env (first pat)))]
@@ -734,7 +704,7 @@
       result)))
 
 (defn- expr-handler [env pat _]
-  (let [[pat alias] (parse-expr-pattern pat)
+  (let [[pat alias] (syn/extract-alias-from-expression pat)
         tag (first pat)
         handler
         (case tag
@@ -844,51 +814,19 @@
         (maybe-lift-relationship-patterns env pat)))
     [pat]))
 
-(defn- maybe-extract-condition-handlers [pat]
-  (or
-   (cond
-     (map? pat)
-     (when-let [cases (li/except-tag pat)]
-       [cases (dissoc pat li/except-tag)])
-
-     (and (vector? pat) (= (first pat) :delete))
-     (when-let [cases (first (rest (drop-while not-case pat)))]
-       [cases (let [p0 (take-while not-case pat)]
-                (vec (concat p0 (rest (drop-while not-case (rest p0))))))]))
-   [nil pat]))
-
 (defn- maybe-normalize-pattern [pat]
   (if (li/query-pattern? pat)
     {pat {}}
     pat))
 
-(declare literal?)
-
-(defn- normal-map? [x]
-  (and (map? x)
-       (and (nil? (seq (select-keys x li/instance-meta-keys)))
-            (some #(or (literal? %)
-                       (if-let [n (and (keyword? %) (li/normalize-name %))]
-                         (not (or (cn/entity? n)
-                                  (cn/event? n)
-                                  (cn/relationship? n)
-                                  (cn/rec? n)))
-                         true))
-                  (keys x)))))
-
-(defn- literal? [x]
-  (or (number? x) (string? x) (boolean? x)
-      (normal-map? x) (nil? x) (li/sealed? x)
-      (and (vector? x) (literal? (first x)))))
-
 (defn evaluate-pattern
   ([env pat]
    (gs/reset-error-code!)
-   (if (literal? pat)
+   (if (syn/literal? pat)
      (make-result env pat)
      (let [env (or env (env/make (store/get-default-store) nil))
            pat (maybe-normalize-pattern pat)
-           [condition-handlers pat] (maybe-extract-condition-handlers pat)
+           [condition-handlers pat] (syn/maybe-extract-condition-handlers pat)
            [pat sub-pats] (maybe-preprocecss-pattern env pat)]
        (if-let [handler (pattern-handler pat)]
          (try
@@ -904,12 +842,6 @@
                (throw ex))))
          (u/throw-ex (str "Cannot handle invalid pattern " pat))))))
   ([pat] (evaluate-pattern nil pat)))
-
-(defn- alias-from-pattern [pat]
-  (cond
-    (map? pat) (:as pat)
-    (vector? pat) (second (drop-while not-as pat))
-    :else nil))
 
 (defn evaluate-dataflow
   ([store env event-instance-or-patterns]
@@ -943,7 +875,7 @@
                              {env1 :env r :result :as er} (evaluate-pattern env pat)]
                          (if-let [susp-pats (and (sp/dataflow-suspended?) (seq (rest df-patterns)))]
                            (let [sid (sp/suspension-id)]
-                             (and (sp/save env1 (vec susp-pats) (alias-from-pattern pat))
+                             (and (sp/save env1 (vec susp-pats) (syn/alias-from-pattern pat))
                                   (assoc er :result {:suspension-id sid :suspended-with r})))
                            (recur (rest df-patterns) pat-count env1 r)))
                        (make-result env result)))
