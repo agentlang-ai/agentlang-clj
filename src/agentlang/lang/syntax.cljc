@@ -9,19 +9,13 @@
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
-(def ^:private load-mode (atom nil))
-
-(defn set-load-mode! [] (reset! load-mode true))
-(defn unset-load-mode! [] (reset! load-mode false))
+(def ^:private load-mode (atom false))
 
 (def ^:private syntax-error-count (u/make-cell 0))
 (def ^:private syntax-error-limit 5)
 
 (defn raise-syntax-error [pattern msg]
-  (let [err (str "Error in pattern: \n"
-                  (u/pretty-str pattern)
-                  "\n"
-                  msg)]
+  (let [err (str msg " -- " (u/pretty-str pattern))]
     (if @load-mode
       (do
         (log/error err)
@@ -31,6 +25,14 @@
           (u/safe-set syntax-error-count (inc @syntax-error-count))))
       (u/throw-ex err))))
 
+(defn force-spit-errors! []
+  (when (pos? @syntax-error-count)
+    (u/throw-ex "There are syntax errors in the model, see the log for details."))
+  (u/safe-set syntax-error-count 0))
+
+(defn set-load-mode! [] (force-spit-errors!) (reset! load-mode true))
+(defn unset-load-mode! [] (force-spit-errors!) (reset! load-mode false))
+
 (defn- not-kw [kw x] (not= kw x))
 (def ^:private not-as (partial not-kw :as))
 (def ^:private not-not-found (partial not-kw :not-found))
@@ -39,7 +41,7 @@
 (def ^:private not-check (partial not-kw :check))
 
 (defn conditional? [pat]
-  (and (vector? pat) (li/match-operator? (first pat))))
+  (and (seqable? pat) (li/match-operator? (first pat))))
 
 (declare literal?)
 
@@ -74,7 +76,7 @@
      (when-let [cases (li/except-tag pat)]
        [cases (dissoc pat li/except-tag)])
 
-     (and (vector? pat) (= (first pat) :delete))
+     (and (seqable? pat) (= (first pat) :delete))
      (when-let [cases (first (rest (drop-while not-case pat)))]
        [cases (let [p0 (take-while not-case pat)]
                 (vec (concat p0 (rest (drop-while not-case (rest p0))))))]))
@@ -104,20 +106,20 @@
 (defn alias-from-pattern [pat]
   (cond
     (map? pat) (:as pat)
-    (vector? pat) (second (drop-while not-as pat))
+    (seqable? pat) (second (drop-while not-as pat))
     :else nil))
 
 (defn check-from-pattern [pat]
-  (when-let [chk (when (vector? pat)
+  (when-let [chk (when (seqable? pat)
                    (second (drop-while not-check pat)))]
     (when-not (or (keyword? chk) (fn? chk))
-      (raise-syntax-error pat "invalid check specification, must be a keyword or a function"))
+      (raise-syntax-error pat "Invalid check specification, must be a keyword or a function"))
     chk))
 
 (defn case-from-pattern [pat]
   (cond
     (map? pat) (li/except-tag pat)
-    (vector? pat) (second (drop-while not-case pat))
+    (seqable? pat) (second (drop-while not-case pat))
     :else nil))
 
 (def ^:private query-attribute? (fn [[k _]] (li/query-pattern? k)))
@@ -127,15 +129,15 @@
 
 (defn- introspect-alias [a]
   (when a
-    (when-not (keyword? a)
-      (raise-syntax-error a "not a valid alias"))
+    (when-not (or (keyword? a) (and (vector? a) (every? keyword? a)))
+      (raise-syntax-error a "Not a valid alias"))
     a))
 
 (def ^:private raw-alias identity)
 
 (defn- introspect-into [into]
   (when-not (map? into)
-    (raise-syntax-error into "not a valid into-specification, must be a map"))
+    (raise-syntax-error into "Not a valid into-specification, must be a map"))
   into)
 
 (def ^:private raw-into identity)
@@ -158,18 +160,27 @@
                (cn/relationship? n))
             ks)))
 
-(def ^:private introspect-map (partial call-on-map-values introspect))
-(def ^:private raw-map (partial call-on-map-values raw))
+(defn- introspect-map-values [m] (call-on-map-values introspect m))
+(defn- raw-map-values [m] (call-on-map-values raw m))
 
 (defn- introspect-case [c]
   (when c
     (when-not (map? c)
-      (raise-syntax-error c "not a valid case-specification, must be a map"))
+      (raise-syntax-error c "Not a valid case-specification, must be a map"))
     (when-not (= case-keys (set/union (keys c) case-keys))
-      (raise-syntax-error c (str "allowed keys are - " case-keys)))
-    (introspect-map c)))
+      (raise-syntax-error c (str "Allowed keys are - " case-keys)))
+    (introspect-map-values c)))
 
-(def ^:private raw-case raw-map)
+(def ^:private raw-case raw-map-values)
+
+(defn with-alias [alias r]
+  (assoc r :as alias))
+
+(defn with-into [into r]
+  (assoc r :into into))
+
+(defn with-case [case r]
+  (assoc r li/except-tag case))
 
 (defn- introspect-optional-keys [pat]
   {:as (introspect-alias (:as pat))
@@ -179,8 +190,8 @@
 (defn- raw-optional-keys [r]
   (merge
    (when-let [a (:as r)] {:as (raw-alias a)})
-   (when-let [into (:into r)] (raw-into into))
-   (when-let [c (li/except-tag r)] (raw-case c))))
+   (when-let [into (:into r)] {:into (raw-into into)})
+   (when-let [c (li/except-tag r)] {li/except-tag (raw-case c)})))
 
 (defn- introspect-query-upsert [recname pat]
   (let [attrs (validate-attributes pat (li/normalize-name recname) (get pat recname))
@@ -196,26 +207,46 @@
       :rels rels-spec}
      (introspect-optional-keys pat))))
 
+(defn- query-upsert
+  ([tag recname attributes rels]
+   {:type tag
+    :record recname
+    :attributes attributes
+    :rels rels})
+  ([tag recname attributes] (query-upsert tag recname attributes nil)))
+
+(def upsert (partial query-upsert :upsert))
+(def query (partial query-upsert :query))
+
 (defn- raw-query [r]
   (merge
    {(:record r)
     (:attributes r)}
-   (when-let [rels (:rels r)] (raw-map rels))
+   (when-let [rels (:rels r)] (raw-map-values rels))
    (raw-optional-keys r)))
 
 (def ^:private raw-upsert raw-query)
 
 (def ^:private introspect-create introspect-query-upsert)
 
+(defn- introspect-query-pattern [pat]
+  (when-not (map? pat)
+    (raise-syntax-error pat "Query must be a map"))
+  (when-not (:where pat)
+    (raise-syntax-error pat "No :where clause in query"))
+  pat)
+
+(def ^:private raw-query-pattern identity)
+
 (defn- introspect-query-object [recname pat]
   (merge
    {:type :query-object
     :record recname
-    :query (:? pat)}
+    :query (introspect-query-pattern (:? (li/record-attributes pat)))}
    (introspect-optional-keys pat)))
 
 (defn- raw-query-object [r]
-  (merge {(:record r) {:? (:query r)}}
+  (merge {(:record r) {:? (raw-query-pattern (:query r))}}
          (raw-optional-keys r)))
 
 (defn- introspect-call [pat]
@@ -223,7 +254,7 @@
    :fn (let [exp (second pat)]
          (if (list? exp)
            exp
-           (raise-syntax-error pat "not a valid fn-call expression")))
+           (raise-syntax-error pat "Not a valid fn-call expression")))
    :as (introspect-alias (alias-from-pattern pat))
    li/except-tag (introspect-case (case-from-pattern pat))
    :check (check-from-pattern pat)})
@@ -285,17 +316,23 @@
     (maybe-add-optional-raw-tags r pat)))
 
 (defn- introspect-for-each [pat]
-  (let [cond-pat (introspect (first pat))
+  (let [src (introspect (first pat))
         body (extract-body-patterns #{:as} (rest pat))
         alias (alias-from-pattern pat)]
     {:type :for-each
+     :src src
      :body (mapv introspect body)
      :as (introspect-alias alias)
      li/except-tag (introspect-case (case-from-pattern pat))}))
 
 (defn- raw-for-each [r]
-  (let [pat `[:for-each ~@(mapv raw (:body r))]]
+  (let [pat `[:for-each ~(raw (:src r)) ~@(mapv raw (:body r))]]
     (maybe-add-optional-raw-tags r pat)))
+
+(defn for-each [src body]
+  {:type :for-each
+   :src src
+   :body body})
 
 (defn- introspect-match [pat]
   (let [has-value? (not (conditional? (first pat)))
@@ -345,7 +382,7 @@
           :for-each introspect-for-each
           :match introspect-match
           :filter introspect-filter
-          (do (raise-syntax-error pat "not a valid expression") nil))]
+          (do (raise-syntax-error pat "Not a valid expression") nil))]
     (f (rest pat))))
 
 (defn- introspect-map [pat]
@@ -353,21 +390,22 @@
     (if main-recname
       (let [attrs (get pat main-recname)]
         (cond
+          (:? attrs) (introspect-query-object main-recname pat)
+
           (or (li/query-pattern? main-recname)
               (some li/query-pattern? (keys attrs)))
           (introspect-query-upsert main-recname pat)
 
-          (:? attrs) (introspect-query-object main-recname pat)
-
           :else (introspect-create main-recname pat)))
-      (raise-syntax-error pat (str "no schema definition found for " main-recname)))))
+      (raise-syntax-error pat (str "No schema definition found for " main-recname)))))
 
 (defn introspect [pat]
-  (cond
-    (map? pat) introspect-map
-    (vector? pat) introspect-command
-    (literal? pat) introspect-literal
-    :else (raise-syntax-error pat "invalid object")))
+  (when-let [f (cond
+                 (map? pat) (if (seq pat) introspect-map identity)
+                 (vector? pat) introspect-command
+                 (literal? pat) introspect-literal
+                 :else (raise-syntax-error pat "Invalid object"))]
+    (f pat)))
 
 (defn raw [r]
   (when-let [f (case (:type r)
@@ -381,5 +419,18 @@
                  :quote raw-quote
                  :sealed raw-sealed
                  :literal raw-literal
-                 (u/throw-ex (str "Invalid raw synatx object - " r)))]
+                 identity)]
     (f r)))
+
+(defn synatx-type? [t r] (= t (:type r)))
+
+(def query? (partial synatx-type? :query))
+(def upsert? (partial synatx-type? :upsert))
+(def query-object? (partial synatx-type? :query-object))
+(def for-each? (partial synatx-type? :for-each))
+(def match? (partial synatx-type? :match))
+(def delete? (partial synatx-type? :delete))
+(def try? (partial synatx-type? :try))
+(def quote? (partial synatx-type? :quote))
+(def sealed? (partial synatx-type? :sealed))
+(def liuteral? (partial synatx-type? :literal))
