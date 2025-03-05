@@ -167,7 +167,7 @@
   (when c
     (when-not (map? c)
       (raise-syntax-error c "Not a valid case-specification, must be a map"))
-    (when-not (= case-keys (set/union (keys c) case-keys))
+    (when-not (= case-keys (set (set/union (keys c) case-keys)))
       (raise-syntax-error c (str "Allowed keys are - " case-keys)))
     (introspect-map-values c)))
 
@@ -276,11 +276,16 @@
        pat))))
 
 (defn- introspect-delete [pat]
-  {:type :delete
-   :query (introspect (second pat))
-   :as (introspect-alias (alias-from-pattern pat))
-   :purge? (some #{:purge} pat)
-   li/except-tag (introspect-case (case-from-pattern pat))})
+  (let [q (first pat)]
+    {:type :delete
+     :query (if (keyword? q)
+              (do (when-not (cn/entity? q)
+                    (raise-syntax-error pat (str q " is not an entity")))
+                  q)
+              (introspect q))
+     :as (introspect-alias (alias-from-pattern pat))
+     :purge? (some #{:purge} pat)
+     li/except-tag (introspect-case (case-from-pattern pat))}))
 
 (defn- raw-delete [r]
   (let [pat [:delete (raw (:query r))]]
@@ -289,6 +294,13 @@
      (if (:purge? r)
        (concat pat [:purge])
        pat))))
+
+(defn delete
+  ([q purge?]
+   {:type :delete
+    :query q
+    :purge? purge?})
+  ([q] (delete q false)))
 
 (defn- introspect-quote [pat]
   {:type :quote
@@ -311,9 +323,25 @@
      :as (introspect-alias alias)
      li/except-tag (when handlers (introspect-case handlers))}))
 
+(defn- with-raw-try-cases [pat cases]
+  (loop [cs cases, pat pat]
+    (if-let [[k v] (first cs)]
+      (recur (rest cs) (conj pat k (raw v)))
+      pat)))
+
 (defn- raw-try [r]
-  (let [pat `[:try ~@(mapv raw (:body r))]]
-    (maybe-add-optional-raw-tags r pat)))
+  (let [pat0 `[:try ~@(mapv raw (:body r))]
+        pat (if-let [c (li/except-tag r)]
+              (vec (with-raw-try-cases pat0 c))
+              pat0)]
+    (maybe-add-optional-raw-tags (dissoc r li/except-tag) pat)))
+
+(defn _try [body cases]
+  (when-not (vector? body)
+    (u/throw-ex "Try body must be a vector"))
+  {:type :try
+   :body body
+   li/except-tag cases})
 
 (defn- introspect-for-each [pat]
   (let [src (introspect (first pat))
@@ -335,11 +363,15 @@
    :body body})
 
 (defn- introspect-match [pat]
-  (let [has-value? (not (conditional? (first pat)))
+  (let [fpat (first pat)
+        has-value? (not (conditional? fpat))
         body (extract-body-patterns #{:as} (if has-value? (rest pat) pat))
         alias (alias-from-pattern pat)]
     {:type :match
-     :value (when has-value? (introspect (first pat)))
+     :value (when has-value?
+              (if (keyword? fpat)
+                fpat
+                (introspect (first pat))))
      :body (loop [body body, result []]
              (if (seq body)
                (let [condition (first body)
@@ -352,15 +384,34 @@
      :as (introspect-alias alias)
      li/except-tag (introspect-case (case-from-pattern pat))}))
 
+(defn- collect-match-clauses [clauses]
+  (loop [cls clauses, result []]
+    (if-let [c (first cls)]
+      (recur
+       (rest cls)
+       (if (vector? c)
+         (conj result (first c) (second c))
+         (conj result c)))
+      result)))
+
 (defn- raw-match [r]
-  (let [body ~@(mapv (fn [v] (if (vector? v)
-                               [(first v) (raw (second v))]
-                               (raw v)))
-                     (:body r))
+  (let [body
+        (collect-match-clauses
+         (mapv (fn [v] (if (vector? v)
+                         [(first v) (raw (second v))]
+                         (raw v)))
+               (:body r)))
         pat (if-let [v (:value r)]
               `[:match ~(raw v) ~@body]
               `[:match ~@body])]
     (maybe-add-optional-raw-tags r pat)))
+
+(defn match
+  ([value body]
+   {:type :match
+    :value value
+    :body body})
+  ([body] (match nil body)))
 
 (defn- introspect-filter [pat]
   )

@@ -83,3 +83,58 @@
                {:error {:SynFe/R {:A 100}}}
                (ls/with-alias :Rs
                  (ls/for-each :Result (mapv ls/introspect [{:SynFe/R {:A :%.A}}])))))))
+
+(deftest delete
+  (defcomponent :SynDel
+    (entity :SynDel/E {:Id {:type :Int :id true} :X :Int}))
+  (is-pat ls/delete? [:delete {:SynDel/E {:Id? 10}}])
+  (is-pat ls/delete? [:delete {:SynDel/E {:Id? 10}} :as :R])
+  (is-pat ls/delete? [:delete :SynDel/E :purge])
+  (is (= [:delete {:SynDel/E {:Id? 10}} :as :R]
+         (ls/raw
+          (ls/with-alias
+            :R
+            (ls/delete (ls/query :SynDel/E {:Id? 10})))))))
+
+(deftest match
+  (defcomponent :SynMatch
+    (entity {:SynMatch/E {:Id {:type :Int :id true} :X :Int}}))
+  (let [testpat [:match :SynMatch/Event.Flag
+                 true {:SynMatch/E {:Id 1 :X 2}}
+                 false {:SynMatch/E {:Id 3 :X 4}}
+                 {:SynMatch/E {:Id 5 :X 6}}
+                 :as :R]]
+    (is-pat ls/match? testpat)
+    (is-pat ls/match? [:match
+                       [:= :SynMatch/E.X 1] {:SynMatch/E {:Id 1 :X 2}}
+                       [:> :SynMatch/E.X 1] {:SynMatch/E {:Id 3 :X 4}}
+                       {:SynMatch/E {:Id 5 :X 6}}
+                       :as :R])
+    (is (= testpat
+           (ls/raw
+            (ls/with-alias
+              :R
+              (ls/match
+               :SynMatch/Event.Flag
+               [[true (ls/upsert :SynMatch/E {:Id 1 :X 2})]
+                [false (ls/upsert :SynMatch/E {:Id 3 :X 4})]
+                (ls/upsert :SynMatch/E {:Id 5 :X 6})])))))))
+
+(deftest _try
+  (defcomponent :SynTry
+    (record :SynTry/R {:K :Int :Err :Boolean})
+    (event :SynTry/Evt {:X :Int :Y :String}))
+  (let [testpat [:try
+                 {:SynTry/Evt {:X 100 :Y "hello"}}
+                 :not-found {:SynTry/R {:K 0 :Err false}}
+                 :error {:SynTry/R {:K 1 :Err true}}
+                 :as :R]]
+    (is-pat ls/try? testpat)
+    (is (= testpat
+           (ls/raw
+            (ls/with-alias
+              :R
+              (ls/_try
+               [(ls/upsert :SynTry/Evt {:X 100 :Y "hello"})]
+               {:not-found (ls/upsert :SynTry/R {:K 0 :Err false})
+                :error (ls/upsert :SynTry/R {:K 1 :Err true})})))))))
