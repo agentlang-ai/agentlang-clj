@@ -342,6 +342,46 @@
          @names)
        [recname]))))
 
+(defn- has-resolved-relation? [query]
+  (first
+   (filter
+    #(and (cn/entity? %) (rr/resolver-for-path %))
+    (apply
+     concat
+     (map
+      keys
+      (vals query))))))
+
+(defn- sub-pat-as-query-pattern [pat]
+  (let [ks (keys pat)
+        entname (first (filter #(cn/entity? (li/normalize-name %)) ks))]
+    (if (li/query-pattern? entname)
+      pat
+      (let [attrs (entname pat)]
+        (if (seq attrs)
+          {entname (into {} (mapv (fn [[k v]]
+                                    [(if (li/query-pattern? k)
+                                       k
+                                       (li/name-as-query-pattern k))
+                                     v])
+                                  attrs))}
+          {(li/name-as-query-pattern entname) {}})))))
+
+(defn- remove-cont-rels-from-sub-pats [sub-pats]
+  (let [aq (dissoc (:abstract-query sub-pats) :contains-join)]
+    (dissoc (assoc sub-pats :abstract-query aq) :cont-rels)))
+
+(defn- filter-by-cont-rels-result [cont-rels-result result]
+  (let [cont-type (cn/instance-type-kw (first cont-rels-result))
+        rtype (cn/instance-type-kw (first result))]
+    (when-let [rs (seq
+                   (if (cn/parent-of? rtype cont-type)
+                     (let [ppaths (set (mapv li/path-attr cont-rels-result))]
+                       (filter (fn [r] (some #{(li/parent-attr r)} ppaths)) result))
+                     (let [ppaths (set (mapv li/parent-attr cont-rels-result))]
+                       (filter (fn [r] (some #{(li/path-attr r)} ppaths) result)))))]
+      (vec rs))))
+
 (defn- handle-query-pattern [env recname [attrs sub-pats] alias]
   (let [select-clause (:? attrs)
         [update-attrs query-attrs] (when-not select-clause (lift-attributes-for-update attrs))
@@ -355,6 +395,9 @@
                    (into {} (mapv (partial process-query-attribute-value env) attrs))))
         resolver (rr/resolver-for-path recname)
         cont-rels-query0 (when-let [rels (:cont-rels sub-pats)] (realize-all-references env rels))
+        is-cont-rels-resolved (when-not resolver (has-resolved-relation? cont-rels-query0))
+        cont-rels-result (when is-cont-rels-resolved
+                           (:result (evaluate-pattern env (sub-pat-as-query-pattern (first (vals cont-rels-query0))))))
         [recname attrs0 cont-rels-query] (maybe-merge-cont-rels-query-to-attributes [recname attrs0 cont-rels-query0])
         qfordel? (:*query-for-delete* env)
         all-ents (all-entities recname sub-pats)
@@ -363,16 +406,19 @@
         can-delete-all (:*can-delete-all* env)
         qparams {:entity-name recname
                  :query-attributes attrs0
-                 :sub-query sub-pats
+                 :sub-query (if is-cont-rels-resolved (remove-cont-rels-from-sub-pats sub-pats) sub-pats)
                  :rbac {:read-on-entities (set/difference all-ents #{recname})
                         :can-read-all? can-read-all
                         :can-update-all? can-update-all
                         :can-delete-all? can-delete-all
                         :follow-up-operation (or (when qfordel? :delete)
                                                  (when update-attrs :update))}}
-        result0 (if (and resolver (not (rr/composed? resolver)))
-                  (:result (r/call-resolver-query resolver env qparams))
-                  (store/do-query (env/get-store env) nil qparams))
+        result0 (let [r (if (and resolver (not (rr/composed? resolver)))
+                          (:result (r/call-resolver-query resolver env qparams))
+                          (store/do-query (env/get-store env) nil qparams))]
+                  (if cont-rels-result
+                    (filter-by-cont-rels-result cont-rels-result r)
+                    r))
         env0 (if (seq result0) (env/bind-instances env recname result0) env)
         result (if update-attrs (handle-upsert env0 resolver recname update-attrs result0) result0)
         env1 (if (seq result) (env/bind-instances env0 recname result) env0)

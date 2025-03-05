@@ -182,6 +182,9 @@
 (defn with-case [case r]
   (assoc r li/except-tag case))
 
+(defn with-distinct [d r]
+  (assoc r :distinct d))
+
 (defn- introspect-optional-keys [pat]
   {:as (introspect-alias (:as pat))
    :into (when-let [into (:into pat)] (introspect-into into))
@@ -204,6 +207,7 @@
               :query)
       :record recname
       :attributes attrs
+      :distinct (:distinct pat)
       :rels rels-spec}
      (introspect-optional-keys pat))))
 
@@ -223,6 +227,7 @@
    {(:record r)
     (:attributes r)}
    (when-let [rels (:rels r)] (raw-map-values rels))
+   (when-let [d (:distinct r)] {:distinct d})
    (raw-optional-keys r)))
 
 (def ^:private raw-upsert raw-query)
