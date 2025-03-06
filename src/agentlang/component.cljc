@@ -1390,10 +1390,58 @@
 (def expr-fns (partial computed-attribute-fns :expr))
 (def eval-attrs (partial computed-attribute-fns :eval))
 
+(defn- find-longest-dep [deps]
+  (loop [deps deps, n 0, r nil]
+    (if-let [[k v] (first deps)]
+      (let [dn (count v)
+            [nn nr] (if (> dn n) [dn k] [n r])]
+        (recur (rest deps) nn nr))
+      r)))
+
+(def ^:private expr-fns-cache (u/make-cell {}))
+
+(defn- set-expr-fns-cache [recname fns]
+  (u/safe-set expr-fns-cache (assoc @expr-fns-cache recname fns))
+  fns)
+
+(defn- get-expr-fns-from-cache [recname]
+  (get @expr-fns-cache recname))
+
+(defn- build-deps-graph
+  ([deps attrs k]
+   (if-let [kdeps (k deps)]
+     (let [dg
+           (loop [kdeps kdeps, dg []]
+             (if-let [kd (first kdeps)]
+               (recur (rest kdeps) (concat dg (build-deps-graph deps attrs kd)))
+               (vec dg)))]
+       (when (some #{k} dg)
+         (u/throw-ex (str "Circular dependency on " k " in " attrs)))
+       (vec (conj dg k)))
+     [k]))
+  ([deps attrs] (u/pprint deps) (build-deps-graph deps attrs (find-longest-dep deps))))
+
+(defn- order-exprs-by-deps [recname expr-attrs]
+  (when (seq expr-attrs)
+    (let [attrs (into {} expr-attrs)
+          ks (set (keys attrs))
+          graph (atom {})]
+      (doseq [[k v] expr-attrs]
+        (when-let [deps (seq (filter #(and (keyword? %) (some #{%} ks)) v))]
+          (swap! graph assoc k (vec (concat (get @graph k []) deps)))))
+      (let [g @graph
+            dg (when (seq g) (build-deps-graph g attrs))
+            missing-ks (set/difference ks (set dg))
+            f (fn [d] [d (get attrs d)])]
+        (set-expr-fns-cache recname (concat (when (seq missing-ks) (mapv f missing-ks))
+                                            (mapv f dg)))))))
+
 (defn all-computed-attribute-fns
   ([record-name rec-version]
    (when-let [scm (find-object-schema record-name rec-version)]
-     [(expr-fns scm rec-version) (eval-attrs scm rec-version)]))
+     [(or (get-expr-fns-from-cache record-name)
+          (order-exprs-by-deps record-name (expr-fns scm rec-version)))
+      (eval-attrs scm rec-version)]))
   ([rec-name]
    (all-computed-attribute-fns rec-name nil)))
 
@@ -1470,6 +1518,9 @@
 (defn type-any? [entity-schema attr]
   (= :Agentlang.Kernel.Lang/Any (attribute-type entity-schema attr)))
 
+(defn type-path? [entity-schema attr]
+  (= :Agentlang.Kernel.Lang/Path (attribute-type entity-schema attr)))
+
 (defn find-ref-path [attr-schema-name]
   (:ref (find-attribute-schema attr-schema-name)))
 
@@ -1483,8 +1534,7 @@
   (let [atype (partial attribute-type entity-schema)]
     (filter
      #(let [t (atype %)]
-        (or (= t :Agentlang.Kernel.Lang/Keyword)
-            (= t :Agentlang.Kernel.Lang/Path)))
+        (= t :Agentlang.Kernel.Lang/Keyword))
      attribute-names)))
 
 (defn dissoc-write-only [instance]
@@ -2492,3 +2542,8 @@
     (concat (keys scm)
             (when (entity? recname)
               (find-extension-attributes recname)))))
+
+(defn path-attributes [recname]
+  (when-let [scm (fetch-entity-schema recname)]
+    (when-let [attrs (seq (filter (fn [[k _]] (type-path? scm k)) scm))]
+      (set (mapv first attrs)))))

@@ -14,7 +14,8 @@
             [agentlang.global-state :as gs]
             [agentlang.lang.internal :as li]
             [agentlang.lang.datetime :as dt]
-            [agentlang.lang.syntax :as syn]
+            [agentlang.lang.syntax :as ls]
+            [agentlang.lang.kernel :as lk]
             [agentlang.resolver.registry :as rr]
             [agentlang.resolver.core :as r]
             [agentlang.datafmt.json :as json]
@@ -56,7 +57,7 @@
              (follow-reference env f))
           ~@(mapv #(evaluate-attribute-value env k %) (rest v))]
         (mapv #(evaluate-attribute-value env k %) v)))
-    (list? v) (evaluate-attr-expr env nil k v)
+    (list? v) (evaluate-attr-expr env nil nil k v)
     :else v))
 
 (defn- follow-references-in-attributes-helper [env attrs]
@@ -111,19 +112,49 @@
                        attrs))}
      (when alias {:as alias}))))
 
-(defn- evaluate-attr-expr [env attrs attr-name exp]
+(declare maybe-follow-raw-path)
+
+(defn- access-path-refs [env r refs]
+  (when r
+    (if (seq refs)
+      (loop [refs refs, result r]
+        (if-let [fr (first refs)]
+          (let [v (get result fr)]
+            (if (lk/path? v)
+              (maybe-follow-raw-path env v (seq (rest refs)))
+              (recur (rest refs) v)))
+          result))
+      r)))
+
+(defn- maybe-follow-raw-path [env path refs]
+  (if-let [entity-name (li/entity-name-from-path path)]
+    (let [r (first (:result (evaluate-pattern env {entity-name {li/path-attr? path}})))]
+      (if r
+        (access-path-refs env r refs)
+        path))
+    path))
+
+(defn- maybe-follow-path [env path-attrs attrs path-ref]
+  (let [{refs :refs a :path} (li/path-parts path-ref)]
+    (when-let [path (and (some #{a} path-attrs) (a attrs))]
+      (let [entity-name (li/entity-name-from-path path)
+            r (first (:result (evaluate-pattern env {entity-name {li/path-attr? path}})))]
+        (access-path-refs env r refs)))))
+
+(defn- evaluate-attr-expr [env attrs path-attr-names attr-name exp]
   (let [final-exp (mapv #(if (keyword? %)
                            (if (= % attr-name)
                              (u/throw-ex (str "Unqualified self-reference " % " not allowed in " exp))
-                             (or (% attrs) (follow-reference env %)))
+                             (or (when path-attr-names (maybe-follow-path env path-attr-names attrs %))
+                                 (% attrs) (follow-reference env %)))
                            %)
                         exp)]
     (li/evaluate (seq final-exp))))
 
-(defn- assoc-fn-attributes [env attrs fn-exprs]
+(defn- assoc-fn-attributes [env attrs path-attr-names fn-exprs]
   (loop [fns fn-exprs, raw-obj attrs]
     (if-let [[a exp] (first fns)]
-      (recur (rest fns) (assoc raw-obj a (evaluate-attr-expr env attrs a exp)))
+      (recur (rest fns) (assoc raw-obj a (evaluate-attr-expr env raw-obj path-attr-names a exp)))
       raw-obj)))
 
 (defn- find-deps [k all-deps]
@@ -185,11 +216,12 @@
                               (follow-reference env v)
                               v)])
                        attrs))
+         path-attrs (cn/path-attributes recname)
          new-attrs
          (if has-exp?
            (loop [exp-attrs (order-by-dependencies env attrs1), attrs attrs1]
              (if-let [[k v] (first exp-attrs)]
-               (let [newv (evaluate-attr-expr env attrs k v)]
+               (let [newv (evaluate-attr-expr env attrs path-attrs k v)]
                  (recur (rest exp-attrs) (assoc attrs k newv)))
                attrs))
            attrs1)]
@@ -199,7 +231,7 @@
               [k (evaluate-attribute-value env k v)])
             (if compute-compound-attributes?
               (if-let [[efns _] (cn/all-computed-attribute-fns recname nil)]
-                (assoc-fn-attributes env new-attrs efns)
+                (assoc-fn-attributes env new-attrs path-attrs efns)
                 new-attrs)
               new-attrs)))))
   ([env recname attrs] (realize-attribute-values env recname attrs true)))
@@ -606,7 +638,7 @@
     result))
 
 (defn- handle-try [env & pat]
-  (let [[body _ handlers] (syn/parse-try pat)
+  (let [[body _ handlers] (ls/parse-try pat)
         not-found (:not-found handlers)
         err (:error handlers)]
     (try
@@ -625,7 +657,7 @@
 
 (defn- handle-for-each [env & pat]
   (let [cond-pat (first pat)
-        body (syn/extract-body-patterns #{:as} (rest pat))]
+        body (ls/extract-body-patterns #{:as} (rest pat))]
     (loop [rs (:result (evaluate-pattern env cond-pat))
            e env, result []]
       (if-let [r (first rs)]
@@ -667,8 +699,8 @@
               (u/throw-ex (str "Invalid operator " (first condition) " in " condition)))))))))
 
 (defn- handle-match [env & pat]
-  (let [has-value? (not (syn/conditional? (first pat)))
-        body (syn/extract-body-patterns #{:as} (if has-value? (rest pat) pat))
+  (let [has-value? (not (ls/conditional? (first pat)))
+        body (ls/extract-body-patterns #{:as} (if has-value? (rest pat) pat))
         e
         (if has-value?
           (let [r (:result (evaluate-pattern env (first pat)))]
@@ -704,7 +736,7 @@
       result)))
 
 (defn- expr-handler [env pat _]
-  (let [[pat alias] (syn/extract-alias-from-expression pat)
+  (let [[pat alias] (ls/extract-alias-from-expression pat)
         tag (first pat)
         handler
         (case tag
@@ -822,11 +854,11 @@
 (defn evaluate-pattern
   ([env pat]
    (gs/reset-error-code!)
-   (if (syn/literal? pat)
+   (if (ls/literal? pat)
      (make-result env pat)
      (let [env (or env (env/make (store/get-default-store) nil))
            pat (maybe-normalize-pattern pat)
-           [condition-handlers pat] (syn/maybe-extract-condition-handlers pat)
+           [condition-handlers pat] (ls/maybe-extract-condition-handlers pat)
            [pat sub-pats] (maybe-preprocecss-pattern env pat)]
        (if-let [handler (pattern-handler pat)]
          (try
@@ -875,7 +907,7 @@
                              {env1 :env r :result :as er} (evaluate-pattern env pat)]
                          (if-let [susp-pats (and (sp/dataflow-suspended?) (seq (rest df-patterns)))]
                            (let [sid (sp/suspension-id)]
-                             (and (sp/save env1 (vec susp-pats) (syn/alias-from-pattern pat))
+                             (and (sp/save env1 (vec susp-pats) (ls/alias-from-pattern pat))
                                   (assoc er :result {:suspension-id sid :suspended-with r})))
                            (recur (rest df-patterns) pat-count env1 r)))
                        (make-result env result)))

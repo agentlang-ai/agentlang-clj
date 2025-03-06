@@ -1004,112 +1004,55 @@
     (is (and (r? r1) (= 0 (:Y r1))))
     (is (e? e2))))
 
-;; (deftest compound-attributes
-;;   (defcomponent :Df04
-;;     (entity {:Df04/E1 {:A :Int}})
-;;     (entity {:Df04/E2 {:AId {:ref (tu/append-id :Df04/E1)}
-;;                        :X :Int
-;;                        :Y {:type :Int
-;;                            :expr '(* :X :AId.A)}}})
-;;     (event {:Df04/PostE2 {:E1 :Df04/E1}}))
-;;   (dataflow :Df04/PostE2
-;;             {:Df04/E2 {:AId (tu/append-id :Df04/PostE2.E1)
-;;                        :X 500}})
-;;   (let [e (cn/make-instance :Df04/E1 {:A 100})
-;;         evt (cn/make-instance :Df04/Create_E1 {:Instance e})
-;;         e1 (tu/invoke evt)
-;;         id (cn/id-attr e1)
-;;         e2 (cn/make-instance :Df04/E2 {:AId (cn/id-attr e1)
-;;                                        :X 20})
-;;         evt (cn/make-instance :Df04/PostE2 {:E1 e1})
-;;         result (tu/invoke evt)]
-;;     (is (cn/instance-of? :Df04/E2 result))
-;;     (is (u/uuid-from-string (cn/id-attr result)))
-;;     (is (= (:AId result) id))
-;;     (is (= (:X result) 500))
-;;     (is (= (:Y result) 50000))))
-
-;; (deftest compound-attributes-non-id
-;;   (defcomponent :Df04NID
-;;     (entity {:Df04NID/E1 {:A :Int
-;;                           :Name {:type :String
-;;                                  :unique true}}})
-;;     (entity {:Df04NID/E2 {:E1 {:ref :Df04NID/E1.Name}
-;;                           :X :Int
-;;                           :Y {:type :Int
-;;                               :expr '(* :X :E1.A)}}})
-;;     (event {:Df04NID/PostE2 {:E1Name :String}}))
-;;   (dataflow :Df04NID/PostE2
-;;             {:Df04NID/E2 {:E1 :Df04NID/PostE2.E1Name
-;;                           :X 500}})
-;;   (let [e (cn/make-instance :Df04NID/E1 {:A 100
-;;                                          :Name "E1-A"})
-;;         evt (cn/make-instance :Df04NID/Create_E1 {:Instance e})
-;;         e1 (first (tu/fresult (e/eval-all-dataflows evt)))
-;;         e1-name (:Name e1)
-;;         evt (cn/make-instance :Df04NID/PostE2 {:E1Name e1-name})
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :Df04NID/E2 result))
-;;     (is (u/uuid-from-string (cn/id-attr result)))
-;;     (is (= (:E1 result) e1-name))
-;;     (is (= (:X result) 500))
-;;     (is (= (:Y result) 50000))))
-
-;; (defn- assert-ca-e! [result]
-;;   (is (cn/instance-of? :CA/E result))
-;;   (is (= 20 (:A result)))
-;;   (is (= 200 (:B result))))
-
-;; (deftest compound-attributes-with-default-events
-;;   (defcomponent :CA
-;;     (entity {:CA/E {:A :Int
-;;                     :B {:type :Int
-;;                         :expr '(* :A 10)}}}))
-;;   (let [e (cn/make-instance :CA/E {:A 20})
-;;         evt {:CA/Create_E {:Instance e}}
-;;         r (e/eval-all-dataflows evt)
-;;         result (first (tu/fresult r))]
-;;     (assert-ca-e! result)
-;;     (let [id (cn/id-attr result)
-;;           evt {:CA/Lookup_E {cn/id-attr id}}
-;;           r (e/eval-all-dataflows evt)
-;;           result (first (tu/fresult r))]
-;;       (assert-ca-e! result))))
-
-;; (deftest compound-attributes-literal-arg
-;;   (defcomponent :Df041
-;;     (record {:Df041/R {:A :Int}})
-;;     (entity {:Df041/E {:X :Int
-;;                        :Y {:type :Int
-;;                            :expr '(* :X 10)}}})
-;;     (event {:Df041/PostE {:R :Df041/R}}))
-;;   (dataflow :Df041/PostE
-;;             {:Df041/E {:X :Df041/PostE.R.A}})
-;;   (let [r (cn/make-instance :Df041/R {:A 100})
-;;         evt (cn/make-instance :Df041/PostE {:R r})
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :Df041/E result))
-;;     (is (= (:X result) 100))
-;;     (is (= (:Y result) 1000))))
-
-;; (deftest refcheck
-;;   (defcomponent :RefCheck
-;;     (entity {:RefCheck/E1 {:A :Int}})
-;;     (entity {:RefCheck/E2 {:AId {:ref (tu/append-id :RefCheck/E1)}
-;;                            :X :Int}}))
-;;   (let [e (cn/make-instance :RefCheck/E1 {:A 100})
-;;         id (cn/id-attr e)
-;;         e2 (cn/make-instance :RefCheck/E2 {:AId (cn/id-attr e) :X 20})
-;;         evt (cn/make-instance :RefCheck/Create_E2 {:Instance e2})]
-;;     (is (= :not-found (:status (first (e/eval-all-dataflows evt)))))
-;;     (let [evt (cn/make-instance :RefCheck/Create_E1 {:Instance e})
-;;           e1 (first (tu/fresult (e/eval-all-dataflows evt)))
-;;           id (cn/id-attr e1)
-;;           e2 (cn/make-instance :RefCheck/E2 {:AId (cn/id-attr e1) :X 20})
-;;           evt (cn/make-instance :RefCheck/Create_E2 {:Instance e2})
-;;           inst (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;       (is (cn/instance-of? :RefCheck/E2 inst))
-;;       (is (= (:AId inst) id)))))
+(deftest compound-path-attributes
+  (defcomponent :Cpa
+    (entity
+     :Cpa/A
+     {:Id {:type :Int :id true}
+      :B :Path
+      :C :Path
+      :X '(+ :Y 5 :B.Z)
+      :Y :Int
+      :Z '(* :X :C.B.Z)})
+    (entity
+     :Cpa/B
+     {:Id {:type :Int :id true}
+      :Z :Int})
+     (entity
+      :Cpa/C
+      {:Id {:type :Int :id true}
+       :B :Path}))
+  (let [a? (partial cn/instance-of? :Cpa/A)
+        b? (partial cn/instance-of? :Cpa/B)
+        c? (partial cn/instance-of? :Cpa/C)
+        crb (fn [id z]
+              (let [b (tu/invoke
+                       {:Cpa/Create_B
+                        {:Instance
+                         {:Cpa/B {:Id id :Z z}}}})]
+                (is (b? b))
+                b))
+        cra (fn [id bpath cpath y]
+              (let [a
+                    (tu/invoke
+                     {:Cpa/Create_A
+                      {:Instance
+                       {:Cpa/A {:Id id :B bpath :C cpath :Y y}}}})]
+                (is (a? a))
+                a))
+        crc (fn [id bpath]
+              (let [c
+                    (tu/invoke
+                     {:Cpa/Create_C
+                      {:Instance
+                       {:Cpa/C {:Id id :B bpath}}}})]
+                (is (c? c))
+                c))
+        [b1 b2] (mapv crb [10 20] [90 91])
+        c (crc 100 (li/path-attr b2))
+        a (cra 1 (li/path-attr b1) (li/path-attr c) 10)]
+    (is (= 105 (:X a)))
+    (is (= 9555 (:Z a)))))
 
 ;; (deftest optional-attributes
 ;;   (defcomponent :OptAttr
