@@ -494,3 +494,18 @@
 (def quote? (partial synatx-type? :quote))
 (def sealed? (partial synatx-type? :sealed))
 (def liuteral? (partial synatx-type? :literal))
+
+(defn- skip-root-component [n]
+  (let [parts (s/split (name n) #"\.")]
+    (if (> (count parts) 1)
+      (keyword (s/join "." (rest parts)))
+      n)))
+
+(defn unqualified-name [x]
+  (cond
+    (li/name? x)
+    (let [[c n] (li/split-path x)]
+      (or n (skip-root-component c)))
+
+    (li/parsed-path? x)
+    (second x)))
