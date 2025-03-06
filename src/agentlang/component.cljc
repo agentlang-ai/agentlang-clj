@@ -1723,6 +1723,15 @@
 (defn meta-entity-name? [n]
   (s/ends-with? (name n) meta-suffix))
 
+(def ^:private inst-priv-suffix "_ipa")
+
+(defn inst-priv-entity-name [entity-name]
+  (let [[c n] (li/split-path entity-name)]
+    (li/make-path c (str (name n) inst-priv-suffix))))
+
+(defn inst-priv-entity-name? [n]
+  (s/ends-with? (name n) inst-priv-suffix))
+
 (defn meta-entity-update-event-name [n]
   (let [[c n] (li/split-path (meta-entity-name n))]
     (keyword (str (name c) "/Update_" (name n)))))
@@ -1767,9 +1776,10 @@
    (make-meta-instance inst user nil)))
 
 (defn user-entity-names [component]
-  (filter #(and (not (meta-entity-name? %))
-                (not (relationship? %)))
-          (entity-names component)))
+  (set (filter #(and (not (meta-entity-name? %))
+                     (not (relationship? %))
+                     (not (inst-priv-entity-name? %)))
+               (entity-names component))))
 
 (def lookup-internal-event-prefix :Lookup_Internal)
 (def lookup-internal-event-prefix-s (name lookup-internal-event-prefix))
@@ -2478,6 +2488,7 @@
   (assoc inst type-key new-type))
 
 (defn all-attribute-names [recname]
-  (concat (keys (fetch-user-schema recname))
-          (when (entity? recname)
-            (find-extension-attributes recname))))
+  (when-let [scm (fetch-user-schema recname)]
+    (concat (keys scm)
+            (when (entity? recname)
+              (find-extension-attributes recname)))))

@@ -260,9 +260,7 @@
 (defn normalize-aggregates [results]
   (mapv normalize-aggregate results))
 
-(defn inst-priv-entity [entity-name]
-  (let [[c n] (li/split-path entity-name)]
-    (li/make-path c (str (name n) "_ipa"))))
+(def inst-priv-entity cn/inst-priv-entity-name)
 
 (defn inst-priv-table [entity-name]
   (entity-table-name (inst-priv-entity entity-name)))

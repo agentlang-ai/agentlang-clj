@@ -209,6 +209,7 @@
         {:Rwc/A? {}
          :Rwc/AB? {:Rwc/B {}
                    :Rwc/BC {:Rwc/C {:Id :Rwc/LookupCBA.C}}}})))
+  (is (= #{:Rwc/A :Rwc/B :Rwc/C} (cn/user-entity-names :Rwc)))
   (call-with-rbac
    (fn []
      (let [a? (partial cn/instance-of? :Rwc/A)

@@ -43,6 +43,9 @@
 (defn conditional? [pat]
   (and (seqable? pat) (li/match-operator? (first pat))))
 
+(defn- maybe-lang-def-name? [n]
+  (= 2 (count (li/split-path n))))
+
 (declare literal?)
 
 (defn- normal-map? [x]
@@ -50,10 +53,7 @@
        (and (nil? (seq (select-keys x li/instance-meta-keys)))
             (some #(or (literal? %)
                        (if-let [n (and (keyword? %) (li/normalize-name %))]
-                         (not (or (cn/entity? n)
-                                  (cn/event? n)
-                                  (cn/relationship? n)
-                                  (cn/rec? n)))
+                         (not (maybe-lang-def-name? n))
                          true))
                   (keys x)))))
 
@@ -63,10 +63,11 @@
       (and (vector? x) (literal? (first x)))))
 
 (defn- validate-attributes [pat recname attrs]
-  (let [all (cn/all-attribute-names recname)]
+  (if-let [all (cn/all-attribute-names recname)]
     (doseq [n (keys attrs)]
       (when-not (some #{(li/normalize-name n)} all)
-        (raise-syntax-error pat (str n " is not a valid attribute of " recname)))))
+        (raise-syntax-error pat (str n " is not a valid attribute of " recname))))
+    (log/warn (str "Schema not found, failed to validate attributes for " recname)))
   attrs)
 
 (defn maybe-extract-condition-handlers [pat]
@@ -154,10 +155,15 @@
                           (cn/rec? n)))
                    ks))))
 
-(defn- extract-relationship-names [pat]
-  (let [ks (keys pat)]
+(defn- extract-possible-record-name [pat]
+  (let [ks (keys pat)] (first (filter maybe-lang-def-name? ks))))
+
+(defn- extract-relationship-names [recname pat]
+  (let [ks (keys pat)
+        rn (li/normalize-name recname)]
     (filter #(let [n (li/normalize-name %)]
-               (cn/relationship? n))
+               (or (cn/relationship? n)
+                   (and (maybe-lang-def-name? n) (not= n rn))))
             ks)))
 
 (defn- introspect-map-values [m] (call-on-map-values introspect m))
@@ -199,7 +205,7 @@
 (defn- introspect-query-upsert [recname pat]
   (let [attrs (validate-attributes pat (li/normalize-name recname) (get pat recname))
         upsattrs (filter update-attribute? attrs)
-        rels (extract-relationship-names pat)
+        rels (extract-relationship-names recname pat)
         rels-spec (mapv (fn [r] [r (introspect (get pat r))]) rels)]
     (merge
      {:type (if (seq upsattrs)
@@ -444,7 +450,8 @@
     (f (rest pat))))
 
 (defn- introspect-map [pat]
-  (let [main-recname (extract-main-record-name pat)]
+  (let [main-recname (or (extract-main-record-name pat)
+                         (extract-possible-record-name pat))]
     (if main-recname
       (let [attrs (get pat main-recname)]
         (cond
