@@ -24,7 +24,7 @@
     (entity :SynInst/E {:Id {:type :Int :id true} :X :Int}))
   (is-pat ls/upsert? {:SynInst/E {:Id 1 :X 100}})
   (is-pat ls/upsert? {:SynInst/E {:Id 1 :X 100} :as :A})
-  (is-pat ls/upsert? {:SynInst/E {:Id? 1 :X 200} :as :A})
+  (is-pat ls/query-upsert? {:SynInst/E {:Id? 1 :X 200} :as :A})
   (is-pat ls/query? {:SynInst/E {:Id? 1} :as [:A]})
   (is-pat ls/upsert? {:SynInst/E {:Id 2 :X '(* 10 :SynInst/CreateE.X)} :as :A})
   (is-pat ls/query-object? {:SynInst/E {:? {:where [:>= :X 100]}} :as :Result})

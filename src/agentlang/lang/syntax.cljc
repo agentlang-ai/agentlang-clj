@@ -203,7 +203,9 @@
         rels-spec (mapv (fn [r] [r (introspect (get pat r))]) rels)]
     (merge
      {:type (if (seq upsattrs)
-              :upsert
+              (if (seq (filter query-attribute? attrs))
+                :query-upsert
+                :upsert)
               :query)
       :record recname
       :attributes attrs
@@ -467,6 +469,7 @@
   (when-let [f (case (:type r)
                  :query raw-query
                  :upsert raw-upsert
+                 :query-upsert raw-upsert
                  :query-object raw-query-object
                  :for-each raw-for-each
                  :match raw-match
@@ -482,6 +485,7 @@
 
 (def query? (partial synatx-type? :query))
 (def upsert? (partial synatx-type? :upsert))
+(def query-upsert? (partial synatx-type? :query-upsert))
 (def query-object? (partial synatx-type? :query-object))
 (def for-each? (partial synatx-type? :for-each))
 (def match? (partial synatx-type? :match))

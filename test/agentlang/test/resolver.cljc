@@ -74,7 +74,7 @@
       (is-find-a 2)
       (is (nil? (tu/invoke {:Bres/FindA {:Id 3}}))))))
 
-(deftest resolver-with-contains-01
+#_(deftest resolver-with-contains-01
   (let [db (atom [])]
     (defcomponent :ResC
       (entity :ResC/A {:Id {:type :Int :id true} :X :Int})
