@@ -79,7 +79,7 @@
 
 (dataflow
  :FindRunnableTimers
- {:Timer? {:where [:or [:= :Status "ready"] [:= :Status "running"]]}})
+ {:Timer {:? {:where [:or [:= :Status "ready"] [:= :Status "running"]]}}})
 
 (dataflow
  :LoadPolicies

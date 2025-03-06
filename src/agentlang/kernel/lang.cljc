@@ -33,7 +33,7 @@
 (attribute :Agentlang.Kernel.Lang/String {:check k/kernel-string?})
 (attribute
  :Agentlang.Kernel.Lang/Keyword
- {:check (fn* [p1__607#] (or (keyword? p1__607#) (string? p1__607#)))})
+ {:check (fn* [p1__703#] (or (keyword? p1__703#) (string? p1__703#)))})
 (attribute :Agentlang.Kernel.Lang/Path {:check k/path?})
 (attribute :Agentlang.Kernel.Lang/DateTime {:check k/date-time?})
 (attribute :Agentlang.Kernel.Lang/Date {:check k/date?})
@@ -131,11 +131,12 @@
                           :Status "term-cancel"}})
 (dataflow
  :Agentlang.Kernel.Lang/FindRunnableTimers
- #:Agentlang.Kernel.Lang{:Timer?
-                         {:where
-                          [:or
-                           [:= :Status "ready"]
-                           [:= :Status "running"]]}})
+ #:Agentlang.Kernel.Lang{:Timer
+                         {:?
+                          {:where
+                           [:or
+                            [:= :Status "ready"]
+                            [:= :Status "running"]]}}})
 (dataflow
  :Agentlang.Kernel.Lang/LoadPolicies
  #:Agentlang.Kernel.Lang{:Policy
@@ -184,4 +185,4 @@
     :paths [:Agentlang.Kernel.Lang/DataSync]})])
 (def
  Agentlang_Kernel_Lang___COMPONENT_ID__
- "640983ac-0e8e-46ea-aa75-ba1b0c21714b")
+ "fd046664-ac58-4a72-b6ea-eca7965011e3")

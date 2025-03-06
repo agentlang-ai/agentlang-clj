@@ -10,6 +10,7 @@
             [agentlang.lang.kernel :as k]
             [agentlang.lang.raw :as raw]
             [agentlang.lang.rbac :as lr]
+            [agentlang.lang.syntax :as syn]
             [agentlang.meta :as mt]
             [agentlang.resolvers]
             [agentlang.resolver.registry :as rr]
@@ -638,9 +639,20 @@
     (cn/canonical-type-name pat)
     pat))
 
+(defn- validate-patterns! [patterns]
+  (try
+    (doseq [pat patterns]
+      (syn/introspect pat))
+    (catch #?(:clj Exception :cljs :default) ex
+      (let [msg (str "Failure in validating: " (u/pretty-str patterns) "\n"
+                     #?(:clj (.getMessage ex) :cljs ex))]
+        (log/warn msg)
+        (println (str "WARN: " msg))))))
+
 (defn dataflow
   "A declarative data transformation pipeline."
   [match-pat & patterns]
+  (validate-patterns! patterns)
   (let [match-pat (canonical-dataflow-match-pattern match-pat)
         r (cond
             (prepost-crud-dataflow? match-pat)

@@ -614,7 +614,7 @@
         (if-let [p (first body)]
           (let [er (evaluate-pattern e p)
                 r (:result er)]
-            (if (and (nil? (seq r)) not-found)
+            (if (and (or (nil? r) (nil? (and (seqable? r) (seq r)))) not-found)
               (:result (evaluate-pattern e not-found))
               (recur (rest body) (:env er) r)))
           result))

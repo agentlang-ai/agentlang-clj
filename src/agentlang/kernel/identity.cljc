@@ -98,17 +98,17 @@
 (dataflow
  [:after :delete :Agentlang.Kernel.Identity/User]
  [:delete
-  :Agentlang.Kernel.Rbac/InstancePrivilegeAssignment
-  {:Assignee :Instance.Email}]
+  #:Agentlang.Kernel.Rbac{:InstancePrivilegeAssignment
+                          {:Assignee? :Instance.Email}}]
  [:delete :Agentlang.Kernel.Rbac/InstancePrivilegeAssignment :purge]
  [:delete
-  :Agentlang.Kernel.Rbac/OwnershipAssignment
-  {:Assignee :Instance.Email}]
+  #:Agentlang.Kernel.Rbac{:OwnershipAssignment
+                          {:Assignee? :Instance.Email}}]
  [:delete :Agentlang.Kernel.Rbac/OwnershipAssignment :purge]
  [:delete
-  :Agentlang.Kernel.Rbac/RoleAssignment
-  {:Assignee :Instance.Email}]
+  #:Agentlang.Kernel.Rbac{:RoleAssignment
+                          {:Assignee? :Instance.Email}}]
  [:delete :Agentlang.Kernel.Rbac/RoleAssignment :purge])
 (def
  Agentlang_Kernel_Identity___COMPONENT_ID__
- "d2284ad8-e872-4ac4-a477-99ec058fb27a")
+ "2059f0eb-504f-4b2a-9579-d9168e074e98")

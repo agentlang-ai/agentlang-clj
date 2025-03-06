@@ -113,9 +113,9 @@
 
 (dataflow
  [:after :delete :Agentlang.Kernel.Identity/User]
- [:delete :Agentlang.Kernel.Rbac/InstancePrivilegeAssignment {:Assignee :Instance.Email}]
+ [:delete {:Agentlang.Kernel.Rbac/InstancePrivilegeAssignment {:Assignee? :Instance.Email}}]
  [:delete :Agentlang.Kernel.Rbac/InstancePrivilegeAssignment :purge]
- [:delete :Agentlang.Kernel.Rbac/OwnershipAssignment {:Assignee :Instance.Email}]
+ [:delete {:Agentlang.Kernel.Rbac/OwnershipAssignment {:Assignee? :Instance.Email}}]
  [:delete :Agentlang.Kernel.Rbac/OwnershipAssignment :purge]
- [:delete :Agentlang.Kernel.Rbac/RoleAssignment {:Assignee :Instance.Email}]
+ [:delete {:Agentlang.Kernel.Rbac/RoleAssignment {:Assignee? :Instance.Email}}]
  [:delete :Agentlang.Kernel.Rbac/RoleAssignment :purge])

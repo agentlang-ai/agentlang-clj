@@ -1,12 +1,12 @@
 {:service {:port 8000}
  :store {:type :h2
          :dbname "./db"}
- :embeddings {:vectordb :pgvector,
-              :config {:host (env POSTGRES_HOST),
-                       :port 5432,
-                       :dbname (env POSTGRES_DB),
-                       :user (env POSTGRES_USER),
-                       :password (env POSTGRES_PASSWORD)}}
+ ;; :embeddings {:vectordb :pgvector,
+ ;;              :config {:host (env POSTGRES_HOST),
+ ;;                       :port 5432,
+ ;;                       :dbname (env POSTGRES_DB),
+ ;;                       :user (env POSTGRES_USER),
+ ;;                       :password (env POSTGRES_PASSWORD)}}
  ;; :rbac-enabled true
  ;; :authentication {:service :cognito
  ;;                  :is-identity-store true

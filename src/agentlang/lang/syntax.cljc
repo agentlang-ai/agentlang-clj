@@ -9,29 +9,9 @@
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
-(def ^:private load-mode (atom false))
-
-(def ^:private syntax-error-count (u/make-cell 0))
-(def ^:private syntax-error-limit 5)
-
-(defn raise-syntax-error [pattern msg]
-  (let [err (str msg " -- " (u/pretty-str pattern))]
-    (if @load-mode
-      (do
-        (log/error err)
-        #?(:clj (println err))
-        (if (> @syntax-error-count syntax-error-limit)
-          (u/throw-ex "There are syntax errors in the model, see the log for details.")
-          (u/safe-set syntax-error-count (inc @syntax-error-count))))
-      (u/throw-ex err))))
-
-(defn force-spit-errors! []
-  (when (pos? @syntax-error-count)
-    (u/throw-ex "There are syntax errors in the model, see the log for details."))
-  (u/safe-set syntax-error-count 0))
-
-(defn set-load-mode! [] (force-spit-errors!) (reset! load-mode true))
-(defn unset-load-mode! [] (force-spit-errors!) (reset! load-mode false))
+(defn format-error [pattern msg] (str msg " -- " (u/pretty-str pattern)))
+(defn raise-syntax-error [pattern msg] (log/warn (format-error pattern msg)))
+(defn throw-ex [pattern msg] (u/throw-ex (format-error pattern msg)))
 
 (defn- not-kw [kw x] (not= kw x))
 (def ^:private not-as (partial not-kw :as))
@@ -128,10 +108,19 @@
 
 (declare introspect raw)
 
+(def case-keys #{:not-found :error})
+(def reserved-words (set (concat case-keys [:as])))
+
+(defn- as-reserved-word [a]
+  (if (keyword? a)
+    (some #{a} reserved-words)
+    (first (map as-reserved-word a))))
+
 (defn- introspect-alias [a]
   (when a
     (when-not (or (keyword? a) (and (vector? a) (every? keyword? a)))
       (raise-syntax-error a "Not a valid alias"))
+    (when-let [a (as-reserved-word a)] (throw-ex a "Invalid alias"))
     a))
 
 (def ^:private raw-alias identity)
@@ -142,8 +131,6 @@
   into)
 
 (def ^:private raw-into identity)
-
-(def case-keys #{:not-found :error})
 
 (defn- call-on-map-values [f m] (into  {} (mapv (fn [[k v]] [k (f v)]) m)))
 
@@ -172,9 +159,9 @@
 (defn- introspect-case [c]
   (when c
     (when-not (map? c)
-      (raise-syntax-error c "Not a valid case-specification, must be a map"))
+      (throw-ex c "Not a valid case-specification, must be a map"))
     (when-not (= case-keys (set (set/union (keys c) case-keys)))
-      (raise-syntax-error c (str "Allowed keys are - " case-keys)))
+      (throw-ex c (str "Allowed keys are - " case-keys)))
     (introspect-map-values c)))
 
 (def ^:private raw-case raw-map-values)
@@ -264,7 +251,7 @@
 
 (defn- introspect-call [pat]
   {:type :call
-   :fn (let [exp (second pat)]
+   :fn (let [exp (first pat)]
          (if (list? exp)
            exp
            (raise-syntax-error pat "Not a valid fn-call expression")))
@@ -468,7 +455,7 @@
   (when-let [f (cond
                  (map? pat) (if (seq pat) introspect-map identity)
                  (vector? pat) introspect-command
-                 (literal? pat) introspect-literal
+                 (or (literal? pat) (keyword? pat)) introspect-literal
                  :else (raise-syntax-error pat "Invalid object"))]
     (f pat)))
 
