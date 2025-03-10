@@ -530,3 +530,14 @@
 
     (li/parsed-path? x)
     (second x)))
+
+(defn fully-qualified?
+  ([n]
+   (if (second (li/split-path n))
+     true
+     false))
+  ([model-name n]
+   (cond
+     (= model-name n) false
+     (s/starts-with? (str n) (str model-name)) true
+     :else false)))
