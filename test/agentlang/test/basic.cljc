@@ -1011,9 +1011,10 @@
      {:Id {:type :Int :id true}
       :B :Path
       :C :Path
-      :X '(+ :Y 5 :B.Z)
+      :BZ {:type :Int :expr :B.Z}
+      :X {:type :Int :expr '(+ :Y 5 :B.Z)}
       :Y :Int
-      :Z '(* :X :C.B.Z)})
+      :Z {:type :Int :expr '(* :X :C.B.Z)}})
     (entity
      :Cpa/B
      {:Id {:type :Int :id true}
@@ -1021,7 +1022,12 @@
      (entity
       :Cpa/C
       {:Id {:type :Int :id true}
-       :B :Path}))
+       :B :Path})
+    (dataflow
+     :Cpa/UpdateY
+     {:Cpa/A
+      {:Id? :Cpa/UpdateY.A
+       :Y :Cpa/UpdateY.Y}}))
   (let [a? (partial cn/instance-of? :Cpa/A)
         b? (partial cn/instance-of? :Cpa/B)
         c? (partial cn/instance-of? :Cpa/C)
@@ -1051,8 +1057,15 @@
         [b1 b2] (mapv crb [10 20] [90 91])
         c (crc 100 (li/path-attr b2))
         a (cra 1 (li/path-attr b1) (li/path-attr c) 10)]
+    (is (= 90 (:BZ a)))
     (is (= 105 (:X a)))
-    (is (= 9555 (:Z a)))))
+    (is (= 9555 (:Z a)))
+    (let [a (first (tu/invoke {:Cpa/UpdateY {:A (:Id a) :Y 20}}))]
+      (is (= 90 (:BZ a)))
+      (is (= 115 (:X a)))
+      (is (= 10465 (:Z a)))
+      (let [a1 (first (tu/invoke {:Cpa/Lookup_A {:path (li/path-attr a)}}))]
+        (is (= a a1))))))
 
 ;; (deftest optional-attributes
 ;;   (defcomponent :OptAttr

@@ -1419,7 +1419,7 @@
          (u/throw-ex (str "Circular dependency on " k " in " attrs)))
        (vec (conj dg k)))
      [k]))
-  ([deps attrs] (u/pprint deps) (build-deps-graph deps attrs (find-longest-dep deps))))
+  ([deps attrs] (build-deps-graph deps attrs (find-longest-dep deps))))
 
 (defn- order-exprs-by-deps [recname expr-attrs]
   (when (seq expr-attrs)

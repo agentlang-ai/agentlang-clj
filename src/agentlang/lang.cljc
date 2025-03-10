@@ -338,8 +338,7 @@
 (defn- normalize-compound-attr [recname attrs nm [k v]]
   (when-let [expr (:expr v)]
     (cond
-      (fn? expr)
-      (attribute nm v)
+      (fn? expr) (attribute nm v)
 
       :else (attribute
              nm
@@ -360,16 +359,14 @@
                   (attribute nm v))))
 
           (list? v)
-          (attribute
-           (fqn (li/unq-name))
-           {:expr v})
+          (do (log/warn (str "Type not specified for " [k v]))
+              (attribute (fqn (li/unq-name)) {:expr v}))
 
           :else
           (let [fulln (fqn v)]
             (if (attref? fulln)
-              (attribute
-               (fqn (li/unq-name))
-               {:ref fulln})
+              (do (log/warn (str "Type not specified for " [k v]))
+                  (attribute (fqn (li/unq-name)) {:expr (list 'identity v)}))
               fulln)))]
     [k newv]))
 
@@ -460,7 +457,7 @@
                       [k (if-let [expr (and (map? v) (:expr v))]
                            (if (or (keyword? expr) (li/patterns-arg? expr))
                              (let [t (or (:type v) :Any)]
-                               (assoc v :type t :expr `(clojure.core/identity ~expr)))
+                               (assoc v :type t :expr (list 'identity expr)))
                              v)
                            v)])
                     attrs)]
