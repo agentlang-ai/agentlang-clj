@@ -1,6 +1,7 @@
 (ns agentlang.lang.name-util
   "Namespace for fully-qualified name utilities"
   (:require [clojure.string :as string]
+            [clojure.set :as set]
             [clojure.walk :as w]
             [agentlang.util :as u]
             [agentlang.util.seq :as su]
@@ -13,15 +14,17 @@
       path)))
 
 (def ^:dynamic fq-name nil)
+(def ^:dynamic scoped-names nil)
 
 (defn- make-fq-name
   "Return a function that returns the fully-qualified (component-name/n) name of `n`."
   [declared-names]
   (let [component-name (:component declared-names)
-        recs (:records declared-names)]
+        recs0 (set (:records declared-names))]
     (fn [n]
       (if (li/name? n)
-        (let [path (:path (li/path-parts n))]
+        (let [path (:path (li/path-parts n))
+              recs (if scoped-names (set/difference recs0 scoped-names) recs0)]
           (if (and path (some #{(normalize-path path)} recs))
             (li/make-path component-name n)
             n))
@@ -136,7 +139,9 @@
         ~(fq-inst-pat scm true))
       `(~(symbol (name (first exp)))
         ~(fq-name scm)
-        ~(map-with-fq-names (su/third exp) true)))))
+        ~(let [attrs (su/third exp)]
+           (binding [scoped-names (set (keys attrs))]
+             (map-with-fq-names attrs true)))))))
 
 (defn- fq-named-df-pat [pat]
   (let [k (fq-name (first (keys pat)))
