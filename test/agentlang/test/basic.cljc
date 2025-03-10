@@ -1027,7 +1027,12 @@
      :Cpa/UpdateY
      {:Cpa/A
       {:Id? :Cpa/UpdateY.A
-       :Y :Cpa/UpdateY.Y}}))
+       :Y :Cpa/UpdateY.Y}})
+    (dataflow
+     :Cpa/UpdateZ
+     {:Cpa/B
+      {:Id? :Cpa/UpdateZ.B
+       :Z :Cpa/UpdateZ.Z}}))
   (let [a? (partial cn/instance-of? :Cpa/A)
         b? (partial cn/instance-of? :Cpa/B)
         c? (partial cn/instance-of? :Cpa/C)
@@ -1056,16 +1061,18 @@
                 c))
         [b1 b2] (mapv crb [10 20] [90 91])
         c (crc 100 (li/path-attr b2))
-        a (cra 1 (li/path-attr b1) (li/path-attr c) 10)]
-    (is (= 90 (:BZ a)))
-    (is (= 105 (:X a)))
-    (is (= 9555 (:Z a)))
-    (let [a (first (tu/invoke {:Cpa/UpdateY {:A (:Id a) :Y 20}}))]
-      (is (= 90 (:BZ a)))
-      (is (= 115 (:X a)))
-      (is (= 10465 (:Z a)))
-      (let [a1 (first (tu/invoke {:Cpa/Lookup_A {:path (li/path-attr a)}}))]
-        (is (= a a1))))))
+        a (cra 1 (li/path-attr b1) (li/path-attr c) 10)
+        chka (fn [a bz cbz]
+               (is (= bz (:BZ a)))
+               (is (= (+ (:Y a) bz 5) (:X a)))
+               (is (= (* (:X a) cbz))))]
+    (let [a (first (tu/invoke {:Cpa/UpdateY {:A (:Id a) :Y 20}}))
+          _ (chka a 90 91)
+          a1 (first (tu/invoke {:Cpa/Lookup_A {:path (li/path-attr a)}}))
+          _ (is (= a a1))
+          _ (is (b? (first (tu/invoke {:Cpa/UpdateZ {:B (:Id b1) :Z 100}}))))
+          a2 (first (tu/invoke {:Cpa/Lookup_A {:path (li/path-attr a)}}))]
+      (chka a2 100 91))))
 
 ;; (deftest optional-attributes
 ;;   (defcomponent :OptAttr

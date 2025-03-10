@@ -39,7 +39,7 @@
 
 (defn- evaluate-attribute-value [env k v]
   (cond
-    (keyword? v) (follow-reference env v)
+    (keyword? v) (if query-mode v (follow-reference env v))
     (li/quoted? v) (:result (evaluate-pattern env v))
     (li/sealed? v) v
     (map? v)
@@ -54,7 +54,7 @@
       (if (keyword? f)
         `[~(if (su/sql-keyword? f)
              f
-             (follow-reference env f))
+             (if query-mode f (follow-reference env f)))
           ~@(mapv #(evaluate-attribute-value env k %) (rest v))]
         (mapv #(evaluate-attribute-value env k %) v)))
     (list? v) (evaluate-attr-expr env nil nil k v)
@@ -209,13 +209,15 @@
 (defn- realize-attribute-values
   ([env recname attrs compute-compound-attributes?]
    (let [has-exp? (first (filter (fn [[_ v]] (list? v)) attrs))
-         attrs1 (into
-                 {}
-                 (mapv (fn [[k v]]
-                         [k (if (keyword? v)
-                              (follow-reference env v)
-                              v)])
-                       attrs))
+         attrs1 (if-not query-mode
+                  (into
+                   {}
+                   (mapv (fn [[k v]]
+                           [k (if (keyword? v)
+                                (follow-reference env v)
+                                v)])
+                         attrs))
+                  attrs)
          path-attrs (cn/path-attributes recname)
          new-attrs
          (if has-exp?
@@ -237,8 +239,8 @@
   ([env recname attrs] (realize-attribute-values env recname attrs true)))
 
 (defn- realize-instance-values [env recname inst]
-  (let [attrs (realize-attribute-values env recname (cn/instance-attributes inst))]
-    (cn/make-instance recname attrs false)))
+   (let [attrs (realize-attribute-values env recname (cn/instance-attributes inst) true)]
+     (merge inst attrs)))
 
 (defn- normalize-query-comparison [k v] `[~(first v) ~k ~@(rest v)])
 
@@ -402,9 +404,13 @@
                         :can-delete-all? can-delete-all
                         :follow-up-operation (or (when qfordel? :delete)
                                                  (when update-attrs :update))}}
-        result0 (if (and resolver (not (rr/composed? resolver)))
-                  (:result (r/call-resolver-query resolver env qparams))
-                  (store/do-query (env/get-store env) nil qparams))
+        res (if (and resolver (not (rr/composed? resolver)))
+              (:result (r/call-resolver-query resolver env qparams))
+              (store/do-query (env/get-store env) nil qparams))
+        result0 (if (seq res)
+                  (binding [query-mode true]
+                    (mapv (partial realize-instance-values env recname) res))
+                  res)
         env0 (if (seq result0) (env/bind-instances env recname result0) env)
         result (if update-attrs (handle-upsert env0 resolver recname update-attrs result0) result0)
         env1 (if (seq result) (env/bind-instances env0 recname result) env0)
