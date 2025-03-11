@@ -519,7 +519,7 @@
 (def try? (partial syntax-type? :try))
 (def quote? (partial syntax-type? :quote))
 (def sealed? (partial syntax-type? :sealed))
-(def literal? (partial syntax-type? :literal))
+(def literal-object? (partial syntax-type? :literal))
 (def call? (partial syntax-type? :call))
 
 (defn- skip-root-component [n]
