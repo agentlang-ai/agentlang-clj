@@ -86,6 +86,10 @@
 
 (def alias-tag :as)
 (def check-tag :check)
+(def into-tag :into)
+(def case-tag li/except-tag)
+(def not-found-tag :not-found)
+(def error-tag :error)
 
 (defn alias-from-pattern [pat]
   (cond
@@ -128,14 +132,14 @@
 
 (def reference? keyword?)
 
-(def ^:private raw-alias identity)
+(def raw-alias identity)
 
 (defn- introspect-into [into]
   (when-not (map? into)
     (raise-syntax-error into "Not a valid into-specification, must be a map"))
   into)
 
-(def ^:private raw-into identity)
+(def raw-into identity)
 
 (defn- call-on-map-values [f m] (into  {} (mapv (fn [[k v]] [k (f v)]) m)))
 
@@ -169,7 +173,7 @@
       (throw-ex c (str "Allowed keys are - " case-keys)))
     (introspect-map-values c)))
 
-(def ^:private raw-case raw-map-values)
+(def raw-case raw-map-values)
 
 (defn with-alias [alias r]
   (assoc r :as alias))
@@ -234,10 +238,12 @@
 (def query (partial query-upsert-helper :query))
 (def query-upsert (partial query-upsert-helper :query-upsert))
 
+(def raw-relationships raw-map-values)
+
 (defn- raw-query [r]
   (merge
    {(record-name r) (attributes r)}
-   (when-let [rels (relationships r)] (raw-map-values rels))
+   (when-let [rels (relationships r)] (raw-relationships rels))
    (when-let [d (distinct-tag r)] {distinct-tag d})
    (raw-optional-keys r)))
 
@@ -429,13 +435,15 @@
          (conj result c)))
       result)))
 
+(defn raw-match-body [body]
+  (collect-match-clauses
+   (mapv (fn [v] (if (vector? v)
+                   [(first v) (raw (second v))]
+                   (raw v)))
+         body)))
+
 (defn- raw-match [r]
-  (let [body
-        (collect-match-clauses
-         (mapv (fn [v] (if (vector? v)
-                         [(first v) (raw (second v))]
-                         (raw v)))
-               (match-body r)))
+  (let [body (raw-match-body (match-body r))
         pat (if-let [v (match-value r)]
               `[:match ~(raw v) ~@body]
               `[:match ~@body])]

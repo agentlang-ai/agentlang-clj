@@ -15,14 +15,17 @@
   ([predic pat]
    (let [r (ls/introspect pat)]
      (is (predic r))
-     (is (= pat (ls/raw r)))))
+     (is (= pat (ls/raw r)))
+     r))
   ([pat] (is-pat (constantly true) pat)))
 
 (deftest instances
   (is (= {} (ls/introspect {})))
   (defcomponent :SynInst
     (entity :SynInst/E {:Id {:type :Int :id true} :X :Int}))
-  (is-pat ls/upsert? {:SynInst/E {:Id 1 :X 100}})
+  (let [r (is-pat ls/upsert? {:SynInst/E {:Id 1 :X 100}})]
+    (is (= (ls/record-name r) :SynInst/E))
+    (is (= (ls/attributes r) {:Id 1 :X 100})))
   (is-pat ls/upsert? {:SynInst/E {:Id 1 :X 100} :as :A})
   (is-pat ls/query-upsert? {:SynInst/E {:Id? 1 :X 200} :as :A})
   (is-pat ls/query? {:SynInst/E {:Id? 1} :as [:A]})
@@ -49,12 +52,21 @@
                      :SynRel/AB? {:SynRel/A {:Id :SynRel/FindB.A}}
                      :as :Bs
                      :case {:not-found {:SynRel/B {:Id 1 :Y 1}}}})
-  (is-pat ls/query? {:SynRel/B? {}
-                     :SynRel/AB? {:SynRel/A {:Id :SynRel/FindB.A}}
-                     :as :Bs
-                     :into {:Y :SynRel/B.Y
-                            :X :SynRel/A.X}
-                     :case {:not-found {:SynRel/B {:Id 1 :Y 1}}}})
+  (let [r (is-pat ls/query? {:SynRel/B? {}
+                             :SynRel/AB? {:SynRel/A {:Id :SynRel/FindB.A}}
+                             :as :Bs
+                             :into {:Y :SynRel/B.Y
+                                    :X :SynRel/A.X}
+                             :case {:not-found {:SynRel/B {:Id 1 :Y 1}}}})]
+    (is (= (ls/record-name r) :SynRel/B?))
+    (is (= (ls/attributes r) {}))
+    (is (= (ls/raw-relationships (ls/relationships r))
+           #:SynRel{:AB? #:SynRel{:A {:Id :SynRel/FindB.A}}}))
+    (is (= (ls/raw (ls/alias-tag r)) :Bs))
+    (is (= (ls/raw-into (ls/into-tag r))
+           {:Y :SynRel/B.Y, :X :SynRel/A.X}))
+    (is (= (ls/raw-case (ls/case-tag r))
+           {:not-found {:SynRel/B {:Id 1 :Y 1}}})))
   (is (= {:SynRel/B? {}
           :SynRel/AB? {:SynRel/A {:Id :SynRel/FindB.A}}
           :as :Rs
@@ -74,10 +86,16 @@
   (defcomponent :SynFe
     (record :SynFe/R {:A :Int})
     (entity :SynFe/E {:Id {:type :Int :id true} :X :Int}))
-  (is-pat ls/for-each? [:for-each {:SynFe/E? {}}
-                        {:SynFe/R {:A :%.X}}
-                        {:SynFe/R {:A '(* 10 :%.X)}}
-                        :as :Rs])
+  (let [r (is-pat ls/for-each? [:for-each {:SynFe/E? {}}
+                                {:SynFe/R {:A :%.X}}
+                                {:SynFe/R {:A '(* 10 :%.X)}}
+                                :as :Rs])]
+    (is (= (ls/raw (ls/for-each-value r))
+           {:SynFe/E? {}}))
+    (is (= (mapv ls/raw (ls/for-each-body r))
+           [{:SynFe/R {:A :%.X}}
+            {:SynFe/R {:A '(* 10 :%.X)}}]))
+    (is (= (ls/raw (ls/alias-tag r)) :Rs)))
   (= [:for-each :Result
       {:SynFe/R {:A :%.A}}
       :as :Rs
@@ -91,7 +109,10 @@
   (defcomponent :SynDel
     (entity :SynDel/E {:Id {:type :Int :id true} :X :Int}))
   (is-pat ls/delete? [:delete {:SynDel/E {:Id? 10}}])
-  (is-pat ls/delete? [:delete {:SynDel/E {:Id? 10}} :as :R])
+  (let [r (is-pat ls/delete? [:delete {:SynDel/E {:Id? 10}} :as :R])]
+    (is (= (ls/raw (ls/query-pattern r))
+           {:SynDel/E {:Id? 10}}))
+    (is (= (ls/raw (ls/alias-tag r)) :R)))
   (is-pat ls/delete? [:delete :SynDel/E :purge])
   (is (= [:delete {:SynDel/E {:Id? 10}} :as :R]
          (ls/raw
@@ -106,13 +127,24 @@
                  true {:SynMatch/E {:Id 1 :X 2}}
                  false {:SynMatch/E {:Id 3 :X 4}}
                  {:SynMatch/E {:Id 5 :X 6}}
-                 :as :R]]
-    (is-pat ls/match? testpat)
-    (is-pat ls/match? [:match
-                       [:= :SynMatch/E.X 1] {:SynMatch/E {:Id 1 :X 2}}
-                       [:> :SynMatch/E.X 1] {:SynMatch/E {:Id 3 :X 4}}
-                       {:SynMatch/E {:Id 5 :X 6}}
-                       :as :R])
+                 :as :R]
+        r (is-pat ls/match? testpat)]
+    (is (= (ls/raw (ls/match-value r))
+           :SynMatch/Event.Flag))
+    (is (= (ls/raw-match-body (ls/match-body r))
+           [true  #:SynMatch{:E {:Id 1, :X 2}}
+            false #:SynMatch{:E {:Id 3, :X 4}}
+            #:SynMatch{:E {:Id 5, :X 6}}]))
+    (is (= :R (ls/raw (ls/alias-tag r))))
+    (let [r (is-pat ls/match? [:match
+                               [:= :SynMatch/E.X 1] {:SynMatch/E {:Id 1 :X 2}}
+                               [:> :SynMatch/E.X 1] {:SynMatch/E {:Id 3 :X 4}}
+                               {:SynMatch/E {:Id 5 :X 6}}
+                               :as :R])]
+      (is (= (ls/raw-match-body (ls/match-body r))
+             [[:= :SynMatch/E.X 1] #:SynMatch{:E {:Id 1, :X 2}}
+              [:> :SynMatch/E.X 1] #:SynMatch{:E {:Id 3, :X 4}}
+              #:SynMatch{:E {:Id 5, :X 6}}])))
     (is (= testpat
            (ls/raw
             (ls/with-alias
@@ -131,8 +163,14 @@
                  {:SynTry/Evt {:X 100 :Y "hello"}}
                  :not-found {:SynTry/R {:K 0 :Err false}}
                  :error {:SynTry/R {:K 1 :Err true}}
-                 :as :R]]
-    (is-pat ls/try? testpat)
+                 :as :R]
+        r (is-pat ls/try? testpat)]
+    (is (= (mapv ls/raw (ls/try-body r))
+           [#:SynTry{:Evt {:X 100, :Y "hello"}}]))
+    (is (= (ls/raw-case (ls/case-tag r))
+           {:not-found #:SynTry{:R {:K 0, :Err false}},
+            :error #:SynTry{:R {:K 1, :Err true}}}))
+    (is (= (ls/raw (ls/alias-tag r)) :R))
     (is (= testpat
            (ls/raw
             (ls/with-alias
