@@ -177,8 +177,10 @@
 (defn with-case [case r]
   (assoc r li/except-tag case))
 
+(def distinct-tag :distinct)
+
 (defn with-distinct [d r]
-  (assoc r :distinct d))
+  (assoc r distinct-tag d))
 
 (defn- introspect-optional-keys [pat]
   {:as (introspect-alias (:as pat))
@@ -197,7 +199,6 @@
 (def syntax-type :type)
 (def record-name :record)
 (def attributes :attributes)
-(def distinct :distinct)
 (def relationships :rels)
 (def query-pattern :query)
 
@@ -214,7 +215,7 @@
                     :query)
       record-name recname
       attributes attrs
-      distinct (distinct pat)
+      distinct-tag (distinct-tag pat)
       relationships rels-spec}
      (introspect-optional-keys pat))))
 
@@ -233,7 +234,7 @@
   (merge
    {(record-name r) (attributes r)}
    (when-let [rels (relationships r)] (raw-map-values rels))
-   (when-let [d (distinct r)] {distinct d})
+   (when-let [d (distinct-tag r)] {distinct-tag d})
    (raw-optional-keys r)))
 
 (def ^:private raw-upsert raw-query)
@@ -362,7 +363,7 @@
    try-body body
    li/except-tag cases})
 
-(def for-each-source :src)
+(def for-each-value :src)
 (def for-each-body :body)
 
 (defn- introspect-for-each [pat]
@@ -370,18 +371,18 @@
         body (extract-body-patterns #{:as} (rest pat))
         alias (alias-from-pattern pat)]
     {syntax-type :for-each
-     for-each-source src
+     for-each-value src
      for-each-body (mapv introspect body)
      :as (introspect-alias alias)
      li/except-tag (introspect-case (case-from-pattern pat))}))
 
 (defn- raw-for-each [r]
-  (let [pat `[:for-each ~(raw (for-each-source r)) ~@(mapv raw (for-each-body r))]]
+  (let [pat `[:for-each ~(raw (for-each-value r)) ~@(mapv raw (for-each-body r))]]
     (maybe-add-optional-raw-tags r pat)))
 
 (defn for-each [src body]
   {syntax-type :for-each
-   for-each-source src
+   for-each-value src
    for-each-body body})
 
 (def match-value :value)
