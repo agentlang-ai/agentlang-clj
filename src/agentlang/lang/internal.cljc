@@ -666,6 +666,6 @@
 
 (defn reset-alias-db! [] (set-alias-db! nil))
 
-(defn case-attribute-spec? [x]
+(defn match-attribute-spec? [x]
   (and (vector? x)
        (= :match (first x))))

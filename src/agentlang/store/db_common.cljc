@@ -378,9 +378,50 @@
           [(ref-from-canonical-name v) (name k)])
         into-spec))
 
+(defn- rewrite-match-expr [sql-alias exp]
+  (cond
+    (vector? exp)
+    `[~(first exp)
+      ~@(mapv #(rewrite-match-expr sql-alias %) (rest exp))]
+
+    (keyword? exp)
+    (let [{path :path refs :refs} (li/path-parts exp)
+          rs? (seq refs)
+          a (if rs? path sql-alias)]
+      (li/make-ref a (stu/attribute-column-name-kw (if rs? (first refs) path))))
+
+    :else exp))
+
+(defn- rewrite-match-spec [sql-alias spec]
+  (when-let [conds (seq (rest spec))]
+    (let [rw (partial rewrite-match-expr sql-alias)]
+      `[:case
+        ~@(apply
+           concat
+           (loop [conds conds, result []]
+             (if-let [[a b :as cq] [(first conds) (second conds)]]
+               (let [[c q] (if b cq [nil a])]
+                 (if c
+                   (recur (nthrest conds 2)
+                          (conj result [(rw c) (rw q)]))
+                   (conj result [:else (rw q)])))
+               result)))])))
+
+(defn- make-case-column-spec [entity-name sql-alias attr-name]
+  [(rewrite-match-spec sql-alias (cn/attribute-match-spec entity-name attr-name))
+   (stu/attribute-column-name-kw attr-name)])
+
 (defn- entity-column-names [entity-name sql-alias]
-  (let [attr-names (cn/query-attribute-names entity-name)]
-    (mapv #(li/make-ref sql-alias (stu/attribute-column-name-kw %)) attr-names)))
+  (let [match-attrs (when-let [attrs (seq (cn/match-attributes entity-name))]
+                      (set attrs))
+        anames (cn/query-attribute-names entity-name)
+        attr-names (if match-attrs
+                     (set/difference (set anames) match-attrs)
+                     anames)
+        cols (mapv #(li/make-ref sql-alias (stu/attribute-column-name-kw %)) attr-names)]
+    (if match-attrs
+      (vec (concat cols (mapv #(make-case-column-spec entity-name sql-alias %) match-attrs)))
+      cols)))
 
 (def ^:private ipa-path (fn [ipa-alias] (li/make-ref ipa-alias (stu/attribute-column-name-kw :ResourcePath))))
 (def ^:private ipa-user (fn [ipa-alias] (li/make-ref ipa-alias (stu/attribute-column-name-kw :Assignee))))
@@ -511,6 +552,25 @@
             q0)]
     q))
 
+(defn- join-path-attribute [entity-name attr]
+  (if-let [relname (cn/attribute-path-to entity-name attr)]
+    (let [rel-ref (partial li/make-ref attr)
+          entity-alias (keyword (as-table-name entity-name))
+          this-ref (partial li/make-ref entity-alias)]
+      [[(as-table-name relname) attr]
+       [:and
+        [:= (rel-ref stu/deleted-flag-col-kw) false]
+        [:= (rel-ref path-col) (this-ref (stu/attribute-column-name-kw attr))]]])
+    (u/throw-ex (str "No able to join table with attribute " [entity-name attr] " without :to entity"))))
+
+(defn- maybe-add-match-joins [entity-name sql-pat]
+  (if-let [path-attrs (when (seq (cn/match-attributes entity-name))
+                        (seq (cn/path-attributes entity-name)))]
+    (let [join (:join sql-pat)
+          path-joins (apply concat (mapv #(join-path-attribute entity-name %) path-attrs))]
+      (assoc sql-pat :join (concat join path-joins)))
+    sql-pat))
+
 (defn- query-by-attributes [datasource {entity-name :entity-name
                                         attrs :query-attributes
                                         sub-query :sub-query
@@ -544,15 +604,16 @@
         w0 (:where sql-pat0)
         w1 (if w0 (insert-deleted-clause w0 entity-alias) [:= (li/make-ref entity-alias stu/deleted-flag-col-kw) false])
         sql-pat0 (assoc sql-pat0 :where w1)
-        sql-pat (if rbac-enabled?
-                  (if can-read-all
-                    (if update-delete-tag
-                      (maybe-add-rbac-joins [update-delete-tag] user entity-name sql-pat0)
-                      sql-pat0)
-                    (maybe-add-rbac-joins
-                     (concat [:read] (when update-delete-tag [update-delete-tag]))
-                     user entity-name read-on-entities sql-pat0))
-                  sql-pat0)
+        sql-pat1 (if rbac-enabled?
+                   (if can-read-all
+                     (if update-delete-tag
+                       (maybe-add-rbac-joins [update-delete-tag] user entity-name sql-pat0)
+                       sql-pat0)
+                     (maybe-add-rbac-joins
+                      (concat [:read] (when update-delete-tag [update-delete-tag]))
+                      user entity-name read-on-entities sql-pat0))
+                   sql-pat0)
+        sql-pat (maybe-add-match-joins entity-name sql-pat1)
         sql-params (sql/raw-format-sql sql-pat)]
     (execute-fn!
      datasource

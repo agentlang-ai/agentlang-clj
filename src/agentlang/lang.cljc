@@ -177,8 +177,8 @@
       (= k li/path-identity)
       (li/validate-bool k v)
 
-      (li/case-attribute-spec? v)
-      v
+      (li/match-attribute-spec? v)
+      {:match v :optional true}
 
       :else
       (case k
@@ -206,7 +206,11 @@
         :relationship (li/validate cn/relationship? "not a valid relationship name" v)
         :extend (li/validate cn/entity? "not a valid entity name" v)
         :order (li/validate int? "order must be an integer" v)
-        (:ui :rbac :meta) v
+        :to (when-not (and (keyword? v)
+                           (let [[c n] (li/split-path v)]
+                             (and c n)))
+              (u/throw-ex (str "Path should point to a valid, fully-qualified entity-name - " [:to v])))
+        (:ui :rbac :meta :match) v
         (u/throw-ex (str "invalid constraint in attribute definition - " k)))))
   (merge-attribute-meta
    (merge
@@ -354,25 +358,33 @@
                     {:expr expr})))))
 
 (defn- normalize-attr [recname attrs fqn [k v]]
-  (let [newv
+  (let [nm (fqn (li/unq-name))
+        newv
         (cond
           (map? v)
-          (let [v (if (:read-only v) (assoc v :optional true) v)
-                nm (fqn (li/unq-name))]
-            (if (query-pattern? v)
+          (let [v (if (or (:read-only v) (:match v)) (assoc v :optional true) v)]
+            (cond
+              (query-pattern? v)
               (attribute nm {:query (query-eval-fn recname attrs k v)})
+
+              (:match v) (attribute nm v)
+
+              :else
               (or (normalize-compound-attr recname attrs nm [k v])
                   (attribute nm v))))
 
+          (li/match-attribute-spec? v)
+          (attribute nm {:match v :optional true})
+
           (list? v)
           (do (log/warn (str "Type not specified for " [k v]))
-              (attribute (fqn (li/unq-name)) {:expr v}))
+              (attribute nm {:expr v}))
 
           :else
           (let [fulln (fqn v)]
             (if (attref? fulln)
               (do (log/warn (str "Type not specified for " [k v]))
-                  (attribute (fqn (li/unq-name)) {:expr (list 'identity v)}))
+                  (attribute nm {:expr (list 'identity v)}))
               fulln)))]
     [k newv]))
 

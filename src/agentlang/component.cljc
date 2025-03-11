@@ -631,6 +631,10 @@
   "Return the names of all immutable attributes in the schema."
   (make-attributes-filter :immutable))
 
+(def match-attributes
+  "Return the names of all identity attributes in the schema."
+  (make-attributes-filter :match))
+
 (defn- maybe-fetch-entity-schema
   ([type-name-or-scm version]
    (if (map? type-name-or-scm)
@@ -1503,11 +1507,19 @@
         ascm (get entity-schema attr)]
     [(find-attribute-schema ascm) ascm]))
 
-(defn attribute-type [entity-schema-or-name attr]
-  (when-let [[ascm ascm0] (entity-attribute-schema entity-schema-or-name attr)]
-    (if (map? ascm)
-      (or (:type ascm) ascm0)
-      ascm)))
+(def attribute-property
+  (memoize
+   (fn [tag strict? entity-schema-or-name attr]
+     (when-let [[ascm ascm0] (entity-attribute-schema entity-schema-or-name attr)]
+       (if strict?
+         (and (map? ascm) (tag ascm))
+         (if (map? ascm)
+           (or (tag ascm) ascm0)
+           ascm))))))
+
+(def attribute-type (partial attribute-property :type false))
+(def attribute-match-spec (partial attribute-property :match true))
+(def attribute-path-to (partial attribute-property :to true))
 
 (def identity-attribute? li/path-identity)
 
