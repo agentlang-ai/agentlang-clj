@@ -84,6 +84,9 @@
      {:not-found (second (drop-while not-not-found pat))
       :error (second (drop-while not-error pat))}]))
 
+(def alias-tag :as)
+(def check-tag :check)
+
 (defn alias-from-pattern [pat]
   (cond
     (map? pat) (:as pat)
@@ -497,6 +500,7 @@
                  :match raw-match
                  :delete raw-delete
                  :try raw-try
+                 :call raw-call
                  :quote raw-quote
                  :sealed raw-sealed
                  :literal raw-literal
@@ -515,7 +519,8 @@
 (def try? (partial syntax-type? :try))
 (def quote? (partial syntax-type? :quote))
 (def sealed? (partial syntax-type? :sealed))
-(def liuteral? (partial syntax-type? :literal))
+(def literal? (partial syntax-type? :literal))
+(def call? (partial syntax-type? :call))
 
 (defn- skip-root-component [n]
   (let [parts (s/split (name n) #"\.")]

@@ -138,3 +138,11 @@
                [(ls/upsert :SynTry/Evt {:X 100 :Y "hello"})]
                {:not-found (ls/upsert :SynTry/R {:K 0 :Err false})
                 :error (ls/upsert :SynTry/R {:K 1 :Err true})})))))))
+
+(deftest call
+  (let [testpat [:call '(acme.com/f :A :B.X 100) :as :R]
+        r (ls/introspect testpat)]
+    (ls/call? r)
+    (is (= (second testpat) (ls/function-expression r)))
+    (is (= :R (ls/alias-tag r)))
+    (is (= testpat (ls/raw r)))))
