@@ -1776,7 +1776,8 @@
 (def ^:private inst-priv-suffix "_ipa")
 
 (defn inst-priv-entity-name [entity-name]
-  (let [[c n] (li/split-path entity-name)]
+  (let [[c n :as cn] (li/split-path entity-name)
+        [c n] (if-not n [(get-current-component) c] cn)]
     (li/make-path c (str (name n) inst-priv-suffix))))
 
 (defn inst-priv-entity-name? [n]

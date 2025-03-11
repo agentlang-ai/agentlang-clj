@@ -115,7 +115,7 @@
       pat)))
 
 (defn- parse-fn-call [expr alias]
-  (let [pat [:eval (list* (first expr) (mapv parse-ref-or-expr (rest expr)))]]
+  (let [pat [:call (list* (first expr) (mapv parse-ref-or-expr (rest expr)))]]
     (if alias
       (vec (concat pat [:as alias]))
       pat)))
@@ -154,7 +154,7 @@
     :else
     (if (seqable? expr)
       (if (vector? expr)
-        [:eval `(vector ~@(mapv expression-to-pattern expr))]
+        [:call `(vector ~@(mapv expression-to-pattern expr))]
         (case (first expr)
           def (parse-binding (nth expr 2) (u/symbol-as-keyword (second expr)))
           cond (parse-cond (rest expr) nil)

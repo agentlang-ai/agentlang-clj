@@ -173,8 +173,14 @@
 
 (defn- finalize-raw-attribute-schema [scm]
   (doseq [[k v] scm]
-    (if (= k li/path-identity)
+    (cond
+      (= k li/path-identity)
       (li/validate-bool k v)
+
+      (li/case-attribute-spec? v)
+      v
+
+      :else
       (case k
         (:unique
          :immutable :optional :indexed

@@ -2,6 +2,7 @@
   (:require #?(:clj [clojure.test :refer [deftest is testing]]
                :cljs [cljs.test :refer-macros [deftest is testing]])
             [agentlang.util :as u]
+            [agentlang.api :as api]
             [agentlang.util.hash :as sh]
             [agentlang.store :as store]
             [agentlang.component :as cn]
@@ -1074,114 +1075,114 @@
           a2 (first (tu/invoke {:Cpa/Lookup_A {:path (li/path-attr a)}}))]
       (chka a2 100 91))))
 
-;; (deftest optional-attributes
-;;   (defcomponent :OptAttr
-;;     (entity {:OptAttr/E {:X :Int
-;;                          :Y {:type :Int
-;;                              :optional true}
-;;                          :S :String}})
-;;     (entity {:OptAttr/F {:X :Int
-;;                          :Y :Int
-;;                          :S :String
-;;                          :meta {:required-attributes [:X :S]}}}))
-;;   (let [e1 (cn/make-instance :OptAttr/E {:X 10 :S "hello"})
-;;         e2 (cn/make-instance :OptAttr/E {:X 1 :Y 2 :S "hi"})]
-;;     (is (cn/instance-of? :OptAttr/E e1))
-;;     (is (= [10 nil "hello"] [(:X e1) (:Y e1) (:S e1)]))
-;;     (is (cn/instance-of? :OptAttr/E e2))
-;;     (is (= [1 2 "hi"] [(:X e2) (:Y e2) (:S e2)])))
-;;   (let [f1 (cn/make-instance :OptAttr/F {:X 10 :S "hello"})
-;;         f2 (cn/make-instance :OptAttr/F {:X 1 :Y 2 :S "hi"})]
-;;     (is (cn/instance-of? :OptAttr/F f1))
-;;     (is (= [10 nil "hello"] [(:X f1) (:Y f1) (:S f1)]))
-;;     (is (cn/instance-of? :OptAttr/F f2))
-;;     (is (= [1 2 "hi"] [(:X f2) (:Y f2) (:S f2)]))))
+(deftest optional-attributes
+  (defcomponent :OptAttr
+    (entity {:OptAttr/E {:X :Int
+                         :Y {:type :Int
+                             :optional true}
+                         :S :String}})
+    (entity {:OptAttr/F {:X :Int
+                         :Y :Int
+                         :S :String
+                         :meta {:required-attributes [:X :S]}}}))
+  (let [e1 (cn/make-instance :OptAttr/E {:X 10 :S "hello"})
+        e2 (cn/make-instance :OptAttr/E {:X 1 :Y 2 :S "hi"})]
+    (is (cn/instance-of? :OptAttr/E e1))
+    (is (= [10 nil "hello"] [(:X e1) (:Y e1) (:S e1)]))
+    (is (cn/instance-of? :OptAttr/E e2))
+    (is (= [1 2 "hi"] [(:X e2) (:Y e2) (:S e2)])))
+  (let [f1 (cn/make-instance :OptAttr/F {:X 10 :S "hello"})
+        f2 (cn/make-instance :OptAttr/F {:X 1 :Y 2 :S "hi"})]
+    (is (cn/instance-of? :OptAttr/F f1))
+    (is (= [10 nil "hello"] [(:X f1) (:Y f1) (:S f1)]))
+    (is (cn/instance-of? :OptAttr/F f2))
+    (is (= [1 2 "hi"] [(:X f2) (:Y f2) (:S f2)]))))
 
-;; (deftest optional-record-attribute
-;;   (defcomponent :OptRecAttr
-;;     (record {:OptRecAttr/R {:A :Int}})
-;;     (entity {:OptRecAttr/E {:Q :Int
-;;                             :R {:type :OptRecAttr/R
-;;                                 :optional true}}})
-;;     (event {:OptRecAttr/PostE {:Q :Int}}))
-;;   (dataflow :OptRecAttr/PostE
-;;             {:OptRecAttr/E {:Q :OptRecAttr/PostE.Q}})
-;;   (let [evt {:OptRecAttr/PostE {:Q 10}}
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :OptRecAttr/E result))
-;;     (is (u/uuid-from-string (cn/id-attr result)))
-;;     (is (= 10 (:Q result)))))
+(deftest optional-record-attribute
+  (defcomponent :OptRecAttr
+    (record {:OptRecAttr/R {:A :Int}})
+    (entity {:OptRecAttr/E {:Q :Int
+                            :R {:type :OptRecAttr/R
+                                :optional true}}})
+    (event {:OptRecAttr/PostE {:Q :Int}}))
+  (dataflow :OptRecAttr/PostE
+            {:OptRecAttr/E {:Q :OptRecAttr/PostE.Q}})
+  (let [evt {:OptRecAttr/PostE {:Q 10}}
+        result (tu/invoke evt)]
+    (is (cn/instance-of? :OptRecAttr/E result))
+    (is (u/uuid-from-string (cn/id-attr result)))
+    (is (= 10 (:Q result)))))
 
-;; (deftest inherits
-;;   (defcomponent :Inherits
-;;     (record {:Inherits/Base {:A {:type :Int
-;;                                  :optional true}
-;;                              :B :Int}})
-;;     (entity {:Inherits/E {:meta {:inherits :Inherits/Base}
-;;                           :X :Int
-;;                           :Y {:type :Int
-;;                               :optional true}
-;;                           :S :String}})
-;;     (record {:Inherits/BaseMeta {:A :Int
-;;                                  :B :Int
-;;                                  :meta {:required-attributes [:B]}}})
-;;     (entity {:Inherits/F {:meta {:inherits :Inherits/BaseMeta}
-;;                           :X :Int
-;;                           :Y {:type :Int
-;;                               :optional true}
-;;                           :S :String}}))
-;;   (let [e1 (cn/make-instance :Inherits/E {:X 10 :S "hello" :A 100 :B 200})
-;;         e2 (cn/make-instance :Inherits/E {:X 1 :Y 2 :S "hi" :B 200})]
-;;     (is (cn/instance-of? :Inherits/E e1))
-;;     (is (= [10 nil "hello" 100 200] [(:X e1) (:Y e1) (:S e1) (:A e1) (:B e1)]))
-;;     (is (cn/instance-of? :Inherits/E e2))
-;;     (is (= [1 2 "hi" nil 200] [(:X e2) (:Y e2) (:S e2) (:A e2) (:B e2)])))
-;;   (let [f1 (cn/make-instance :Inherits/F {:X 10 :S "hello" :A 100 :B 200})
-;;         f2 (cn/make-instance :Inherits/F {:X 1 :Y 2 :S "hi" :B 200})]
-;;     (is (cn/instance-of? :Inherits/F f1))
-;;     (is (= [10 nil "hello" 100 200] [(:X f1) (:Y f1) (:S f1) (:A f1) (:B f1)]))
-;;     (is (cn/instance-of? :Inherits/F f2))
-;;     (is (= [1 2 "hi" nil 200] [(:X f2) (:Y f2) (:S f2) (:A f2) (:B f2)]))))
+(deftest inherits
+  (defcomponent :Inherits
+    (record {:Inherits/Base {:A {:type :Int
+                                 :optional true}
+                             :B :Int}})
+    (entity {:Inherits/E {:meta {:inherits :Inherits/Base}
+                          :X :Int
+                          :Y {:type :Int
+                              :optional true}
+                          :S :String}})
+    (record {:Inherits/BaseMeta {:A :Int
+                                 :B :Int
+                                 :meta {:required-attributes [:B]}}})
+    (entity {:Inherits/F {:meta {:inherits :Inherits/BaseMeta}
+                          :X :Int
+                          :Y {:type :Int
+                              :optional true}
+                          :S :String}}))
+  (let [e1 (cn/make-instance :Inherits/E {:X 10 :S "hello" :A 100 :B 200})
+        e2 (cn/make-instance :Inherits/E {:X 1 :Y 2 :S "hi" :B 200})]
+    (is (cn/instance-of? :Inherits/E e1))
+    (is (= [10 nil "hello" 100 200] [(:X e1) (:Y e1) (:S e1) (:A e1) (:B e1)]))
+    (is (cn/instance-of? :Inherits/E e2))
+    (is (= [1 2 "hi" nil 200] [(:X e2) (:Y e2) (:S e2) (:A e2) (:B e2)])))
+  (let [f1 (cn/make-instance :Inherits/F {:X 10 :S "hello" :A 100 :B 200})
+        f2 (cn/make-instance :Inherits/F {:X 1 :Y 2 :S "hi" :B 200})]
+    (is (cn/instance-of? :Inherits/F f1))
+    (is (= [10 nil "hello" 100 200] [(:X f1) (:Y f1) (:S f1) (:A f1) (:B f1)]))
+    (is (cn/instance-of? :Inherits/F f2))
+    (is (= [1 2 "hi" nil 200] [(:X f2) (:Y f2) (:S f2) (:A f2) (:B f2)]))))
 
-;; (deftest multi-level-inherits
-;;   (defcomponent :MultiInherits
-;;     (record {:MultiInherits/Base1 {:A {:type :Int
-;;                                        :optional true}
-;;                                    :B :Int}})
-;;     (record {:MultiInherits/Base2 {:C :Int
-;;                                    :meta {:inherits :MultiInherits/Base1}}})
-;;     (entity {:MultiInherits/E {:X :Int
-;;                                :Y {:type :Int
-;;                                    :optional true}
-;;                                :S :String
-;;                                :meta {:inherits :MultiInherits/Base2}}}))
-;;   (let [e1 (cn/make-instance :MultiInherits/E {:X 10 :S "hello" :A 100 :B 200 :C 300})
-;;         e2 (cn/make-instance :MultiInherits/E {:X 1 :Y 2 :S "hi" :B 200 :C 300})]
-;;     (is (cn/instance-of? :MultiInherits/E e1))
-;;     (is (= [10 nil "hello" 100 200 300] [(:X e1) (:Y e1) (:S e1) (:A e1) (:B e1) (:C e1)]))
-;;     (is (cn/instance-of? :MultiInherits/E e2))
-;;     (is (= [1 2 "hi" nil 200 300] [(:X e2) (:Y e2) (:S e2) (:A e2) (:B e2) (:C e1)]))))
+(deftest multi-level-inherits
+  (defcomponent :MultiInherits
+    (record {:MultiInherits/Base1 {:A {:type :Int
+                                       :optional true}
+                                   :B :Int}})
+    (record {:MultiInherits/Base2 {:C :Int
+                                   :meta {:inherits :MultiInherits/Base1}}})
+    (entity {:MultiInherits/E {:X :Int
+                               :Y {:type :Int
+                                   :optional true}
+                               :S :String
+                               :meta {:inherits :MultiInherits/Base2}}}))
+  (let [e1 (cn/make-instance :MultiInherits/E {:X 10 :S "hello" :A 100 :B 200 :C 300})
+        e2 (cn/make-instance :MultiInherits/E {:X 1 :Y 2 :S "hi" :B 200 :C 300})]
+    (is (cn/instance-of? :MultiInherits/E e1))
+    (is (= [10 nil "hello" 100 200 300] [(:X e1) (:Y e1) (:S e1) (:A e1) (:B e1) (:C e1)]))
+    (is (cn/instance-of? :MultiInherits/E e2))
+    (is (= [1 2 "hi" nil 200 300] [(:X e2) (:Y e2) (:S e2) (:A e2) (:B e2) (:C e1)]))))
 
-;; (deftest multi-level-inherits-meta
-;;   (defcomponent :MultiInheritsMeta
-;;     (record {:MultiInheritsMeta/Base1 {:A :Int
-;;                                        :B :Int
-;;                                        :meta {:required-attributes [:B]}}})
-;;     (record {:MultiInheritsMeta/Base2 {:C :Int
-;;                                        :meta {:inherits :MultiInheritsMeta/Base1}}})
-;;     (entity {:MultiInheritsMeta/E {:X :Int
-;;                                    :Y {:type :Int
-;;                                        :optional true}
-;;                                    :S :String
-;;                                    :meta {:inherits :MultiInheritsMeta/Base2}}}))
-;;   (let [e1 (cn/make-instance :MultiInheritsMeta/E {:X 10 :S "hello" :A 100 :B 200 :C 300})
-;;         e2 (cn/make-instance :MultiInheritsMeta/E {:X 1 :Y 2 :S "hi" :B 200 :C 300})]
-;;     (is (cn/instance-of? :MultiInheritsMeta/E e1))
-;;     (is (= [10 nil "hello" 100 200 300] [(:X e1) (:Y e1) (:S e1) (:A e1) (:B e1) (:C e1)]))
-;;     (is (cn/instance-of? :MultiInheritsMeta/E e2))
-;;     (is (= [1 2 "hi" nil 200 300] [(:X e2) (:Y e2) (:S e2) (:A e2) (:B e2) (:C e1)]))))
+(deftest multi-level-inherits-meta
+  (defcomponent :MultiInheritsMeta
+    (record {:MultiInheritsMeta/Base1 {:A :Int
+                                       :B :Int
+                                       :meta {:required-attributes [:B]}}})
+    (record {:MultiInheritsMeta/Base2 {:C :Int
+                                       :meta {:inherits :MultiInheritsMeta/Base1}}})
+    (entity {:MultiInheritsMeta/E {:X :Int
+                                   :Y {:type :Int
+                                       :optional true}
+                                   :S :String
+                                   :meta {:inherits :MultiInheritsMeta/Base2}}}))
+  (let [e1 (cn/make-instance :MultiInheritsMeta/E {:X 10 :S "hello" :A 100 :B 200 :C 300})
+        e2 (cn/make-instance :MultiInheritsMeta/E {:X 1 :Y 2 :S "hi" :B 200 :C 300})]
+    (is (cn/instance-of? :MultiInheritsMeta/E e1))
+    (is (= [10 nil "hello" 100 200 300] [(:X e1) (:Y e1) (:S e1) (:A e1) (:B e1) (:C e1)]))
+    (is (cn/instance-of? :MultiInheritsMeta/E e2))
+    (is (= [1 2 "hi" nil 200 300] [(:X e2) (:Y e2) (:S e2) (:A e2) (:B e2) (:C e1)]))))
 
-#_(deftest edn-attribute
+(deftest edn-attribute
   (defcomponent :EdnAttr
     (entity :EdnAttr/Form {:Title :String
                            :X :Int
@@ -1208,7 +1209,6 @@
   (let [result (tu/invoke
                 {:EdnAttr/RenderLoginForm
                  {:Title "Login" :X 150 :Y 12}})]
-    (u/pprint result)
     (is (cn/instance-of? :EdnAttr/Form result))
     (is (= 160 (:Y result)))
     (is (= [:div [:p [:b "Login"]]]
@@ -1218,772 +1218,558 @@
                    first
                    (nth 2) second second)))))
 
-;; (deftest patterns-in-attributes
-;;   (defcomponent :PA
-;;     (record {:PA/OnClickEvent {:Source {:type :Int :optional true}}})
-;;     (record {:PA/Position {:X :Int :Y :Int
-;;                            :W :Int :H :Int}})
-;;     (entity {:PA/Button {:Id {:type :Int tu/guid true}
-;;                          :Title :String
-;;                          :Position :PA/Position
-;;                          :OnClick :PA/OnClickEvent}})
-;;     (event {:PA/AddButton {:Title :String :Position :PA/Position :Id :Int}})
-;;     (dataflow :PA/AddButton
-;;               {:PA/Button {:Id :PA/AddButton.Id
-;;                            :Title :PA/AddButton.Title
-;;                            :Position :PA/AddButton.Position
-;;                            :OnClick
-;;                            {:PA/OnClickEvent {:Source :PA/AddButton.Id}}}}))
-;;   (let [pos (cn/make-instance {:PA/Position {:X 10 :Y 10 :W 100 :H 50}})
-;;         add-btn (cn/make-instance {:PA/AddButton {:Title "OK" :Position pos :Id 1}})
-;;         result (tu/first-result add-btn)]
-;;     (is (cn/instance-of? :PA/Button result))
-;;     (is (cn/instance-of? :PA/OnClickEvent (:OnClick result)))))
-
-;; (deftest edn-ui
-;;   (defcomponent :EdnUI
-;;     (entity {:EdnUI/UserLogin
-;;              {:UserNameLabel {:type :String
-;;                               :default "Username: "}
-;;               :PasswordLabel {:type :String
-;;                               :default "Password: "}
-;;               :ButtonTitle {:type :String
-;;                             :default "Login"}
-;;               :HandlerEvent {:type :Keyword
-;;                              :optional true}
-;;               :View {:type :Edn
-;;                      :default
-;;                      [:div
-;;                       [:div
-;;                        [:label :UserNameLabel]
-;;                        [:input [:type "text"]]]
-;;                       [:div
-;;                        [:label :PasswordLabel]
-;;                        [:input [:type "password"]]]
-;;                       [:div
-;;                        [:button [:title :ButtonTitle]
-;;                         :on-click :HandlerEvent]]]}}})
-;;     (entity {:EdnUI/LoginForm
-;;              {:UserLogin {:type :EdnUI/UserLogin
-;;                           :optional true}
-;;               :Title {:type :String
-;;                       :default "Login"}
-;;               :DOMTarget :String
-;;               :View {:type :Edn
-;;                      :default
-;;                      [:div
-;;                       [:h2 :Title]
-;;                       [:div :UserLogin.View]]}}})
-
-;;     (event {:EdnUI/LoginEvent
-;;             {:Data :Any}})
-
-;;     (dataflow :EdnUI/MakeLoginForm
-;;               {:EdnUI/UserLogin
-;;                {:UserNameLabel :EdnUI/MakeLoginForm.UserNameLabel
-;;                 :PasswordLabel :EdnUI/MakeLoginForm.PasswordLabel
-;;                 :ButtonTitle :EdnUI/MakeLoginForm.ButtonTitle
-;;                 :HandlerEvent :EdnUI/MakeLoginForm.HandlerEvent}}
-;;               {:EdnUI/LoginForm
-;;                {:Title :EdnUI/MakeLoginForm.FormTitle
-;;                 :DOMTarget "app"
-;;                 :UserLogin :EdnUI/UserLogin}}))
-;;   (let [evt (cn/make-instance {:EdnUI/MakeLoginForm
-;;                                {:FormTitle "Login to the V8 Platform"
-;;                                 :UserNameLabel "Your V8 userId or email: "
-;;                                 :PasswordLabel "Password: "
-;;                                 :ButtonTitle "Login"
-;;                                 :HandlerEvent :EdnUI/LoginEvent}})
-;;         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-;;     (is (cn/instance-of? :EdnUI/LoginForm result))))
-
-;; (deftest async-event
-;;   (#?(:clj do
-;;       :cljs cljs.core.async/go)
-;;    (defcomponent :AE
-;;      (record {:AE/R01 {:X :Int}})
-;;      (event {:AE/Evt01 {:A :Int}})
-;;      (event {:AE/Evt02 {:B :Int}})
-;;      (dataflow :AE/Evt01
-;;                {:AE/Evt02 {:B :AE/Evt01.A}})
-;;      (dataflow :AE/Evt02
-;;                {:AE/R01 {:X :AE/Evt02.B}}))
-;;    (let [evt01 (cn/make-instance {:AE/Evt01 {:A 100}})
-;;          result (first (tu/fresult (e/eval-all-dataflows evt01)))]
-;;      (is (cn/instance-of? :AE/R01 result))
-;;      (is (= 100 (:X result))))))
-
-;; (deftest path-type
-;;   (#?(:clj do
-;;       :cljs cljs.core.async/go)
-;;    (defcomponent :PathType
-;;      (entity {:PathType/E
-;;               {:X :Path}}))
-;;    (let [e1 (cn/make-instance {:PathType/E {:X :A/B.R}})
-;;          e2 (cn/make-instance {:PathType/E {:X "A/B.R"}})]
-;;      (is (cn/instance-of? :PathType/E e1))
-;;      (is (= :A/B.R (:X e1)))
-;;      (is (cn/instance-of? :PathType/E e2))
-;;      (is (= :A/B.R (keyword (:X e2))))
-;;      (is (= "k/j" (:X (cn/make-instance {:PathType/E {:X "k/j"}}))))
-;;      (is (= :k (:X (cn/make-instance {:PathType/E {:X :k}})))))))
-
-;; (deftest format-test
-;;   (#?(:clj do
-;;       :cljs cljs.core.async/go)
-;;    (defcomponent :FormatTest
-;;      (entity {:FormatTest/E
-;;               {:Phone {:type :String
-;;                        :format "^(1\\s?)?(\\d{3}|\\(\\d{3}\\))[\\s\\-]?\\d{3}[\\s\\-]?\\d{4}$"}
-;;                :DOB {:type :String
-;;                      :format "^((19|2[0-9])[0-9]{2})-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$"}}})
-;;      (is (cn/instance-of?
-;;           :FormatTest/E
-;;           (cn/make-instance
-;;            {:FormatTest/E
-;;             {:Phone "(555)555-5555"
-;;              :DOB "1999-03-20"}})))
-;;      (tu/is-error #(cn/make-instance
-;;                     {:FormatTest/E
-;;                      {:Phone "(555)555-5555"
-;;                       :DOB "1877-09-01"}})))))
-
-;; (deftest numeric-types
-;;   (#?(:clj do
-;;       :cljs cljs.core.async/go)
-;;    (defcomponent :NT
-;;      (entity
-;;       :NT/E
-;;       {:X :Int
-;;        :Y :Int64
-;;        :Z :BigInteger
-;;        :A :Float
-;;        :B :Double
-;;        :C :Decimal
-;;        :D :DateTime})
-;;      (let [bi 8993993938884848858996996
-;;            f 1.2
-;;            d "90.8"
-;;            dt "2014-03-14T12:34:20.000000"
-;;            e (cn/make-instance
-;;               {:NT/E
-;;                {:X 10
-;;                 :Y #?(:clj Long/MAX_VALUE
-;;                       :cljs Number.MAX_VALUE)
-;;                 :Z bi
-;;                 :A f
-;;                 :B f
-;;                 :C d
-;;                 :D dt}})]
-;;        (is (cn/instance-of? :NT/E e))
-;;        (is (= 90.8M (:C e)))
-;;        (is (= (float f) (:A e)))
-;;        (is (= (double f) (:B e)))
-;;        (is (= bi (:Z e)))
-;;        (is (= dt (:D e)))))))
-
-;; (deftest match-cond
-;;   (#?(:clj do
-;;       :cljs cljs.core.async/go)
-;;    (defcomponent :MC
-;;      (record
-;;       {:MC/R
-;;        {:X :Int}})
-;;      (dataflow
-;;       :MC/E
-;;       [:match
-;;        [:like :MC/E.Y "xyz%"] {:MC/R {:X 0}}
-;;        [:< :MC/E.X 10] {:MC/R {:X 1}}
-;;        [:= :MC/E.X 100] {:MC/R {:X 2}}
-;;        [:between 1000 5000 :MC/E.X] {:MC/R {:X 100}}
-;;        [:in [11 20 30] :MC/E.X] {:MC/R {:X 5}}
-;;        [:or [:= 10 :MC/E.X] [:= 21 :MC/E.X]] {:MC/R {:X 12}}
-;;        {:MC/R {:X 3}}
-;;        :as :Result]
-;;       :Result))
-;;    (defn run [x result]
-;;      (let [r (first
-;;               (tu/fresult
-;;                (e/eval-all-dataflows
-;;                 (cn/make-instance
-;;                  {:MC/E
-;;                   {:X x
-;;                    :Y
-;;                    (if (neg? x)
-;;                      "xyz@eee.com"
-;;                      "abc@ddsd.com")}}))))]
-;;        (is (= (:X r) result))))
-;;    (run 3000 100)
-;;    (run 20 5)
-;;    (run 21 12)
-;;    (run -1 0)
-;;    (run 100 2)
-;;    (run 9 1)
-;;    (run 22 3)))
-
-;; (deftest inheritance-type-check
-;;   (defcomponent :Itc
-;;     (record
-;;      :Itc/Base
-;;      {:X :Int})
-;;     (record
-;;      :Itc/Child1
-;;      {:meta {:inherits :Itc/Base}
-;;       :Y :Int})
-;;     (record
-;;      :Itc/Child2
-;;      {:meta {:inherits :Itc/Base}
-;;       :Z :Int})
-;;     (record
-;;      :Itc/Child3
-;;      {:meta {:inherits :Itc/Child1}
-;;       :A :Int})
-;;     (entity
-;;      :Itc/E
-;;      {:Vals {:listof :Itc/Base}}))
-;;   (let [v1 (cn/make-instance {:Itc/Child1 {:X 1 :Y 2}})
-;;         v2 (cn/make-instance {:Itc/Child2 {:X 10 :Z 20}})
-;;         v3 (cn/make-instance {:Itc/Child3 {:X 9 :Y 8 :A 7}})
-;;         e (cn/make-instance {:Itc/E
-;;                              {:Vals [v1 v2 v3]}})
-;;         result (first
-;;                 (tu/fresult
-;;                  (e/eval-all-dataflows
-;;                   (cn/make-instance
-;;                    {:Itc/Create_E
-;;                     {:Instance e}}))))]
-;;     (is (cn/instance-of? :Itc/E result))
-;;     (every? #(or (cn/instance-of? :Itc/Child1 %)
-;;                  (cn/instance-of? :Itc/Child2 %)
-;;                  (cn/instance-of? :Itc/Child3 %))
-;;             (:Vals result))
-;;     (every? (partial cn/instance-of? :Itc/Base) (:Vals result))))
-
-;; #?(:clj
-;;    (deftest check-wrong-reference-attribute-use
-;;      (defcomponent :UserAccount
-;;        (entity {:UserAccount/Estimate
-;;                 {:Balance :Float
-;;                  :Loan    :Float}})
-;;        (record {:UserAccount/Total {:Total :Float}})
-;;        (event {:UserAccount/IncreaseLoan {:Balance :UserAccount/Total}}))
-;;      (dataflow :UserAccount/IncreaseLoan
-;;                {:UserAccount/Estimate {:Balance :UserAccount/IncreaseLoan.Total
-;;                                        :Loan    '(+ :Balance 10000)}})
-;;      (let [r (cn/make-instance :UserAccount/Total {:Total 100000})
-;;            evt (cn/make-instance :UserAccount/IncreaseLoan {:Balance r})]
-;;        (is (thrown-with-msg? Exception #"Error in: Event "
-;;                              (cn/instance-of? :UserAccount/Estimate
-;;                                               (first (tu/fresult (e/eval-all-dataflows evt)))))))))
-
-;; #?(:clj
-;;    (deftest access-wrong-event-entity
-;;      (defcomponent :UserAccount
-;;        (entity {:UserAccount/Estimate
-;;                 {:Balance :Float
-;;                  :Loan    :Float}})
-;;        (record {:UserAccount/Total {:Total :Float}})
-;;        (event {:UserAccount/IncreaseLoan {:Balance :UserAccount/Total}}))
-;;      (dataflow :UserAccount/IncreaseLoan
-;;                ;Intentional
-;;                {:UserAccount/Estimate {:Balance :UserAccount/Increase.Balance.Total
-;;                                        :Loan    '(+ :Balance 10000)}})
-;;      (let [r (cn/make-instance :UserAccount/Total {:Total 100000})
-;;            evt (cn/make-instance :UserAccount/IncreaseLoan {:Balance r})]
-;;        (is (thrown-with-msg? Exception #"Reference cannot be found for"
-;;                              (cn/instance-of? :UserAccount/Estimate
-;;                                               (first (tu/fresult (e/eval-all-dataflows evt)))))))))
-
-;; #?(:clj
-;;    (deftest ref-id-of-record
-;;      (defcomponent :UserAccount
-;;        (record {:UserAccount/Estimate
-;;                 {:Balance :Float
-;;                  :Loan    :Float}})
-;;        (record {:UserAccount/Total {:Total :Float}})
-;;        (event {:UserAccount/IncreaseLoan {cn/id-attr
-;;                                           {:type :UUID
-;;                                            :default "167d0b04-fa75-11eb-9a03-0242ac130003"}
-;;                                           :Balance :UserAccount/Total}}))
-;;      (dataflow :UserAccount/IncreaseLoan
-;;                {:UserAccount/Estimate {tu/q-id-attr (tu/append-id :UserAccount/IncreaseLoan)}}
-;;                {:UserAccount/Estimate {:Balance :UserAccount/IncreaseLoan.Balance.Total
-;;                                        :Loan    '(+ :Balance 10000)}})
-;;      (let [r (cn/make-instance :UserAccount/Total {:Total 100000})
-;;            evt (cn/make-instance :UserAccount/IncreaseLoan {:Balance r})]
-;;        (is (thrown? Exception (cn/instance-of? :UserAccount/Estimate (first (tu/fresult (e/eval-all-dataflows evt)))))))))
-
-;; (deftest password-match
-;;   (defcomponent :PM
-;;     (entity
-;;      :PM/User
-;;      {:UserName {:type :String
-;;                  :indexed true}
-;;       :Password :Password})
-;;     (event
-;;      :PM/UserLogin
-;;      {:UserName :String
-;;       :Password :Password})
-;;     (dataflow
-;;      :PM/UserLogin
-;;      {:PM/User
-;;       {:UserName? :PM/UserLogin.UserName}}
-;;      [:match :PM/UserLogin.Password
-;;       :PM/User.Password :PM/User]))
-;;   (let [u (tu/first-result
-;;            {:PM/Create_User
-;;             {:Instance
-;;              {:PM/User
-;;               {:UserName "admin"
-;;                :Password "admin"}}}})
-;;         r1 (e/eval-all-dataflows
-;;             {:PM/UserLogin
-;;              {:UserName "admin"
-;;               :Password "admin"}})
-;;         r2 (e/eval-all-dataflows
-;;             {:PM/UserLogin
-;;              {:UserName "admin"
-;;               :Password "kkkk"}})]
-;;     (is (cn/same-instance? u (:result (first r1))))
-;;     (is (not (:result (first r2))))))
-
-;; #?(:clj
-;;    (deftest data-generation-and-validation-for-listof []
-;;      (component :RefCheck2)
-;;      (testing "list-of"
-;;        (testing "string"
-;;          (entity {:RefCheck2/E1 {:AIdId {:listof :String}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E1)]
-;;            (is (seq? data))
-;;            (is (every? coll? (mapv :RefCheck2/E1.AIdId data)))
-;;            (is (every? #(every? string? %) (map :RefCheck2/E1.AIdId data)))
-;;            (is (every? uuid? (mapv (tu/append-id :RefCheck2/E1) data)))))
-
-;;        (testing "unique string"
-;;          (entity {:RefCheck2/E2 {:AIdId {:listof :String}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E2)]
-;;            (is (seq? data))
-;;            (is (every? coll? (mapv :RefCheck2/E2.AIdId data)))
-;;            (is (every? #(every? string? %) (map :RefCheck2/E2.AIdId data)))
-;;            (is (every? uuid? (mapv (tu/append-id :RefCheck2/E2) data)))))
-
-;;        (testing "int"
-;;          (entity {:RefCheck2/E3 {:AIdId {:listof :Int}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E3)]
-;;            (is (seq? data))
-;;            (is (every? coll? (map :RefCheck2/E3.AIdId data)))
-;;            (is (every? #(every? int? %) (map :RefCheck2/E3.AIdId data)))))
-
-;;        (testing "keyword"
-;;          (entity {:RefCheck2/E4 {:AIdId {:listof :Keyword}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E4)]
-;;            (is (seq? data))
-;;            (is (every? coll? (map :RefCheck2/E4.AIdId data)))
-;;            (is (every? #(every? keyword? %) (map :RefCheck2/E4.AIdId data)))))
-
-;;        (testing "path"
-;;          (entity {:RefCheck2/E5 {:AIdId {:listof :Path}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E5)]
-;;            (is (seq? data))
-;;            (is (every? coll? (map :RefCheck2/E5.AIdId data)))
-;;            (is (every? (fn [val]
-;;                          (every? #(or (keyword? %) (string? %)) val))
-;;                        (map :RefCheck2/E5.AIdId data)))))
-
-;;        (testing "float"
-;;          (entity {:RefCheck2/E6 {:AIdId {:listof :Float}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E6)]
-;;            (is (seq? data))
-;;            (is (every? coll? (map :RefCheck2/E6.AIdId data)))
-;;            (is (every? #(every? float? %) (map :RefCheck2/E6.AIdId data)))))
-
-;;        (testing "double"
-;;          (entity {:RefCheck2/E7 {:AIdId {:listof :Double}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E7)]
-;;            (is (seq? data))
-;;            (is (every? coll? (map :RefCheck2/E7.AIdId data)))
-;;            (is (every? #(every? double? %) (map :RefCheck2/E7.AIdId data)))))
-
-;;        (testing "decimal"
-;;          (entity {:RefCheck2/E8 {:AIdId {:listof :Decimal}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E8)]
-;;            (is (seq? data))
-;;            (is (every? coll? (map :RefCheck2/E8.AIdId data)))
-;;            (is (every? #(every? decimal? %) (map :RefCheck2/E8.AIdId data)))))
-
-;;        (testing "boolean"
-;;          (entity {:RefCheck2/E9 {:AIdId {:listof :Boolean}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E9)]
-;;            (is (seq? data))
-;;            (is (every? coll? (map :RefCheck2/E9.AIdId data)))
-;;            (is (every? #(every? boolean? %) (map :RefCheck2/E9.AIdId data)))))
-
-;;        (testing "any"
-;;          (entity {:RefCheck2/E10 {:AIdId {:listof :Any}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E10)]
-;;            (is (seq? data))
-;;            (is (every? coll? (map :RefCheck2/E10.AIdId data)))
-;;            (is (every? #(every? any? %) (map :RefCheck2/E10.AIdId data)))))
-
-;;        (testing "map"
-;;          (entity {:RefCheck2/E11 {:AIdId {:listof :Map}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E11)]
-;;            (is (seq? data))
-;;            (is (every? coll? (map :RefCheck2/E11.AIdId data)))
-;;            (is (every? #(every? map? %) (map :RefCheck2/E11.AIdId data)))))
-
-;;        (testing "date"
-;;          (entity {:RefCheck2/E12 {:AIdId {:listof :Date}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E12)]
-;;            (is (seq? data))
-;;            (is (every? coll? (map :RefCheck2/E12.AIdId data)))
-;;            (is (every? (fn [val]
-;;                          (every? #(instance? java.time.LocalDate %) val))
-;;                        (map :RefCheck2/E12.AIdId data)))))
-
-;;        (testing "date-time"
-;;          (entity {:RefCheck2/E13 {:AIdId {:listof :DateTime}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E13)]
-;;            (is (seq? data))
-;;            (is (every? coll? (map :RefCheck2/E13.AIdId data)))
-;;            (is (every? (fn [val]
-;;                          (every? #(instance? java.time.LocalDateTime %) val))
-;;                        (map :RefCheck2/E13.AIdId data)))))
-
-;;        (testing "time"
-;;          (entity {:RefCheck2/E14 {:AIdId {:listof :Time}}})
-
-;;          (let [data (tu/generate-data :RefCheck2/E14)]
-;;            (is (seq? data))
-;;            (is (every? coll? (map :RefCheck2/E14.AIdId data)))
-;;            (is (every? (fn [val]
-;;                          (every? #(instance? java.time.LocalTime %) val))
-;;                        (map :RefCheck2/E14.AIdId data))))))))
-
-;; #?(:clj
-;;    (deftest data-generation-and-validation-for-agentlang-types []
-;;      (component :RefCheck3)
-;;      (testing "agentlang type"
-;;        (testing "entity"
-;;          (entity {:RefCheck3/E
-;;                   {:X :Int
-;;                    :Y :Int}})
-
-;;          (let [data (tu/generate-data :RefCheck3/E)]
-;;            (is (seq? data))
-;;            (is (every? #(int? (:RefCheck3/E.X %)) data))
-;;            (is (every? #(int? (:RefCheck3/E.Y %)) data))
-;;            (is (every? #(uuid? ((tu/append-id :RefCheck3/E) %)) data))))
-
-;;        (testing "record"
-;;          (record {:RefCheck3/E
-;;                   {:X :Int
-;;                    :Y :Int}}))
-
-;;        (let [data (tu/generate-data :RefCheck3/E)]
-;;          (is (seq? data))
-;;          (is (every? #(int? (:RefCheck3/E.X %)) data))
-;;          (is (every? #(int? (:RefCheck3/E.Y %)) data))
-;;          (is (every? #(nil? ((tu/append-id :RefCheck3/E) %)) data))))
-
-;;      (testing "Reference to an entity's attribute"
-;;        (entity {:RefCheck3/E1 {:A :Int}})
-;;        (entity {:RefCheck3/E2 {:AId {:ref (tu/append-id :RefCheck3/E1)}
-;;                                :X :Int}})
-;;        (entity {:RefCheck3/E3 {:AIdId {:ref :RefCheck3/E2.AId}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(uuid? (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "Reference to an entity"
-;;        (entity {:RefCheck3/E1 {:A :Int}})
-;;        (entity {:RefCheck3/E2 {:AId {:ref (tu/append-id :RefCheck3/E1)}
-;;                                :X :Int}})
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :RefCheck3/E1}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(instance? clojure.lang.PersistentArrayMap (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "Reference to a record"
-;;        (record {:RefCheck3/E1 {:A :Int}})
-;;        (entity {:RefCheck3/E2 {:AId {:ref :RefCheck3/E1.A}
-;;                                :X :Int}})
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :RefCheck3/E1}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(instance? clojure.lang.PersistentArrayMap (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "oneof"
-;;        (entity {:RefCheck3/E3 {:AIdId {:oneof ["diesel", "petrol", "cng"]}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(string? (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "string without format"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :String}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(string? (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "keyword"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :Keyword}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(keyword? (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "path"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :Path}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(or (keyword? %) (string? %)) (map :RefCheck3/E3.AIdId data)))))
-
-;;      (testing "int64"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :Int64}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(int? (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "bigInteger"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :BigInteger}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(integer? (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "float"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :Float}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(float? (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "double"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :Double}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(double? (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "decimal"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :Decimal}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(decimal? (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "boolean"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :Boolean}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(boolean? (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "date"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :Date}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(instance? java.time.LocalDate %) (map :RefCheck3/E3.AIdId data)))))
-
-;;      (testing "dateTime"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :DateTime}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(instance? java.time.LocalDateTime %) (map :RefCheck3/E3.AIdId data)))))
-
-;;      (testing "time"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :Time}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(instance? java.time.LocalTime %) (map :RefCheck3/E3.AIdId data)))))
-
-;;      (testing "any"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :Any}}})
-
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(any? (:RefCheck3/E3.AIdId %)) data))))
-
-;;      (testing "map"
-;;        (entity {:RefCheck3/E3 {:AIdId {:type :Map}}})
-;;        (let [data (tu/generate-data :RefCheck3/E3)]
-;;          (is (seq? data))
-;;          (is (every? #(map? (:RefCheck3/E3.AIdId %)) data))))))
-
-;; (deftest components-in-model
-;;   (component :Abc.X)
-;;   (component :Abc.Y)
-;;   (component :Bcd.Z)
-;;   (is (= #{:Abc.X :Abc.Y} (set (cn/component-names :Abc))))
-;;   (is (= #{:Bcd.Z} (set (cn/component-names :Bcd)))))
-
-;; (deftest attribute-meta
-;;   (defcomponent :AMeta
-;;     (attribute
-;;      :AMeta/Name
-;;      {:type :String
-;;       :meta {:instance {:ui {:Agentlang.Fx/Input {}}}}}))
-;;   (is (= {:unique false, :immutable false, :type :Agentlang.Kernel.Lang/String}
-;;          (dissoc (cn/find-attribute-schema :AMeta/Name) :check)))
-;;   (is (= {:instance {:ui #:Agentlang.Fx{:Input {}}}}
-;;          (cn/fetch-meta :AMeta/Name))))
-
-;; (deftest model-spec
-;;   (let [spec {:name :crm :version "1.0.2"
-;;               :agentlang-version "current"
-;;               :components [:Crm.Core :Crm.Sales]}]
-;;     (ln/model spec)
-;;     (is (= spec (cn/fetch-model :crm)))
-;;     (is (= "1.0.2" (cn/model-version :crm)))))
-
-;; #?(:clj
-;;    (deftest multi-threaded-transactions
-;;      (defcomponent :Mtt01
-;;        (entity
-;;         :Mtt01/E
-;;         {:Id {:type :Int tu/guid true}
-;;          :X :Int
-;;          :Y :String}))
-;;      (let [create-e (fn [id]
-;;                       (let [x (* id 10)]
-;;                         (loop [attempts 0]
-;;                           (let [res (tu/first-result
-;;                                      {:Mtt01/Create_E
-;;                                       {:Instance
-;;                                        {:Mtt01/E {:Id id :X x
-;;                                                   :Y (str id ", " x)}}}})]
-;;                             (if (seq res) res
-;;                                 (when (< attempts 4) (recur (inc attempts))))))))
-;;            e? (partial cn/instance-of? :Mtt01/E)
-;;            create-es #(mapv create-e %)
-;;            lookup-all (fn [] (tu/result
-;;                               {:Mtt01/LookupAll_E {}}))
-;;            delete-e (fn [id]
-;;                       (loop [attempts 0]
-;;                         (let [res (tu/first-result
-;;                                    {:Mtt01/Delete_E
-;;                                     {:Id id}})]
-;;                           (if (seq res) res
-;;                               (when (< attempts 4) (recur (inc attempts)))))))
-;;            delete-es #(mapv delete-e %)
-;;            trtest (fn [opr ids]
-;;                     (let [res (atom nil)
-;;                           ^Thread t (Thread. #(reset! res (opr ids)))]
-;;                       (.start t)
-;;                       [t res]))
-;;            chk (fn [[^Thread t res] ids]
-;;                  (.join t)
-;;                  (is (= (count ids) (count @res)))
-;;                  (let [rs (filter e? @res)]
-;;                    (is (> (count rs)
-;;                           (int (* (count ids) 0.98))))))
-;;            crtest (partial trtest create-es)
-;;            deltest (partial trtest delete-es)]
-;;        (let [ids1 (range 1 500)
-;;              ids2 (range 500 1000)
-;;              ids3 (range 20 100)
-;;              ids4 (range 470 600)
-;;              t1 (crtest ids1)
-;;              t2 (crtest ids2)]
-;;          (chk t1 ids1)
-;;          (chk t2 ids2)
-;;          (let [es (lookup-all)]
-;;            (is (every? e? es)))
-;;          (let [t3 (deltest ids3)
-;;                t4 (deltest ids4)]
-;;            (chk t3 ids3)
-;;            (chk t4 ids4)
-;;            (let [es (lookup-all)]
-;;              (is (every? e? es))))))))
-
-;; (deftest api-test
-;;   (api/component :Api.Test)
-;;   (api/record
-;;    :Api.Test/R
-;;    {:A :String})
-;;   (api/entity
-;;    :Api.Test/E
-;;    {:Id :Identity :R :Api.Test/R})
-;;   (api/entity
-;;    :Api.Test/F
-;;    {:Id :Identity
-;;     :Name {:type :String :id true}
-;;     :Y :Int})
-;;   (api/relationship
-;;    :Api.Test/Rel
-;;    {:meta {:contains [:Api.Test/E :Api.Test/F]}})
-;;   (api/event
-;;    :Api.Test/MakeF
-;;    {:Name :String :Y :Int})
-;;   (api/dataflow
-;;    :Api.Test/MakeF
-;;    {:Api.Test/R
-;;     {:A "hello, world"} :as :R}
-;;    {:Api.Test/E {:R :R} :as :E}
-;;    {:Api.Test/F
-;;     {:Name :Api.Test/MakeF.Name
-;;      :Y :Api.Test/MakeF.Y}
-;;     :-> [[:Api.Test/Rel :E]]})
-;;   (tu/finalize-component :Api.Test)
-;;   (let [f (tu/first-result
-;;            {:Api.Test/MakeF
-;;             {:Name "abc" :Y 100}})]
-;;     (is (cn/instance-of? :Api.Test/F f))
-;;     (is (cn/same-instance?
-;;          f
-;;          (tu/first-result
-;;           {:Api.Test/Lookup_F
-;;            {li/path-attr (li/path-attr f)}})))))
-
-;; (deftest password-encryption-bug
-;;   (defcomponent :PswdEnc
-;;     (entity
-;;      :PswdEnc/E
-;;      {:X :String
-;;       :Y {:type :Password :optional true
-;;           :check #(or (agentlang.util.hash/crypto-hash? %)
-;;                       (let [c (count %)]
-;;                         (< 2 c 10)))}}))
-;;   (let [e (tu/first-result
-;;            {:PswdEnc/Create_E
-;;             {:Instance
-;;              {:PswdEnc/E {:X "hello" :Y "jjj3223"}}}})]
-;;     (is (cn/instance-of? :PswdEnc/E e))
-;;     (is (agentlang.util.hash/crypto-hash? (:Y e)))))
-
-;; (deftest default-component
-;;   (component :Dc01)
-;;   (component :Dc02)
-;;   (cn/set-current-component :Dc02)
-;;   (is (= :Dc02/A (entity :A {:Id :Identity :X :Int})))
-;;   (is (= :Dc02/B (record :B {:Name :String})))
-;;   (is (= :Dc02/C (event :C {:A :UUID :B :String})))
-;;   (is (= :Dc02/C (dataflow :C {:Dc02/A {:X :C.X}})))
-;;   (is (= :Dc02/OnA (inference :OnA {:instructions "handle new A"})))
-;;   (is (= :Dc02/R (relationship :R {:meta {:between [:Dc02/A :Dc02/A]}})))
-;;   (cn/set-current-component :Dc01)
-;;   (is (= :Dc01/A (entity :A {:Id :Identity :X :Int})))
-;;   (is (= :Dc01/B (record :B {:Name :String}))))
+(deftest patterns-in-attributes
+  (defcomponent :PA
+    (record {:PA/OnClickEvent {:Source {:type :Int :optional true}}})
+    (record {:PA/Position {:X :Int :Y :Int
+                           :W :Int :H :Int}})
+    (entity {:PA/Button {:Id {:type :Int :id true}
+                         :Title :String
+                         :Position :PA/Position
+                         :OnClick :PA/OnClickEvent}})
+    (event {:PA/AddButton {:Title :String :Position :PA/Position :Id :Int}})
+    (dataflow :PA/AddButton
+              {:PA/Button {:Id :PA/AddButton.Id
+                           :Title :PA/AddButton.Title
+                           :Position :PA/AddButton.Position
+                           :OnClick
+                           {:PA/OnClickEvent {:Source :PA/AddButton.Id}}}}))
+  (let [pos (cn/make-instance {:PA/Position {:X 10 :Y 10 :W 100 :H 50}})
+        add-btn (cn/make-instance {:PA/AddButton {:Title "OK" :Position pos :Id 1}})
+        result (tu/invoke add-btn)]
+    (is (cn/instance-of? :PA/Button result))
+    (is (cn/instance-of? :PA/OnClickEvent (:OnClick result)))))
+
+(deftest format-test
+  (#?(:clj do
+      :cljs cljs.core.async/go)
+   (defcomponent :FormatTest
+     (entity {:FormatTest/E
+              {:Phone {:type :String
+                       :format "^(1\\s?)?(\\d{3}|\\(\\d{3}\\))[\\s\\-]?\\d{3}[\\s\\-]?\\d{4}$"}
+               :DOB {:type :String
+                     :format "^((19|2[0-9])[0-9]{2})-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$"}}})
+     (is (cn/instance-of?
+          :FormatTest/E
+          (cn/make-instance
+           {:FormatTest/E
+            {:Phone "(555)555-5555"
+             :DOB "1999-03-20"}})))
+     (tu/is-error #(cn/make-instance
+                    {:FormatTest/E
+                     {:Phone "(555)555-5555"
+                      :DOB "1877-09-01"}})))))
+
+(deftest numeric-types
+  (#?(:clj do
+      :cljs cljs.core.async/go)
+   (defcomponent :NT
+     (entity
+      :NT/E
+      {:X :Int
+       :Y :Int64
+       :Z :BigInteger
+       :A :Float
+       :B :Double
+       :C :Decimal
+       :D :DateTime})
+     (let [bi 8993993938884848858996996
+           f 1.2
+           d "90.8"
+           dt "2014-03-14T12:34:20.000000"
+           e (cn/make-instance
+              {:NT/E
+               {:X 10
+                :Y #?(:clj Long/MAX_VALUE
+                      :cljs Number.MAX_VALUE)
+                :Z bi
+                :A f
+                :B f
+                :C d
+                :D dt}})]
+       (is (cn/instance-of? :NT/E e))
+       (is (= 90.8M (:C e)))
+       (is (= (float f) (:A e)))
+       (is (= (double f) (:B e)))
+       (is (= bi (:Z e)))
+       (is (= dt (:D e)))))))
+
+(deftest inheritance-type-check
+  (defcomponent :Itc
+    (record
+     :Itc/Base
+     {:X :Int})
+    (record
+     :Itc/Child1
+     {:meta {:inherits :Itc/Base}
+      :Y :Int})
+    (record
+     :Itc/Child2
+     {:meta {:inherits :Itc/Base}
+      :Z :Int})
+    (record
+     :Itc/Child3
+     {:meta {:inherits :Itc/Child1}
+      :A :Int})
+    (entity
+     :Itc/E
+     {:Vals {:listof :Itc/Base}}))
+  (let [v1 (cn/make-instance {:Itc/Child1 {:X 1 :Y 2}})
+        v2 (cn/make-instance {:Itc/Child2 {:X 10 :Z 20}})
+        v3 (cn/make-instance {:Itc/Child3 {:X 9 :Y 8 :A 7}})
+        e (cn/make-instance {:Itc/E
+                             {:Vals [v1 v2 v3]}})
+        result (tu/invoke
+                (cn/make-instance
+                 {:Itc/Create_E
+                  {:Instance e}}))]
+    (is (cn/instance-of? :Itc/E result))
+    (every? #(or (cn/instance-of? :Itc/Child1 %)
+                 (cn/instance-of? :Itc/Child2 %)
+                 (cn/instance-of? :Itc/Child3 %))
+            (:Vals result))
+    (every? (partial cn/instance-of? :Itc/Base) (:Vals result))))
+
+#?(:clj
+   (deftest data-generation-and-validation-for-listof []
+     (component :RefCheck2)
+     (testing "list-of"
+       (testing "string"
+         (entity {:RefCheck2/E1 {:AIdId {:listof :String}}})
+
+         (let [data (tu/generate-data :RefCheck2/E1)]
+           (is (seq? data))
+           (is (every? coll? (mapv :RefCheck2/E1.AIdId data)))
+           (is (every? #(every? string? %) (map :RefCheck2/E1.AIdId data)))
+           (is (every? uuid? (mapv (tu/append-id :RefCheck2/E1) data)))))
+
+       (testing "unique string"
+         (entity {:RefCheck2/E2 {:AIdId {:listof :String}}})
+
+         (let [data (tu/generate-data :RefCheck2/E2)]
+           (is (seq? data))
+           (is (every? coll? (mapv :RefCheck2/E2.AIdId data)))
+           (is (every? #(every? string? %) (map :RefCheck2/E2.AIdId data)))
+           (is (every? uuid? (mapv (tu/append-id :RefCheck2/E2) data)))))
+
+       (testing "int"
+         (entity {:RefCheck2/E3 {:AIdId {:listof :Int}}})
+
+         (let [data (tu/generate-data :RefCheck2/E3)]
+           (is (seq? data))
+           (is (every? coll? (map :RefCheck2/E3.AIdId data)))
+           (is (every? #(every? int? %) (map :RefCheck2/E3.AIdId data)))))
+
+       (testing "keyword"
+         (entity {:RefCheck2/E4 {:AIdId {:listof :Keyword}}})
+
+         (let [data (tu/generate-data :RefCheck2/E4)]
+           (is (seq? data))
+           (is (every? coll? (map :RefCheck2/E4.AIdId data)))
+           (is (every? #(every? keyword? %) (map :RefCheck2/E4.AIdId data)))))
+
+       (testing "path"
+         (entity {:RefCheck2/E5 {:AIdId {:listof :Path}}})
+
+         (let [data (tu/generate-data :RefCheck2/E5)]
+           (is (seq? data))
+           (is (every? coll? (map :RefCheck2/E5.AIdId data)))
+           (is (every? (fn [val]
+                         (every? #(or (keyword? %) (string? %)) val))
+                       (map :RefCheck2/E5.AIdId data)))))
+
+       (testing "float"
+         (entity {:RefCheck2/E6 {:AIdId {:listof :Float}}})
+
+         (let [data (tu/generate-data :RefCheck2/E6)]
+           (is (seq? data))
+           (is (every? coll? (map :RefCheck2/E6.AIdId data)))
+           (is (every? #(every? float? %) (map :RefCheck2/E6.AIdId data)))))
+
+       (testing "double"
+         (entity {:RefCheck2/E7 {:AIdId {:listof :Double}}})
+
+         (let [data (tu/generate-data :RefCheck2/E7)]
+           (is (seq? data))
+           (is (every? coll? (map :RefCheck2/E7.AIdId data)))
+           (is (every? #(every? double? %) (map :RefCheck2/E7.AIdId data)))))
+
+       (testing "decimal"
+         (entity {:RefCheck2/E8 {:AIdId {:listof :Decimal}}})
+
+         (let [data (tu/generate-data :RefCheck2/E8)]
+           (is (seq? data))
+           (is (every? coll? (map :RefCheck2/E8.AIdId data)))
+           (is (every? #(every? decimal? %) (map :RefCheck2/E8.AIdId data)))))
+
+       (testing "boolean"
+         (entity {:RefCheck2/E9 {:AIdId {:listof :Boolean}}})
+
+         (let [data (tu/generate-data :RefCheck2/E9)]
+           (is (seq? data))
+           (is (every? coll? (map :RefCheck2/E9.AIdId data)))
+           (is (every? #(every? boolean? %) (map :RefCheck2/E9.AIdId data)))))
+
+       (testing "any"
+         (entity {:RefCheck2/E10 {:AIdId {:listof :Any}}})
+
+         (let [data (tu/generate-data :RefCheck2/E10)]
+           (is (seq? data))
+           (is (every? coll? (map :RefCheck2/E10.AIdId data)))
+           (is (every? #(every? any? %) (map :RefCheck2/E10.AIdId data)))))
+
+       (testing "map"
+         (entity {:RefCheck2/E11 {:AIdId {:listof :Map}}})
+
+         (let [data (tu/generate-data :RefCheck2/E11)]
+           (is (seq? data))
+           (is (every? coll? (map :RefCheck2/E11.AIdId data)))
+           (is (every? #(every? map? %) (map :RefCheck2/E11.AIdId data)))))
+
+       (testing "date"
+         (entity {:RefCheck2/E12 {:AIdId {:listof :Date}}})
+
+         (let [data (tu/generate-data :RefCheck2/E12)]
+           (is (seq? data))
+           (is (every? coll? (map :RefCheck2/E12.AIdId data)))
+           (is (every? (fn [val]
+                         (every? #(instance? java.time.LocalDate %) val))
+                       (map :RefCheck2/E12.AIdId data)))))
+
+       (testing "date-time"
+         (entity {:RefCheck2/E13 {:AIdId {:listof :DateTime}}})
+
+         (let [data (tu/generate-data :RefCheck2/E13)]
+           (is (seq? data))
+           (is (every? coll? (map :RefCheck2/E13.AIdId data)))
+           (is (every? (fn [val]
+                         (every? #(instance? java.time.LocalDateTime %) val))
+                       (map :RefCheck2/E13.AIdId data)))))
+
+       (testing "time"
+         (entity {:RefCheck2/E14 {:AIdId {:listof :Time}}})
+
+         (let [data (tu/generate-data :RefCheck2/E14)]
+           (is (seq? data))
+           (is (every? coll? (map :RefCheck2/E14.AIdId data)))
+           (is (every? (fn [val]
+                         (every? #(instance? java.time.LocalTime %) val))
+                       (map :RefCheck2/E14.AIdId data))))))))
+
+#?(:clj
+   (deftest data-generation-and-validation-for-agentlang-types []
+     (component :RefCheck3)
+     (testing "agentlang type"
+       (testing "entity"
+         (entity {:RefCheck3/E
+                  {:X :Int
+                   :Y :Int}})
+
+         (let [data (tu/generate-data :RefCheck3/E)]
+           (is (seq? data))
+           (is (every? #(int? (:RefCheck3/E.X %)) data))
+           (is (every? #(int? (:RefCheck3/E.Y %)) data))
+           (is (every? #(uuid? ((tu/append-id :RefCheck3/E) %)) data))))
+
+       (testing "record"
+         (record {:RefCheck3/E
+                  {:X :Int
+                   :Y :Int}}))
+
+       (let [data (tu/generate-data :RefCheck3/E)]
+         (is (seq? data))
+         (is (every? #(int? (:RefCheck3/E.X %)) data))
+         (is (every? #(int? (:RefCheck3/E.Y %)) data))
+         (is (every? #(nil? ((tu/append-id :RefCheck3/E) %)) data))))
+
+     (testing "Reference to an entity's attribute"
+       (entity {:RefCheck3/E1 {:A :Int}})
+       (entity {:RefCheck3/E2 {:AId {:ref (tu/append-id :RefCheck3/E1)}
+                               :X :Int}})
+       (entity {:RefCheck3/E3 {:AIdId {:ref :RefCheck3/E2.AId}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(uuid? (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "Reference to an entity"
+       (entity {:RefCheck3/E1 {:A :Int}})
+       (entity {:RefCheck3/E2 {:AId {:ref (tu/append-id :RefCheck3/E1)}
+                               :X :Int}})
+       (entity {:RefCheck3/E3 {:AIdId {:type :RefCheck3/E1}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(instance? clojure.lang.PersistentArrayMap (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "Reference to a record"
+       (record {:RefCheck3/E1 {:A :Int}})
+       (entity {:RefCheck3/E2 {:AId {:ref :RefCheck3/E1.A}
+                               :X :Int}})
+       (entity {:RefCheck3/E3 {:AIdId {:type :RefCheck3/E1}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(instance? clojure.lang.PersistentArrayMap (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "oneof"
+       (entity {:RefCheck3/E3 {:AIdId {:oneof ["diesel", "petrol", "cng"]}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(string? (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "string without format"
+       (entity {:RefCheck3/E3 {:AIdId {:type :String}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(string? (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "keyword"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Keyword}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(keyword? (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "path"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Path}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(or (keyword? %) (string? %)) (map :RefCheck3/E3.AIdId data)))))
+
+     (testing "int64"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Int64}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(int? (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "bigInteger"
+       (entity {:RefCheck3/E3 {:AIdId {:type :BigInteger}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(integer? (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "float"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Float}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(float? (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "double"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Double}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(double? (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "decimal"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Decimal}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(decimal? (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "boolean"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Boolean}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(boolean? (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "date"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Date}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(instance? java.time.LocalDate %) (map :RefCheck3/E3.AIdId data)))))
+
+     (testing "dateTime"
+       (entity {:RefCheck3/E3 {:AIdId {:type :DateTime}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(instance? java.time.LocalDateTime %) (map :RefCheck3/E3.AIdId data)))))
+
+     (testing "time"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Time}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(instance? java.time.LocalTime %) (map :RefCheck3/E3.AIdId data)))))
+
+     (testing "any"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Any}}})
+
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(any? (:RefCheck3/E3.AIdId %)) data))))
+
+     (testing "map"
+       (entity {:RefCheck3/E3 {:AIdId {:type :Map}}})
+       (let [data (tu/generate-data :RefCheck3/E3)]
+         (is (seq? data))
+         (is (every? #(map? (:RefCheck3/E3.AIdId %)) data))))))
+
+(deftest components-in-model
+  (component :Abc.X)
+  (component :Abc.Y)
+  (component :Bcd.Z)
+  (is (= #{:Abc.X :Abc.Y} (set (cn/component-names :Abc))))
+  (is (= #{:Bcd.Z} (set (cn/component-names :Bcd)))))
+
+(deftest attribute-meta
+  (defcomponent :AMeta
+    (attribute
+     :AMeta/Name
+     {:type :String
+      :meta {:instance {:ui {:Agentlang.Fx/Input {}}}}}))
+  (is (= {:unique false, :immutable false, :type :Agentlang.Kernel.Lang/String}
+         (dissoc (cn/find-attribute-schema :AMeta/Name) :check)))
+  (is (= {:instance {:ui #:Agentlang.Fx{:Input {}}}}
+         (cn/fetch-meta :AMeta/Name))))
+
+(deftest model-spec
+  (let [spec {:name :crm :version "1.0.2"
+              :agentlang-version "current"
+              :components [:Crm.Core :Crm.Sales]}]
+    (ln/model spec)
+    (is (= spec (cn/fetch-model :crm)))
+    (is (= "1.0.2" (cn/model-version :crm)))))
+
+#?(:clj
+   (deftest multi-threaded-transactions
+     (defcomponent :Mtt01
+       (entity
+        :Mtt01/E
+        {:Id {:type :Int :id true}
+         :X :Int
+         :Y :String})
+       (dataflow
+        :Mtt01/DeleteE
+        [:delete {:Mtt01/E {:Id? :Mtt01/DeleteE.Id}}]))
+     (let [create-e (fn [id]
+                      (let [x (* id 10)]
+                        (loop [attempts 0]
+                          (let [res (tu/invoke
+                                     {:Mtt01/Create_E
+                                      {:Instance
+                                       {:Mtt01/E {:Id id :X x
+                                                  :Y (str id ", " x)}}}})]
+                            (if (seq res) res
+                                (when (< attempts 4) (recur (inc attempts))))))))
+           e? (partial cn/instance-of? :Mtt01/E)
+           create-es #(mapv create-e %)
+           lookup-all (fn [] (tu/invoke
+                              {:Mtt01/LookupAll_E {}}))
+           delete-e (fn [id]
+                      (loop [attempts 0]
+                        (let [res (tu/invoke {:Mtt01/DeleteE {:Id id}})]
+                          (if (seq res)
+                            (first res)
+                            (when (< attempts 4) (recur (inc attempts)))))))
+           delete-es #(mapv delete-e %)
+           trtest (fn [opr ids]
+                    (let [res (atom nil)
+                          ^Thread t (Thread. #(reset! res (opr ids)))]
+                      (.start t)
+                      [t res]))
+           chk (fn [[^Thread t res] ids]
+                 (.join t)
+                 (is (= (count ids) (count @res)))
+                 (let [rs (filter e? @res)]
+                   (is (> (count rs)
+                          (int (* (count ids) 0.98))))))
+           crtest (partial trtest create-es)
+           deltest (partial trtest delete-es)]
+       (let [ids1 (range 1 500)
+             ids2 (range 500 1000)
+             ids3 (range 20 100)
+             ids4 (range 470 600)
+             t1 (crtest ids1)
+             t2 (crtest ids2)]
+         (chk t1 ids1)
+         (chk t2 ids2)
+         (let [es (lookup-all)]
+           (is (every? e? es)))
+         (let [t3 (deltest ids3)
+               t4 (deltest ids4)]
+           (chk t3 ids3)
+           (chk t4 ids4)
+           (let [es (lookup-all)]
+             (is (every? e? es))))))))
+
+(deftest api-test
+  (api/component :Api.Test)
+  (api/record
+   :Api.Test/R
+   {:A :String})
+  (api/entity
+   :Api.Test/E
+   {:Id :Identity :R :Api.Test/R})
+  (api/entity
+   :Api.Test/F
+   {:Id :Identity
+    :Name {:type :String :id true}
+    :Y :Int})
+  (api/relationship
+   :Api.Test/Rel
+   {:meta {:contains [:Api.Test/E :Api.Test/F]}})
+  (api/event
+   :Api.Test/MakeF
+   {:Name :String :Y :Int})
+  (api/dataflow
+   :Api.Test/MakeF
+   {:Api.Test/R
+    {:A "hello, world"} :as :R}
+   {:Api.Test/E {:R :R} :as :E}
+   {:Api.Test/F
+    {:Name :Api.Test/MakeF.Name
+     :Y :Api.Test/MakeF.Y}
+    :Api.Test/Rel :E})
+  (tu/finalize-component :Api.Test)
+  (let [f (tu/invoke
+           {:Api.Test/MakeF
+            {:Name "abc" :Y 100}})]
+    (is (cn/instance-of? :Api.Test/F f))
+    (is (cn/same-instance?
+         f
+         (first
+          (tu/invoke
+           {:Api.Test/Lookup_F
+            {:path (li/path-attr f)}}))))))
+
+(deftest password-encryption-bug
+  (defcomponent :PswdEnc
+    (entity
+     :PswdEnc/E
+     {:X :String
+      :Y {:type :Password :optional true
+          :check #(or (agentlang.util.hash/crypto-hash? %)
+                      (let [c (count %)]
+                        (< 2 c 10)))}}))
+  (let [e (tu/invoke
+           {:PswdEnc/Create_E
+            {:Instance
+             {:PswdEnc/E {:X "hello" :Y "jjj3223"}}}})]
+    (is (cn/instance-of? :PswdEnc/E e))
+    (is (agentlang.util.hash/crypto-hash? (:Y e)))))
+
+(deftest default-component
+  (component :Dc01)
+  (component :Dc02)
+  (cn/set-current-component :Dc02)
+  (is (= :Dc02/A (entity :A {:Id :Identity :X :Int})))
+  (is (= :Dc02/B (record :B {:Name :String})))
+  (is (= :Dc02/C (event :C {:A :UUID :B :String})))
+  (is (= :Dc02/C (dataflow :C {:Dc02/A {:X :C.X}})))
+  (is (= :Dc02/OnA (inference :OnA {:instructions "handle new A"})))
+  (is (= :Dc02/R (relationship :R {:meta {:between [:Dc02/A :Dc02/A]}})))
+  (cn/set-current-component :Dc01)
+  (is (= :Dc01/A (entity :A {:Id :Identity :X :Int})))
+  (is (= :Dc01/B (record :B {:Name :String}))))

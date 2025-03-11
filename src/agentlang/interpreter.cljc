@@ -151,6 +151,8 @@
                         exp)]
     (li/evaluate (seq final-exp))))
 
+(defn- evaluate-expr [env exp] (evaluate-attr-expr env nil nil nil exp))
+
 (defn- assoc-fn-attributes [env attrs path-attr-names fn-exprs]
   (loop [fns fn-exprs, raw-obj attrs]
     (if-let [[a exp] (first fns)]
@@ -860,8 +862,14 @@
 (defn evaluate-pattern
   ([env pat]
    (gs/reset-error-code!)
-   (if (ls/literal? pat)
+   (cond
+     (ls/literal? pat)
      (make-result env pat)
+
+     (list? pat)
+     (make-result env (evaluate-expr env pat))
+
+     :else
      (let [env (or env (env/make (store/get-default-store) nil))
            pat (maybe-normalize-pattern pat)
            [condition-handlers pat] (ls/maybe-extract-condition-handlers pat)

@@ -665,3 +665,7 @@
      (second (first (filter (fn [[[_ en] v]] (= en entity-name)) db))))))
 
 (defn reset-alias-db! [] (set-alias-db! nil))
+
+(defn case-attribute-spec? [x]
+  (and (vector? x)
+       (= :match (first x))))
