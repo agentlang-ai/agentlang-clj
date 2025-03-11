@@ -260,6 +260,11 @@
     query-pattern (introspect-query-pattern (:? (li/record-attributes pat)))}
    (introspect-optional-keys pat)))
 
+(defn query-object [recname qpat]
+  {syntax-type :query-object
+   record-name recname
+   query-pattern (introspect-query-pattern qpat)})
+
 (defn- raw-query-object [r]
   (merge {(record-name r) {:? (raw-query-pattern (query-pattern r))}}
          (raw-optional-keys r)))

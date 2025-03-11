@@ -28,6 +28,9 @@
   (is-pat ls/query? {:SynInst/E {:Id? 1} :as [:A]})
   (is-pat ls/upsert? {:SynInst/E {:Id 2 :X '(* 10 :SynInst/CreateE.X)} :as :A})
   (is-pat ls/query-object? {:SynInst/E {:? {:where [:>= :X 100]}} :as :Result})
+  (let [qobj (ls/with-alias [:R] (ls/query-object :SynInst/E {:where [:= :X 1]}))]
+    (is (ls/query-object? qobj))
+    (is (= {:SynInst/E {:? {:where [:= :X 1]}}, :as [:R]} (ls/raw qobj))))
   (is (= {:SynInst/E {:Id 3, :X 30}, :as :A}
          (ls/raw (ls/with-alias :A (ls/upsert :SynInst/E {:Id 3 :X 30}))))))
 
