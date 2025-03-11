@@ -222,16 +222,17 @@
       relationships rels-spec}
      (introspect-optional-keys pat))))
 
-(defn- query-upsert
+(defn- query-upsert-helper
   ([tag recname attrs rels]
    {syntax-type tag
     record-name recname
     attributes attrs
     relationships rels})
-  ([tag recname attrs] (query-upsert tag recname attrs nil)))
+  ([tag recname attrs] (query-upsert-helper tag recname attrs nil)))
 
-(def upsert (partial query-upsert :upsert))
-(def query (partial query-upsert :query))
+(def upsert (partial query-upsert-helper :upsert))
+(def query (partial query-upsert-helper :query))
+(def query-upsert (partial query-upsert-helper :query-upsert))
 
 (defn- raw-query [r]
   (merge
