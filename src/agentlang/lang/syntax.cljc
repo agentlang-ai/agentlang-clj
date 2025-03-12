@@ -158,8 +158,9 @@
   (let [ks (keys (li/normalize-instance-pattern pat))
         rn (li/normalize-name recname)]
     (filter #(let [n (cn/canonical-type-name (li/normalize-name %))]
-               (or (cn/relationship? n)
-                   (and (maybe-lang-def-name? n) (not= n rn))))
+               (when (not= rn n)
+                 (or (cn/relationship? n)
+                     (and (maybe-lang-def-name? n) (not= n rn)))))
             ks)))
 
 (defn- introspect-map-values [m] (call-on-map-values introspect m))

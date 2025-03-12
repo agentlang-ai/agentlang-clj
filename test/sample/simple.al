@@ -24,6 +24,7 @@
        :Y '(agentlang.lang.datetime/now)}})
 
 (entity :A {:Id {:type :Int :id true} :X :Int
+            :meta {:audit true}
             :rbac [{:roles ["user"] :allow [:create]}]})
 (entity :B {:Id {:type :Int :id true} :Y :Int})
 (relationship :AB {:meta {:contains [:A :B]}})

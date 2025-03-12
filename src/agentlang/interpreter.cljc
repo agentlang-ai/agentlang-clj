@@ -301,22 +301,21 @@
 
 (defn- maybe-create-audit-trail [env tag insts]
   #?(:clj
-     (when (gs/audit-trail-enabled?)
-       (let [action (name tag)]
-         (doseq [inst insts]
-           (let [entity-name (cn/instance-type inst)]
-             (when (cn/audit-required? entity-name)
-               (let [id-val (li/path-attr inst)
-                     attrs {:InstancePath id-val
-                            :Action action
-                            :Timestamp (dt/unix-timestamp)
-                            :User (or (gs/active-user) "anonymous")}
-                     trail-data (if-let [sinfo (gs/active-session-info)]
-                                  (assoc attrs :SessionToken (str-session-info sinfo))
-                                  attrs)
-                     trail-entry {(cn/audit-trail-entity-name entity-name) trail-data}]
-                 (when-not (:result (gs/kernel-call #(evaluate-pattern trail-entry)))
-                   (log/warn (str "failed to audit " tag " on " inst))))))))))
+     (when-let [action (and (gs/audit-trail-enabled?) (name tag))]
+       (doseq [inst insts]
+         (when-let [entity-name (let [t (cn/instance-type inst)]
+                                  (and (cn/audit-required? t) t))]
+           (let [id-val (li/path-attr inst)
+                 attrs {:InstancePath id-val
+                        :Action action
+                        :Timestamp (dt/unix-timestamp)
+                        :User (or (gs/active-user) "anonymous")}
+                 trail-data (if-let [sinfo (gs/active-session-info)]
+                              (assoc attrs :SessionToken (str-session-info sinfo))
+                              attrs)
+                 trail-entry {(cn/audit-trail-entity-name entity-name) trail-data}]
+             (when-not (:result (gs/kernel-call #(evaluate-pattern trail-entry)))
+               (log/warn (str "failed to audit " tag " on " inst))))))))
   insts)
 
 (defn- handle-upsert [env resolver recname update-attrs instances]
@@ -351,14 +350,14 @@
 (def ^:private c-parent-attr (keyword (su/attribute-column-name li/parent-attr)))
 
 (defn- maybe-merge-cont-rels-query-to-attributes [[recname attrs rels-query :as args]]
-  (or (when rels-query
-        (let [[k _ :as ks] (keys rels-query)]
-          (when (and (= 1 (count ks)) (cn/contains-relationship? k))
-            (when-let [parent (fetch-parent k recname rels-query)]
-              (when-let [pat (get-in rels-query [k parent])]
-                (when-let [pid (and (= 1 (count (keys pat)))
-                                    (force-fetch-only-id parent pat))]
-                  [(li/normalize-name recname) (assoc attrs li/parent-attr? [:= c-parent-attr (pr-str [parent pid])]) nil]))))))
+  (or (when-let [[k _ :as ks] (and rels-query (keys rels-query))]
+        (when (and (= 1 (count ks)) (cn/contains-relationship? k))
+          (let [parent (fetch-parent k recname rels-query)
+                pat (and parent (get-in rels-query [k parent]))
+                pid (and pat (= 1 (count (keys pat)))
+                         (force-fetch-only-id parent pat))]
+            [(li/normalize-name recname)
+             (assoc attrs li/parent-attr? [:= c-parent-attr (pr-str [parent pid])]) nil])))
       args))
 
 (defn- all-entities [recname sub-pats]
@@ -368,11 +367,9 @@
      (if (or (seq crels) (seq brels))
        (let [names (atom [recname])]
          (w/postwalk
-          #(do (when (map? %)
-                 (when-let [n (li/record-name %)]
-                   (let [n (li/normalize-name n)]
-                     (when (cn/entity? n)
-                       (swap! names conj n)))))
+          #(do (when-let [n (and (map? %) (li/record-name %))]
+                 (let [n (li/normalize-name n)]
+                   (when (cn/entity? n) (swap! names conj n))))
                %)
           [crels brels])
          @names)

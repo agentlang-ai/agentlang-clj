@@ -963,10 +963,12 @@
    li/path-attr li/path-attr-spec))
 
 (def ^:private audit-entity-attrs
-  (preproc-attrs {:InstanceId :String
-                  :Action {:oneof ["create" "update" "delete"]}
-                  :Timestamp :Int
+  (preproc-attrs {:InstancePath {:type :String :indexed true}
+                  :Action {:oneof ["create" "update" "delete"] :indexed true}
+                  :Timestamp {:type :Int :indexed true}
                   :User :String
+                  li/path-attr li/path-attr-spec
+                  li/parent-attr li/parent-attr-spec
                   :SessionToken {:type :String :optional true}}))
 
 (defn- audit-entity [entity-name spec]
