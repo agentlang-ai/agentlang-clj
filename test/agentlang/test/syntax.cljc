@@ -186,4 +186,5 @@
     (ls/call? r)
     (is (= (second testpat) (ls/function-expression r)))
     (is (= :R (ls/alias-tag r)))
-    (is (= testpat (ls/raw r)))))
+    (is (= testpat (ls/raw r)))
+    (is (= testpat (ls/raw (ls/with-alias :R (ls/call '(acme.com/f :A :B.X 100))))))))

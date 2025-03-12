@@ -96,6 +96,11 @@
      :cljs (atom [])))
 
 (defn set-current-component [n]
+  (when (= n :Project)
+    (try
+      (u/throw-ex "blla")
+      (catch Exception ex
+        (.printStackTrace ex))))
   #?(:clj (dosync (.set current-component n)
                   (ref-set components-inited (conj @components-inited n)))
      :cljs (do (reset! current-component n)
@@ -275,7 +280,8 @@
   `typname` must be in the format - :ComponentName/TypName
   Returns the name of the entry. If the component is non-existing, raise an exception."
   ([typname typdef typtag meta]
-   (let [[component n :as k] (li/split-path typname)
+   (let [[a b :as cn] (li/split-path typname)
+         [component n :as k] (if (and a b) cn [(get-current-component) a])
          intern-k [component (get-model-version component) typtag n]]
      (when-not (component-exists? component)
        (log/info (str "auto-creating component - " component))

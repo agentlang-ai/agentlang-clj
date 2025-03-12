@@ -144,20 +144,20 @@
 (defn- call-on-map-values [f m] (into  {} (mapv (fn [[k v]] [k (f v)]) m)))
 
 (defn- extract-main-record-name [pat]
-  (let [ks (keys pat)]
-    (first (filter #(let [n (li/normalize-name %)]
+  (let [ks (keys (li/normalize-instance-pattern pat))]
+    (first (filter #(let [n (cn/canonical-type-name (li/normalize-name %))]
                       (or (cn/entity? n)
                           (cn/event? n)
                           (cn/rec? n)))
                    ks))))
 
 (defn- extract-possible-record-name [pat]
-  (let [ks (keys pat)] (first (filter maybe-lang-def-name? ks))))
+  (let [ks (keys (li/normalize-instance-pattern pat))] (first (filter maybe-lang-def-name? ks))))
 
 (defn- extract-relationship-names [recname pat]
-  (let [ks (keys pat)
+  (let [ks (keys (li/normalize-instance-pattern pat))
         rn (li/normalize-name recname)]
-    (filter #(let [n (li/normalize-name %)]
+    (filter #(let [n (cn/canonical-type-name (li/normalize-name %))]
                (or (cn/relationship? n)
                    (and (maybe-lang-def-name? n) (not= n rn))))
             ks)))
@@ -287,6 +287,15 @@
    :as (introspect-alias (alias-from-pattern pat))
    li/except-tag (introspect-case (case-from-pattern pat))
    :check (check-from-pattern pat)})
+
+(defn call
+  ([fnexpr check]
+   (merge
+    {syntax-type :call
+     function-expression fnexpr}
+    (when check
+      {:check check})))
+  ([fnexpr] (call fnexpr nil)))
 
 (defn- maybe-add-optional-raw-tags [r pat]
   (let [a (when-let [a (:as r)] (raw-alias a))
