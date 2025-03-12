@@ -577,12 +577,15 @@
                                         rbac :rbac}]
   (let [rbac-enabled? (gs/rbac-enabled?)
         [can-read-all can-update-all can-delete-all
-         update-delete-tag read-on-entities]
+         can-read-all-path-entities update-delete-tag
+         path-entities read-on-entities]
         (when rbac-enabled?
           [(:can-read-all? rbac)
            (:can-update-all? rbac)
            (:can-delete-all? rbac)
+           (:can-read-all-path-entities? rbac)
            (:follow-up-operation rbac)
+           (:read-on-path-entities rbac)
            (:read-on-entities rbac)])
         update-delete-tag
         (when update-delete-tag
@@ -608,10 +611,15 @@
                    (if can-read-all
                      (if update-delete-tag
                        (maybe-add-rbac-joins [update-delete-tag] user entity-name sql-pat0)
-                       sql-pat0)
-                     (maybe-add-rbac-joins
-                      (concat [:read] (when update-delete-tag [update-delete-tag]))
-                      user entity-name read-on-entities sql-pat0))
+                       (if can-read-all-path-entities
+                         sql-pat0
+                         (maybe-add-rbac-joins [:read] user entity-name path-entities sql-pat0)))
+                     (let [sql-pat1 (maybe-add-rbac-joins
+                                     (concat [:read] (when update-delete-tag [update-delete-tag]))
+                                     user entity-name read-on-entities sql-pat0)]
+                       (if can-read-all-path-entities
+                         sql-pat1
+                         (maybe-add-rbac-joins [:read] user entity-name path-entities sql-pat1))))
                    sql-pat0)
         sql-pat (maybe-add-match-joins entity-name sql-pat1)
         sql-params (sql/raw-format-sql sql-pat)]

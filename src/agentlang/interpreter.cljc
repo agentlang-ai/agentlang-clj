@@ -375,6 +375,19 @@
          @names)
        [recname]))))
 
+(defn- check-can-read [entity-names]
+  (into {} (mapv (fn [n]
+                   [n (if (rbac/can-read? n) true false)])
+                 entity-names)))
+
+(defn- can-read-all? [rd-perms]
+  (if rd-perms
+    (every? true? (vals rd-perms))
+    true))
+
+(defn- non-readable-entities [rd-perms]
+  (set (mapv first (filter #(true? (second %)) rd-perms))))
+
 (defn- handle-query-pattern [env recname [attrs sub-pats] alias]
   (let [select-clause (:? attrs)
         [update-attrs query-attrs] (when-not select-clause (lift-attributes-for-update attrs))
@@ -391,16 +404,22 @@
         [recname attrs0 cont-rels-query] (maybe-merge-cont-rels-query-to-attributes [recname attrs0 cont-rels-query0])
         qfordel? (:*query-for-delete* env)
         all-ents (all-entities recname sub-pats)
-        can-read-all (every? #(rbac/can-read? %) all-ents)
+        rd-perms (check-can-read all-ents)
+        can-read-all (can-read-all? rd-perms)
         can-update-all (when update-attrs (rbac/can-update? recname))
         can-delete-all (:*can-delete-all* env)
+        path-ents (cn/entities-reached-via-path-attributes recname)
+        path-rd-perms (when all-ents (check-can-read path-ents))
+        can-read-all-path-entities (can-read-all? path-rd-perms)
         qparams {:entity-name recname
                  :query-attributes attrs0
                  :sub-query sub-pats
-                 :rbac {:read-on-entities (set/difference all-ents #{recname})
+                 :rbac {:read-on-entities (non-readable-entities rd-perms)
+                        :read-on-path-entities (non-readable-entities path-rd-perms)
                         :can-read-all? can-read-all
                         :can-update-all? can-update-all
                         :can-delete-all? can-delete-all
+                        :can-read-all-path-entities? can-read-all-path-entities
                         :follow-up-operation (or (when qfordel? :delete)
                                                  (when update-attrs :update))}}
         res (if (and resolver (not (rr/composed? resolver)))
