@@ -450,6 +450,22 @@
   ([oprs user entity-name sql-pat]
    (maybe-add-rbac-joins oprs user entity-name nil sql-pat)))
 
+(defn- add-path-rbac-join [oprs user entity-alias [entity-name attr-name] sql-pat]
+  (let [join (:join sql-pat)
+        ipa-table (keyword (stu/inst-priv-table entity-name))
+        ipa-alias ipa-table
+        ipa-join
+        [[ipa-table ipa-alias]
+         (concat
+          [:and
+           [:like (li/make-ref entity-alias (stu/attribute-column-name-kw attr-name)) (ipa-path ipa-alias)]
+           [:= (ipa-user ipa-alias) user]]
+           (mapv (fn [opr] [:= ((opr ipa-flag-cols) ipa-alias) true]) oprs))]]
+    (assoc sql-pat :join (concat join ipa-join))))
+
+(defn- add-path-rbac-joins [oprs user entity-alias path-entity-info sql-pat]
+  (reduce (fn [sql-pat pinfo] (add-path-rbac-join oprs user entity-alias pinfo sql-pat)) sql-pat path-entity-info))
+
 (defn- get-alias [relname entity-name]
   (when-let [alias (li/get-alias relname entity-name)]
     (when (stu/sql-keyword? alias)
@@ -613,13 +629,13 @@
                        (maybe-add-rbac-joins [update-delete-tag] user entity-name sql-pat0)
                        (if can-read-all-path-entities
                          sql-pat0
-                         (maybe-add-rbac-joins [:read] user entity-name path-entities sql-pat0)))
+                         (add-path-rbac-joins [:read] user entity-alias path-entities sql-pat0)))
                      (let [sql-pat1 (maybe-add-rbac-joins
                                      (concat [:read] (when update-delete-tag [update-delete-tag]))
                                      user entity-name read-on-entities sql-pat0)]
                        (if can-read-all-path-entities
                          sql-pat1
-                         (maybe-add-rbac-joins [:read] user entity-name path-entities sql-pat1))))
+                         (add-path-rbac-joins [:read] user entity-alias path-entities sql-pat1))))
                    sql-pat0)
         sql-pat (maybe-add-match-joins entity-name sql-pat1)
         sql-params (sql/raw-format-sql sql-pat)]

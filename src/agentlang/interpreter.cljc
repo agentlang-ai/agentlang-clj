@@ -386,7 +386,7 @@
     true))
 
 (defn- non-readable-entities [rd-perms]
-  (set (mapv first (filter #(true? (second %)) rd-perms))))
+  (set (mapv first (filter #(false? (second %)) rd-perms))))
 
 (defn- handle-query-pattern [env recname [attrs sub-pats] alias]
   (let [select-clause (:? attrs)
@@ -409,13 +409,13 @@
         can-update-all (when update-attrs (rbac/can-update? recname))
         can-delete-all (:*can-delete-all* env)
         path-ents (cn/entities-reached-via-path-attributes recname)
-        path-rd-perms (when all-ents (check-can-read path-ents))
+        path-rd-perms (when path-ents (check-can-read (keys path-ents)))
         can-read-all-path-entities (can-read-all? path-rd-perms)
         qparams {:entity-name recname
                  :query-attributes attrs0
                  :sub-query sub-pats
-                 :rbac {:read-on-entities (non-readable-entities rd-perms)
-                        :read-on-path-entities (non-readable-entities path-rd-perms)
+                 :rbac {:read-on-entities (set/difference (non-readable-entities rd-perms) #{recname})
+                        :read-on-path-entities (select-keys path-ents (non-readable-entities path-rd-perms))
                         :can-read-all? can-read-all
                         :can-update-all? can-update-all
                         :can-delete-all? can-delete-all

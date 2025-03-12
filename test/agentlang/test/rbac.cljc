@@ -319,6 +319,35 @@
        (check-bs-ids [103] (lookup-bs with-u2 2))
        (check-bs-ids [103] (lookup-bs with-u1 2))))))
 
+(defn as-path [cn id] (li/vec-to-path [cn id]))
+
+(defn has-action? [actions action]
+  (if (some #{action} actions)
+    true
+    false))
+
+(defn assign-inst-priv [owner assignee actions path]
+  (tu/invoke
+   (with-user
+     owner
+     {:Agentlang.Kernel.Rbac/AssignInstancePrivilege
+      {:ResourcePath path
+       :Assignee assignee
+       :CanRead (has-action? actions :read)
+       :CanUpdate (has-action? actions :update)
+       :CanDelete (has-action? actions :delete)}})))
+
+(defn del-inst-priv [owner assignee path]
+  (first
+   (tu/invoke
+    (with-user
+      owner
+      {:Agentlang.Kernel.Rbac/DeleteInstancePrivilegeAssignment
+       {:ResourcePath path
+        :Assignee assignee}}))))
+
+(def ip? #(string? (:ResourcePath %)))
+
 (deftest instance-privs
   (with-rbac
     #(defcomponent :Ipv
@@ -341,7 +370,7 @@
   (call-with-rbac
    (fn []
      (let [e? (partial cn/instance-of? :Ipv/E)
-           as-path (fn [id] (li/vec-to-path [:Ipv/E id]))
+           as-path (partial as-path :Ipv/E)
            create-e (fn [user id]
                       (tu/invoke
                        (with-user
@@ -364,29 +393,6 @@
                           user
                           {:Ipv/Lookup_E
                            {:path (as-path id)}}))))
-           has-action? (fn [actions action]
-                         (if (some #{action} actions)
-                           true
-                           false))
-           inst-priv (fn [owner assignee actions id]
-                       (tu/invoke
-                        (with-user
-                          owner
-                          {:Agentlang.Kernel.Rbac/AssignInstancePrivilege
-                           {:ResourcePath (as-path id)
-                            :Assignee assignee
-                            :CanRead (has-action? actions :read)
-                            :CanUpdate (has-action? actions :update)
-                            :CanDelete (has-action? actions :delete)}})))
-           del-inst-priv (fn [owner assignee id]
-                           (first
-                            (tu/invoke
-                             (with-user
-                               owner
-                               {:Agentlang.Kernel.Rbac/DeleteInstancePrivilegeAssignment
-                                {:ResourcePath (as-path id)
-                                 :Assignee assignee}}))))
-           ip? #(string? (:ResourcePath %))
            e1 (create-e "u1@ipv.com" 1)]
        (is (e? e1))
        (tu/is-forbidden #(create-e "u2@ipv.com" 2))
@@ -394,14 +400,14 @@
        (is (not (lookup-e "u2@ipv.com" 1)))
        (is (e? (update-e "u1@ipv.com" 1 3000)))
        (is (not (update-e "u2@ipv.com" 1 5000)))
-       (is (ip? (inst-priv "u1@ipv.com" "u2@ipv.com" [:read :update] 1)))
-       (tu/is-error #(inst-priv "u2@ipv.com" "u2@ipv.com" [:read :update] 1))
+       (is (ip? (assign-inst-priv "u1@ipv.com" "u2@ipv.com" [:read :update] (as-path 1))))
+       (tu/is-error #(assign-inst-priv "u2@ipv.com" "u2@ipv.com" [:read :update] (as-path 1)))
        (let [e (lookup-e "u1@ipv.com" 1)]
          (is (= 3000 (:X e)))
          (is (cn/same-instance? e (lookup-e "u2@ipv.com" 1)))
          (is (e? (update-e "u2@ipv.com" 1 5000)))
-         (tu/is-error #(del-inst-priv "u2@ipv.com" "u2@ipv.com" 1))
-         (is (ip? (del-inst-priv "u1@ipv.com" "u2@ipv.com" 1)))
+         (tu/is-error #(del-inst-priv "u2@ipv.com" "u2@ipv.com" (as-path 1)))
+         (is (ip? (del-inst-priv "u1@ipv.com" "u2@ipv.com" (as-path 1))))
          (let [e (lookup-e "u1@ipv.com" 1)]
            (is (= 5000 (:X e)))
            (is (not (update-e "u2@ipv.com" 1 8000)))
@@ -547,3 +553,68 @@
        (check-bs [11 12] (lookup-b with-u1 1))
        (check-bs [13] (lookup-b with-u3 2))
        (check-bs [13] (lookup-b with-u2 2))))))
+
+(deftest rbac-on-match-attribute-spec
+  (with-rbac
+    #(defcomponent :Romas
+       (dataflow
+        :Romas/InitUsers
+        {:Agentlang.Kernel.Identity/User
+         {:Email "u1@romas.com"}}
+        {:Agentlang.Kernel.Identity/User
+         {:Email "u2@romas.com"}}
+        {:Agentlang.Kernel.Rbac/RoleAssignment
+         {:Role "romas-user" :Assignee "u1@romas.com"}}
+        {:Agentlang.Kernel.Rbac/RoleAssignment
+         {:Role "romas-guest" :Assignee "u2@romas.com"}})
+       (entity
+        :Romas/A
+        {:Id {:type :Int :id true} :X :Int
+         :rbac [{:roles ["romas-user"] :allow [:create]}]})
+       (entity
+        :Romas/B
+        {:Id {:type :Int :id true}
+         :A {:type :Path :to :Romas/A}
+         :Y :Int
+         :Z [:match
+             [:= :A.X 1] 100
+             [:< :A.X 100] [:* :Y :A.X]
+             1000]
+         :rbac [{:roles ["romas-user" "romas-guest"] :allow [:create]}]})
+       (dataflow
+        :Romas/FindB
+        {:Romas/B {:Id? :Romas/FindB.Id}})))
+  (call-with-rbac
+   (fn []
+     (let [with-u1 (partial with-user "u1@romas.com")
+           with-u2 (partial with-user "u2@romas.com")
+           cra (fn [wu id x]
+                 (tu/invoke
+                  (wu
+                   {:Romas/Create_A
+                    {:Instance {:Romas/A {:Id id :X x}}}})))
+           a? (partial cn/instance-of? :Romas/A)
+           crb (fn [wu id a y]
+                 (tu/invoke
+                  (wu
+                   {:Romas/Create_B
+                    {:Instance {:Romas/B {:Id id :A a :Y y}}}})))
+           b? (partial cn/instance-of? :Romas/B)
+           [a1 a2] (mapv (partial cra with-u1) [1 2] [10 20])
+           _ (is (every? a? [a1 a2]))
+           b1 (crb with-u1 90 (li/path-attr a1) 2)
+           b2 (crb with-u2 91 (li/path-attr a1) 3)
+           findb (fn [wu id] (tu/invoke (wu {:Romas/FindB {:Id id}})))
+           chkb (fn [wu id z]
+                  (let [rs (findb wu id)
+                        _ (is (= 1 (count rs)))
+                        r (first rs)]
+                    (is (b? r))
+                    (is (= z (:Z r)))))]
+       (is (b? b1))
+       (is (b? b2))
+       (chkb with-u1 90 20)
+       (let [rs (findb with-u2 91)]
+         (is (not (seq rs))))
+       (is (ip? (assign-inst-priv "u1@romas.com" "u2@romas.com" [:read] (as-path :Romas/A 1))))
+       (chkb with-u2 91 30)))))
