@@ -202,7 +202,7 @@
 
 (defn- make-session-info [token]
   (let [parts (str/split token #" ")]
-    {:token-type (first parts) :id-token (second parts)}))
+    {:token-type (first parts) :id-token (last parts)}))
 
 (defmethod auth/session-user tag [all-stuff-map]
   (let [user-details (get-in all-stuff-map [:request :identity])]
