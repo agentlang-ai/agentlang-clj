@@ -572,6 +572,10 @@
         {:Id {:type :Int :id true} :X :Int
          :rbac [{:roles ["romas-user"] :allow [:create]}]})
        (entity
+        :Romas/P
+        {:Id {:type :Int :id true}
+         :rbac [{:roles ["romas-user" "romas-guest"] :allow [:create]}]})
+       (entity
         :Romas/B
         {:Id {:type :Int :id true}
          :A {:type :Path :to :Romas/A}
@@ -579,8 +583,15 @@
          :Z [:match
              [:= :A.X 1] 100
              [:< :A.X 100] [:* :Y :A.X]
-             1000]
-         :rbac [{:roles ["romas-user" "romas-guest"] :allow [:create]}]})
+             1000]})
+       (relationship :Romas/PB {:meta {:contains [:Romas/P :Romas/B]}})
+       (dataflow
+        :Romas/CreateB
+        {:Romas/B
+         {:Id :Romas/CreateB.Id
+          :A :Romas/CreateB.A
+          :Y :Romas/CreateB.Y}
+         :Romas/PB {:Romas/P {:Id? :Romas/CreateB.P}}})
        (dataflow
         :Romas/FindB
         {:Romas/B {:Id? :Romas/FindB.Id}})))
@@ -594,16 +605,24 @@
                    {:Romas/Create_A
                     {:Instance {:Romas/A {:Id id :X x}}}})))
            a? (partial cn/instance-of? :Romas/A)
-           crb (fn [wu id a y]
+           crp (fn [wu id]
                  (tu/invoke
                   (wu
-                   {:Romas/Create_B
-                    {:Instance {:Romas/B {:Id id :A a :Y y}}}})))
+                   {:Romas/Create_P
+                    {:Instance {:Romas/P {:Id id}}}})))
+           p? (partial cn/instance-of? :Romas/P)
+           crb (fn [wu p id a y]
+                 (tu/invoke
+                  (wu
+                   {:Romas/CreateB {:Id id :P p :A a :Y y}})))
            b? (partial cn/instance-of? :Romas/B)
            [a1 a2] (mapv (partial cra with-u1) [1 2] [10 20])
            _ (is (every? a? [a1 a2]))
-           b1 (crb with-u1 90 (li/path-attr a1) 2)
-           b2 (crb with-u2 91 (li/path-attr a1) 3)
+           p1 (crp with-u1 70)
+           p2 (crp with-u2 71)
+           _ (do (is (p? p1)) (is (p? p2)))
+           b1 (crb with-u1 70 90 (li/path-attr a1) 2)
+           b2 (crb with-u2 71 91 (li/path-attr a1) 3)
            findb (fn [wu id] (tu/invoke (wu {:Romas/FindB {:Id id}})))
            chkb (fn [wu id z]
                   (let [rs (findb wu id)
