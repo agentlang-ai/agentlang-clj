@@ -27,6 +27,7 @@
     (dataflow
      :Mas/FindB
      {:Mas/B {:Id? :Mas/FindB.Id}}))
+  (is (= #{:Mas/A} (cn/entities-reached-via-path-attributes :Mas/B)))
   (is (= #{:Z} (set (cn/match-attributes :Mas/B))))
   (is (= #{:A} (set (cn/path-attributes :Mas/B))))
   (let [cra (fn [id x]
@@ -48,5 +49,3 @@
           r (first rs)]
       (is (b? r))
       (is (= 20 (:Z r))))))
-
-;; TODO: add tests for SQL functions, rbac and relationships

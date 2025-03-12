@@ -21,6 +21,8 @@
 (def ^:private paths-tag :-*-paths-*-)
 (def ^:private back-link-tag :-*-back-link-*-)
 
+(def get-roots roots-tag)
+
 (defn- attach-roots [graph]
   (assoc
    graph
@@ -84,7 +86,7 @@
 
 (defn build-graph [root]
   (when (component-name? root)
-    (let [enames (cn/entity-names root)]
+    (let [enames (cn/user-entity-names root)]
       (do-build-graph
        (seq
         (filter

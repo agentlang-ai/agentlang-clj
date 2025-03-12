@@ -13,6 +13,7 @@
             [agentlang.lang.internal :as li]
             [agentlang.suspension :as sp]
             [agentlang.lang.datetime :as dt]
+            [agentlang.lang.relgraph :as rg]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
 
@@ -171,6 +172,7 @@
     (entity :BC01/C {:Id {:type :Int :id true} :Z :Int})
     (relationship :BC01/AB {:meta {:contains [:BC01/A :BC01/B]}})
     (relationship :BC01/BC {:meta {:contains [:BC01/B :BC01/C]}})
+    (is (= #{:BC01/A} (rg/get-roots (rg/build-graph :BC01))))
     (dataflow
      :BC01/DeleteA
      [:delete {:BC01/A {:Id? :BC01/DeleteA.Id}}])

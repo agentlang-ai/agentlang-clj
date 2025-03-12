@@ -2566,3 +2566,8 @@
   (when-let [scm (fetch-entity-schema recname)]
     (when-let [attrs (seq (filter (fn [[k _]] (type-path? scm k)) scm))]
       (set (mapv first attrs)))))
+
+(defn entities-reached-via-path-attributes [recname]
+  (when-let [scm (fetch-entity-schema recname)]
+    (when-let [entities (seq (su/nonils (mapv (fn [[k _]] (attribute-path-to scm k)) scm)))]
+      (set entities))))
