@@ -20,8 +20,8 @@
 (def ^:private not-case (partial not-kw li/except-tag))
 (def ^:private not-check (partial not-kw :check))
 
-(def empty (constantly {}))
-(defn empty? [x] (= x {}))
+(def empty-pattern (constantly {}))
+(defn empty-pattern? [x] (= x {}))
 
 (defn conditional? [pat]
   (and (seqable? pat) (li/match-operator? (first pat))))
@@ -159,7 +159,7 @@
 
 (defn- extract-relationship-names [recname pat]
   (let [ks (keys (li/normalize-instance-pattern pat))
-        rn (li/normalize-name recname)]
+        rn (cn/canonical-type-name (li/normalize-name recname))]
     (filter #(let [n (cn/canonical-type-name (li/normalize-name %))]
                (when (not= rn n)
                  (or (cn/relationship? n)

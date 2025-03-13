@@ -20,7 +20,7 @@
   ([pat] (is-pat (constantly true) pat)))
 
 (deftest instances
-  (is (= (ls/empty? (ls/introspect (ls/empty)))))
+  (is (= (ls/empty-pattern? (ls/introspect (ls/empty-pattern)))))
   (defcomponent :SynInst
     (entity :SynInst/E {:Id {:type :Int :id true} :X :Int}))
   (let [r (is-pat ls/upsert? {:SynInst/E {:Id 1 :X 100}})]
