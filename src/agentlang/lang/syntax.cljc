@@ -20,6 +20,9 @@
 (def ^:private not-case (partial not-kw li/except-tag))
 (def ^:private not-check (partial not-kw :check))
 
+(def empty (constantly {}))
+(defn empty? [x] (= x {}))
+
 (defn conditional? [pat]
   (and (seqable? pat) (li/match-operator? (first pat))))
 
