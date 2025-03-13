@@ -2213,15 +2213,20 @@
         n
         (first (find-between-keys relname maybe-node-name))))))
 
-(defn relationship-node-entity [relname node-name]
-  (let [[n1 n2] (relationship-nodes relname)
-        t (:as (fetch-meta relname))
-        [a1 a2 :as aliases] (or t [(second (li/split-path n1))
-                                   (second (li/split-path n2))])]
-    (cond
-      (= node-name a1) n1
-      (= node-name a2) n2
-      :else (u/throw-ex (str "node-name " node-name " is not in relationship aliases - " aliases)))))
+(defn relationship-node-entity
+  ([relname node-attr-names node-name]
+   (let [[n1 n2] (relationship-nodes relname)
+         [a1 a2 :as aliases] (or node-attr-names
+                                 [(second (li/split-path n1))
+                                  (second (li/split-path n2))])]
+     (cond
+       (= node-name a1) n1
+       (= node-name a2) n2
+       :else (u/throw-ex (str "node-name " node-name " is not in relationship aliases - " aliases)))))
+  ([relname node-name]
+   (relationship-node-entity
+    relname (when (between-relationship? relname) (between-attribute-names relname))
+    node-name)))
 
 (defn fetch-default-attribute-values [schema]
   (into

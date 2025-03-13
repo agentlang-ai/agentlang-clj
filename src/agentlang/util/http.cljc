@@ -247,11 +247,17 @@
 
 (defn create-pattern-from-path [entity-name obj path parent]
   (let [attrs (li/record-attributes obj)
-        idn (cn/identity-attribute-name entity-name)]
+        idn (cn/identity-attribute-name entity-name)
+        has-parent (map? parent)
+        relname (when has-parent (last (drop-last path)))]
+    (when-not (= (last path) entity-name)
+      (u/throw-ex (str "Invalid path " path)))
+    (when (and relname (not (cn/contains-relationship? relname)))
+      (u/throw-ex (str relname " is not a contains relationship")))
     (let [id-val (or (idn attrs) li/id-attr-s)
           path (concat path [id-val])]
       {entity-name
        (merge
         (assoc attrs li/path-attr (li/vec-to-path path))
-        (when (map? parent)
+        (when has-parent
           {li/parent-attr (li/path-attr parent)}))})))

@@ -55,11 +55,30 @@
     (mapv (fn [[k v]] [(keyfmt k) (parse-ref-or-expr v)]) attrs)))
   ([attrs] (parse-value-refs-and-exprs identity attrs)))
 
+(defn- make-between-instance [relname attrs alias]
+  (let [nns (cn/between-attribute-names relname)
+        ks (keys attrs)]
+    (when (not= (set nns) (set ks))
+      (u/throw-ex (str "Invalid attribute(s) for " relname " - " ks)))
+    (let [fent (partial cn/relationship-node-entity nns)
+          qpats (mapv (fn [n]
+                        (let [ent (fent n)
+                              idattr (cn/identity-attribute-name ent)]
+                          {ent {(li/name-as-query-pattern idattr) (n attrs)} :as n}))
+                      nns)
+          new-attrs (into {} (mapv (fn [k] [k (li/make-ref k li/path-attr)]) ks))]
+      (vec
+       (concat
+        qpats
+        (merge {relname new-attrs} (when alias {:as alias})))))))
+
 (defn- parse-make [[n attrs :as expr] alias]
   (when (validate-record-expr expr alias)
     (let [a0 (parse-value-refs-and-exprs attrs)]
-      (merge {n a0}
-             (when alias {:as alias})))))
+      (if (cn/between-relationship? n)
+        (make-between-instance n attrs alias)
+        (merge {n a0}
+               (when alias {:as alias}))))))
 
 (defn- merge-contains [entity-name contains-rel-name parent-id]
   (if-let [parent-name (first (cn/relationship-nodes contains-rel-name))]
@@ -85,6 +104,16 @@
   (parse-lookup expr (when alias [alias])))
 
 (def ^:private parse-lookup-many parse-lookup)
+
+(defn- parse-lookup-childern [[relname parent-id :as expr] alias]
+  (let [parent (cn/containing-parent relname)
+        pid-attr (cn/identity-attribute-name parent)
+        child (cn/contained-child relname)]
+    (merge
+     {(li/name-as-query-pattern child) {}
+      (li/name-as-query-pattern relname)
+      {parent {pid-attr parent-id}}}
+     (when alias {:as alias}))))
 
 (defn- parse-cond [expr alias]
   (loop [expr expr, pats []]
@@ -127,6 +156,7 @@
      cond parse-cond
      lookup-one parse-lookup-one
      lookup-many parse-lookup-many
+     lookup-children parse-lookup-childern
      update parse-update
      delete parse-delete
      parse-fn-call)
@@ -179,7 +209,7 @@
        (u/pretty-str
         '(entity
           :Acme.Core/Customer
-          {:Email {:type :Email :guid true}
+          {:Email {:type :Email :id true}
            :Name :String
            :Address {:type :String :optional true}
            :LoyaltyPoints {:type :Int :default 50}}))
@@ -195,25 +225,20 @@
           {:Email :Email}))
        "\n\nIf the instruction given to you is to construct a customer instance with name `joe` and email `joe@acme.com`,\n"
        "you must return the following clojure expression:\n"
-       (u/pretty-str
-        '(def customer (make :Acme.Core/Customer {:Email "joe@acme.com" :Name "joe"})))
+       (u/pretty-str '(def customer (make :Acme.Core/Customer {:Email "joe@acme.com" :Name "joe"})))
        "\nThere's no need to fill in attributes marked `:optional true`, :read-only true` or those with a `:default`, unless explicitly instructed.\n"
        "You can also ignore attributes with types `:Now` and `:Identity` - these will be automatically filled-in by the system.\n"
        "For example, if the instruction is to create customer `joe` with email `joe@acme.com` and loyalty points 6700, then you should return\n"
-       (u/pretty-str
-        '(def customer (make :Acme.Core/Customer {:Email "joe@acme.com" :Name "joe", :LoyaltyPoints 6700})))
+       (u/pretty-str '(def customer (make :Acme.Core/Customer {:Email "joe@acme.com" :Name "joe", :LoyaltyPoints 6700})))
        "\nMaking an instance of a customer will save it to a peristent store or database. To query or lookup instances of an entity, "
        "you can generate the following expressions:\n"
-       (u/pretty-str
-        '(def customer (lookup-one :Acme.Core/Customer {:Email "joe@acme.com"})))
+       (u/pretty-str '(def customer (lookup-one :Acme.Core/Customer {:Email "joe@acme.com"})))
        "\nThe preceding expression will lookup a customer with email `joe@acme.com`. Here's another example lookup, that will return "
        "all customers whose loyalty-points are greater than 1000:\n"
-       (u/pretty-str
-        '(def customers (lookup-many :Acme.Core/Customer {:LoyaltyPoints [> 1000]})))
+       (u/pretty-str '(def customers (lookup-many :Acme.Core/Customer {:LoyaltyPoints [> 1000]})))
        "\nBasically to fetch a single instance, call the `lookup-one` function and to fetch multiple instances, use `lookup-many`. "
        "To fetch all instances of an entity, call `lookup-many` as:\n"
-       (u/pretty-str
-        '(def all-customers (lookup-many :Acme.Core/Customer {})))
+       (u/pretty-str '(def all-customers (lookup-many :Acme.Core/Customer {})))
        "\nTo do something for each instance in a query, use the for-each expression. For example, the following example will create "
        "a PlatinumCustomer instance for each customer from the preceding lookup:\n"
        (u/pretty-str
@@ -224,11 +249,9 @@
        "DO NOT EXPLICITLY DEFINE `%`, it is automatically defined for for-each.\n"
        "The other two operations you can do on entities are `update` and `delete`. The following example shows how to change "
        "a customer's name and address. The customer is looked-up by email:\n"
-       (u/pretty-str
-        '(def changed-customer (update :Acme.Core/Customer {:Email "joe@acme.com"} {:Name "Joe Jae" :Address "151/& MZT"})))
+       (u/pretty-str '(def changed-customer (update :Acme.Core/Customer {:Email "joe@acme.com"} {:Name "Joe Jae" :Address "151/& MZT"})))
        "\nThe following code-snippet shows how to delete a customer instance by email:\n"
-       (u/pretty-str
-        '(def deleted-customer (delete :Acme.Core/Customer {:Email "joe@acme.com"})))
+       (u/pretty-str '(def deleted-customer (delete :Acme.Core/Customer {:Email "joe@acme.com"})))
        "\nNote that you should call `update` or `delete` only if explicitly asked to do so, in all normal cases entities should be "
        "created using `make`."
        "\nYou can also generate patterns that are evaluated against conditions, using the `cond` expression. For example,\n"
@@ -250,7 +273,7 @@
        (u/pretty-str
         '(entity
           :Family.Core/Person
-          {:Email {:type :Email :guid true}
+          {:Email {:type :Email :id true}
            :Name :String
            :Age :String}))
        "\nA possible relationship between two persons is:\n"
@@ -258,7 +281,9 @@
         '(relationship
           :Family.Core/Spouse
           {:meta {:between [:Person :Person :as [:Husband :Wife]]}}))
-       "\nGiven the email of a wife, her husband can be queried as:\n"
+       "\nCreating a new between relationship is similar to creating an instance of an entity, as shown below:\n"
+       (u/pretty-str '(def spouse (make :Family.Core/Spouse {:Husband "sam@family.org" :Wife "mary@family.org"})))
+       "\nThe between relationship is established on the `id` attributes of the entities. Given the email of a wife, her husband can be queried as:\n"
        (u/pretty-str
         '(do (def spouse (lookup-one :Family.Core/Spouse {:Wife "mary@family.org"}))
              (def husband (lookup-one :Family.Core/Person {:Email (:Husband spouse)}))))
@@ -267,11 +292,11 @@
        (u/pretty-str
         '(entity
           :Acme.Core/Company
-          {:Name {:type :String :guid true}}))
+          {:Name {:type :String :id true}}))
        (u/pretty-str
         '(entity
           :Acme.Core/Department
-          {:No {:type :Int :guid true}
+          {:No {:type :Int :id true}
            :Name :String}))
        (u/pretty-str
         '(relationship
@@ -280,9 +305,12 @@
        "\n\nWhen creating a new Department, the name of its parent Company must be specified as follows:\n"
        (u/pretty-str
         '(def dept (make-child :Acme.Core/Department {:No 101 :Name "sales"} :Acme.Core/CompanyDepartment "RK Steels Corp")))
-       "\n\nNote that the parent is identified by its guid - in this case the company-name. The parent is assumed to be already existing."
+       "\n\nNote that the parent is identified by its id - in this case the company-name. The parent is assumed to be already existing."
        "You should not lookup or try to create the parent, unless explicitly instructed to do so. Never call `make` and `make-child` for the same "
-       "instance - a instance of an entity with a parent should always be created with a call to `make-child`."
+       "instance - a instance of an entity with a parent should always be created with a call to `make-child`.\n"
+       "To lookup childern under a parent, call the `lookup-children` function. For example, the following expression will return "
+       "all departments in the company named \"RK Steels Corp\":\n"
+       (u/pretty-str '(def departments (lookup-children :Acme.Core/CompanyDepartment "RK Steels Corp")))
        "\n\nIn addition to entities and relationships, you may also have events in a model, as the one shown below:\n"
        (u/pretty-str
         '(event
@@ -304,11 +332,12 @@
         '(do (def wife (lookup-one :Family.Core/Spouse {:Wife "mary@family.org"}))
              (def husband (lookup-one :Family.Core/Person {:Email (:Husband spouse)}))
              [husband wife]))
-       "\nAlso keep in mind that you can call only `make` on events, `update`, `delete`, `lookup-one` and `lookup-many` are reserved for entities.\n"
+       "\nAlso keep in mind that you can call only `make` on events, `update`, `delete`, `lookup-one`, "
+       "`lookup-many` and `lookup-children` are reserved for entities.\n"
        "Note that you are generating code in a subset of Clojure. In your response, you should not use "
        "any feature of the language that's not present in the above examples. "
        "This means, for conditionals you should always return a `cond` expression, and must not return an `if`.\n"
-       "A `def` must always bind to the result of `make`, `update`, `delete`, `lookup-one` and `lookup-many` and nothing else.\n"
+       "A `def` must always bind to the result of `make`, `update`, `delete`, `lookup-one`, `lookup-many` and `lookup-children` and nothing else.\n"
        "You must not call functions like `map` or invent functional-syntax like `[data in [1 2 3]]`.\n\n"
        "Now consider the entity definitions and user-instructions that follows to generate fresh dataflow patterns. "
        "An important note: do not return any plain text in your response, only return valid clojure expressions. "

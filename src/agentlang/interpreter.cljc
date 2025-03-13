@@ -23,6 +23,10 @@
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
+(defn- fncall-expr? [x]
+  (when (and (seqable? x) (seq x))
+    (or (list? x) (= clojure.lang.Cons (type x)))))
+
 (defn- make-result [env result]
   {:env env :result result})
 
@@ -57,7 +61,7 @@
              (if query-mode f (follow-reference env f)))
           ~@(mapv #(evaluate-attribute-value env k %) (rest v))]
         (mapv #(evaluate-attribute-value env k %) v)))
-    (list? v) (evaluate-attr-expr env nil nil k v)
+    (fncall-expr? v) (evaluate-attr-expr env nil nil k v)
     :else v))
 
 (defn- follow-references-in-attributes-helper [env attrs]
@@ -198,7 +202,7 @@
     (or (eval-cache-lookup k)
         (eval-cache-update
          k
-         (let [exp-attrs (into {} (filter (fn [[_ v]] (list? v)) attrs))
+         (let [exp-attrs (into {} (filter (fn [[_ v]] (fncall-expr? v)) attrs))
                ks (set (keys exp-attrs))
                attrs-deps (mapv (fn [[k v]]
                                   (if-let [deps (seq (set/intersection (set v) (set/difference ks #{k})))]
@@ -210,7 +214,7 @@
 
 (defn- realize-attribute-values
   ([env recname attrs compute-compound-attributes?]
-   (let [has-exp? (first (filter (fn [[_ v]] (list? v)) attrs))
+   (let [has-exp? (first (filter (fn [[_ v]] (fncall-expr? v)) attrs))
          attrs1 (if-not query-mode
                   (into
                    {}
@@ -882,7 +886,7 @@
      (ls/literal? pat)
      (make-result env pat)
 
-     (list? pat)
+     (fncall-expr? pat)
      (make-result env (evaluate-expr env pat))
 
      :else
@@ -956,7 +960,7 @@
          (let [evaluation-result (case op-code
                                    "eval" (cond
                                             (map? pat) (evaluate-pattern pat)
-                                            (list? pat) (eval pat)
+                                            (fncall-expr? pat) (eval pat)
                                             :else (println "Cannot evaluate this pattern: " pat))
                                    "add" (eval pat)
                                    (println "Wrong op-code for the pattern - op-code: " op-code))]
