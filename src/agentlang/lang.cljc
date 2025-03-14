@@ -187,9 +187,9 @@
          :write-only :read-only
          :cascade-on-delete :var :secure-hash)
         (li/validate-bool k v)
-        :check (li/validate fn? ":check is not a predicate" v)
-        :parse (li/validate fn? ":parse is not a function" v)
-        :default (when-not (fn? v)
+        :check (li/validate fn-or-name? ":check is not a predicate" v)
+        :parse (li/validate fn-or-name? ":parse is not a function" v)
+        :default (when-not (fn-or-name? v)
                    (when-let [predic (:check scm)]
                      (li/validate predic "invalid value for :default" v)))
         :type (li/validate attribute-type? "invalid :type" v)
@@ -200,7 +200,7 @@
         :setof (li/validate attribute-type? ":setof has invalid type" v)
         :type-in-store (li/validate string? ":type-in-store must be specified as a string" v)
         :ref (li/validate reference-exists? ":ref is invalid" v)
-        :writer (li/validate fn? ":writer must be a function" v)
+        :writer (li/validate fn-or-name? ":writer must be a function" v)
         :oneof v
         :label (li/validate symbol? ":label must be a symbol" v)
         :relationship (li/validate cn/relationship? "not a valid relationship name" v)
