@@ -2205,6 +2205,9 @@
          (= node2 entity-name) a2
          :else (u/throw-ex (str entity-name " not in relationship - " relname)))])))
 
+(defn other-between-attribute-name [anames aname]
+  (first (set/difference (set anames) #{aname})))
+
 (defn maybe-between-node-as-attribute [relname maybe-node-name]
   (when maybe-node-name
     (let [[c n] (li/split-path maybe-node-name)

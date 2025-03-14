@@ -1,5 +1,6 @@
 (ns agentlang.inference.service.planner
   (:require [clojure.walk :as w]
+            [clojure.set :as set]
             [agentlang.util :as u]
             [agentlang.component :as cn]
             [agentlang.lang.internal :as li]
@@ -57,6 +58,7 @@
 
 (defn- make-between-instance [relname attrs alias]
   (let [nns (cn/between-attribute-names relname)
+        attrs (parse-value-refs-and-exprs attrs)
         ks (keys attrs)]
     (when (not= (set nns) (set ks))
       (u/throw-ex (str "Invalid attribute(s) for " relname " - " ks)))
@@ -89,16 +91,33 @@
   (when (validate-record-expr expr alias)
     (let [a0 (parse-value-refs-and-exprs attrs)]
       (merge {n a0}
-             (when contains-rel (merge-contains n contains-rel parent-id))
+             (when contains-rel (merge-contains n contains-rel (parse-ref-or-expr parent-id)))
              (when alias {:as alias})))))
 
+(defn- parse-lookup-via-between [[relname attrs :as expr] alias]
+  (let [nodes (set (cn/between-attribute-names relname))
+        attrs (parse-value-refs-and-exprs attrs)
+        k (first (keys attrs))]
+    (when-not (some #{k} nodes)
+      (u/throw-ex (str k " not in nodes " nodes " of " relname)))
+    (let [n1 k, n2 (first (set/difference nodes #{k}))
+          e1 (cn/relationship-node-entity relname n1)
+          e2 (cn/relationship-node-entity relname n2)]
+      (merge
+       {(li/name-as-query-pattern e2) {}
+        (li/name-as-query-pattern relname)
+        {e1 {(cn/identity-attribute-name e1) (parse-ref-or-expr (k attrs))}}}
+       (when alias {:as alias})))))
+
 (defn- parse-lookup [[n attrs :as expr] alias]
-  (when (validate-record-expr expr alias)
-    (merge
-     (if (seq attrs)
-       {n (parse-value-refs-and-exprs li/name-as-query-pattern attrs)}
-       {(li/name-as-query-pattern n) {}})
-     (when alias {:as alias}))))
+  (if (cn/between-relationship? n)
+    (parse-lookup-via-between expr alias)
+    (when (validate-record-expr expr alias)
+      (merge
+       (if (seq attrs)
+         {n (parse-value-refs-and-exprs li/name-as-query-pattern attrs)}
+         {(li/name-as-query-pattern n) {}})
+       (when alias {:as alias})))))
 
 (defn- parse-lookup-one [expr alias]
   (parse-lookup expr (when alias [alias])))
@@ -272,21 +291,27 @@
        "\n\nTwo entities can form relationships between them. For example, consider the following entity that represents a person:\n"
        (u/pretty-str
         '(entity
-          :Family.Core/Person
+          :School.Core/Student
           {:Email {:type :Email :id true}
            :Name :String
-           :Age :String}))
-       "\nA possible relationship between two persons is:\n"
+           :Age :Int}))
+       (u/pretty-str
+        '(entity
+          :School.Core/ExamResult
+          {:Id {:type :Int :id true}
+           :Subject :String
+           :Mark :Int}))
+       "\nA relationship can be established between Students and ExamResults as, \n"
        (u/pretty-str
         '(relationship
-          :Family.Core/Spouse
-          {:meta {:between [:Person :Person :as [:Husband :Wife]]}}))
+          :School.Core/StudentExamResult
+          {:meta {:between [:Student :ExamResult]}}))
        "\nCreating a new between relationship is similar to creating an instance of an entity, as shown below:\n"
-       (u/pretty-str '(def spouse (make :Family.Core/Spouse {:Husband "sam@family.org" :Wife "mary@family.org"})))
-       "\nThe between relationship is established on the `id` attributes of the entities. Given the email of a wife, her husband can be queried as:\n"
+       (u/pretty-str '(def spouse (make :School.Core/StudentExamResult {:Student "sam@school.org" :ExamResult 101})))
+       "\nThe between relationship is established on the `id` attributes of the entities. Given the email of a student, "
+       "her exam results can be queried as:\n"
        (u/pretty-str
-        '(do (def spouse (lookup-one :Family.Core/Spouse {:Wife "mary@family.org"}))
-             (def husband (lookup-one :Family.Core/Person {:Email (:Husband spouse)}))))
+        '(def exam-results (lookup-many :School.Core/StudentExamResult {:Student "mary@school.org"})))
        "\n\nTwo entities may also form a `contains` relationship - where the relationship is hierarchical. For example, "
        "a Company can contain Departments:\n"
        (u/pretty-str
@@ -302,15 +327,18 @@
         '(relationship
           :Acme.Core/CompanyDepartment
           {:meta {:contains [:Acme.Core/Company :Acme.Core/Department]}}))
-       "\n\nWhen creating a new Department, the name of its parent Company must be specified as follows:\n"
+       "\n\nIn the `:Acme.Core/CompanyDepartment` contains-relationship, `:Acme.Core/Company` is the parent entity and `:Acme.Core/Department` "
+       "is the child entity. When creating a new Department, the name of its parent Company must be specified as follows:\n"
        (u/pretty-str
         '(def dept (make-child :Acme.Core/Department {:No 101 :Name "sales"} :Acme.Core/CompanyDepartment "RK Steels Corp")))
        "\n\nNote that the parent is identified by its id - in this case the company-name. The parent is assumed to be already existing."
-       "You should not lookup or try to create the parent, unless explicitly instructed to do so. Never call `make` and `make-child` for the same "
-       "instance - a instance of an entity with a parent should always be created with a call to `make-child`.\n"
+       "You should not lookup or try to create the parent, unless explicitly instructed to do so. When asked to create a child instance under "
+       "a parent, you must call `make-child`.\n"
        "To lookup childern under a parent, call the `lookup-children` function. For example, the following expression will return "
        "all departments in the company named \"RK Steels Corp\":\n"
        (u/pretty-str '(def departments (lookup-children :Acme.Core/CompanyDepartment "RK Steels Corp")))
+       "\nLet me repeat again, for queries on a `:between` relationship, always call `lookup-many` and nothing else.\n"
+       "For queries via a `:contains` relationship, always call `lookup-children` and nothing else."
        "\n\nIn addition to entities and relationships, you may also have events in a model, as the one shown below:\n"
        (u/pretty-str
         '(event
@@ -327,17 +355,18 @@
            (= summary-result "trip to USA") "YES"
            :else "NO"))
        "\nIf you are asked to return more than one result, pack them into a list. For example, if you are asked to lookup and return both the "
-       "husband and wife, you may do the following:\n"
+       "employee and his salary, you may do the following:\n"
        (u/pretty-str
-        '(do (def wife (lookup-one :Family.Core/Spouse {:Wife "mary@family.org"}))
-             (def husband (lookup-one :Family.Core/Person {:Email (:Husband spouse)}))
-             [husband wife]))
+        '(do (def employee (lookup-one :Company/Employee {:Email "joe@company.com"}))
+             (def salary (lookup-one :Company/Salary {:EmployeeId (:Id employee)}))
+             [employee salary]))
        "\nAlso keep in mind that you can call only `make` on events, `update`, `delete`, `lookup-one`, "
        "`lookup-many` and `lookup-children` are reserved for entities.\n"
        "Note that you are generating code in a subset of Clojure. In your response, you should not use "
        "any feature of the language that's not present in the above examples. "
        "This means, for conditionals you should always return a `cond` expression, and must not return an `if`.\n"
-       "A `def` must always bind to the result of `make`, `update`, `delete`, `lookup-one`, `lookup-many` and `lookup-children` and nothing else.\n"
+       "A `def` must always bind to the result of `make`, `make-child`, `update`, `delete`, "
+       "`lookup-one`, `lookup-many` and `lookup-children` and nothing else.\n"
        "You must not call functions like `map` or invent functional-syntax like `[data in [1 2 3]]`.\n\n"
        "Now consider the entity definitions and user-instructions that follows to generate fresh dataflow patterns. "
        "An important note: do not return any plain text in your response, only return valid clojure expressions. "

@@ -474,24 +474,33 @@
 
 (defn- between-join [src-entity relname [target-entity attrs tg-alias]]
   (let [n1 (first (cn/find-between-keys relname src-entity))
-        n2 (first (cn/find-between-keys relname target-entity))]
+        target-keys (cn/find-between-keys relname target-entity)
+        n2 (first target-keys)]
     (when-not (or n1 n2)
       (u/throw-ex (str "Query failed, "
                        "no relationship " relname " between " src-entity " and " target-entity)))
-    (let [rel-alias (keyword (as-table-name relname))
+    (let [n2 (if (= n1 n2)
+               (second target-keys)
+               n2)
+          rel-alias (keyword (as-table-name relname))
           rel-ref (partial li/make-ref rel-alias)
-          this-alias (or (get-alias relname src-entity) (keyword (as-table-name src-entity)))
+          this-alias (or (when-not (= src-entity target-entity (get-alias relname src-entity)))
+                         (keyword (as-table-name src-entity)))
           this-ref (partial li/make-ref this-alias)
-          that-alias (or tg-alias (get-alias relname target-entity) (keyword (as-table-name target-entity)))
+          that-alias0 (or tg-alias (get-alias relname target-entity) (keyword (as-table-name target-entity)))
+          that-alias (if (and (not tg-alias) (= this-alias that-alias0))
+                       (keyword (str (name that-alias0) "1"))
+                       that-alias0)
           that-ref (partial li/make-ref that-alias)
           p (when-let [p (li/path-attr attrs)]
               (and (string? p) p))
+          refrev? (and tg-alias (= tg-alias n1))
           main-joins
           [[(as-table-name relname) rel-alias]
            [:and
             [:= (rel-ref stu/deleted-flag-col-kw) false]
-            [:= (rel-ref (stu/attribute-column-name-kw n1)) (this-ref path-col)]
-            [:= (rel-ref (stu/attribute-column-name-kw n2)) (or p (that-ref path-col))]]]
+            [:= (rel-ref (stu/attribute-column-name-kw n1)) ((if refrev? that-ref this-ref) path-col)]
+            [:= (rel-ref (stu/attribute-column-name-kw n2)) (or p ((if refrev? this-ref that-ref) path-col))]]]
           sub-joins
           (when-not p
             [[(as-table-name target-entity) that-alias]
@@ -539,9 +548,9 @@
 
 (defn- handle-joins-for-between [entity-name bjs]
   (mapv
-   (fn [[relname spec]]
+   (fn [[relname spec alias]]
      (let [[target-entity _ :as sel] (:select spec)
-           r0 (between-join entity-name relname sel)
+           r0 (between-join entity-name relname (conj sel alias))
            r1 (if-let [bjs (:between-join spec)]
                 (apply concat r0 (handle-joins-for-between target-entity bjs))
                 r0)]
