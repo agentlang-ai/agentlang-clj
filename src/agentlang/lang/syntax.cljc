@@ -145,6 +145,11 @@
 
 (def reference? keyword?)
 
+(defn reference [x]
+  (if (keyword? x)
+    x
+    (u/throw-ex (str "Reference " x " must be a keyword"))))
+
 (def raw-alias identity)
 
 (defn- introspect-into [into]
