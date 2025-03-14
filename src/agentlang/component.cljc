@@ -2222,7 +2222,7 @@
      (cond
        (= node-name a1) n1
        (= node-name a2) n2
-       :else (u/throw-ex (str "node-name " node-name " is not in relationship aliases - " aliases)))))
+       :else (u/throw-ex (str node-name " is not in relationship aliases - " aliases " of " relname)))))
   ([relname node-name]
    (relationship-node-entity
     relname (when (between-relationship? relname) (between-attribute-names relname))

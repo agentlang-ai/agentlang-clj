@@ -472,7 +472,7 @@
       (u/throw-ex (str "SQL keyword " alias " cannot be used as an alias")))
     alias))
 
-(defn- between-join [src-entity relname [target-entity attrs]]
+(defn- between-join [src-entity relname [target-entity attrs tg-alias]]
   (let [n1 (first (cn/find-between-keys relname src-entity))
         n2 (first (cn/find-between-keys relname target-entity))]
     (when-not (or n1 n2)
@@ -482,7 +482,7 @@
           rel-ref (partial li/make-ref rel-alias)
           this-alias (or (get-alias relname src-entity) (keyword (as-table-name src-entity)))
           this-ref (partial li/make-ref this-alias)
-          that-alias (or (get-alias relname target-entity) (keyword (as-table-name target-entity)))
+          that-alias (or tg-alias (get-alias relname target-entity) (keyword (as-table-name target-entity)))
           that-ref (partial li/make-ref that-alias)
           p (when-let [p (li/path-attr attrs)]
               (and (string? p) p))
@@ -502,10 +502,14 @@
                (entity-attributes-as-queries attrs that-alias)))])]
       (vec (concat sub-joins main-joins)))))
 
-(defn- contains-join [src-entity relname [target-entity attrs]]
+(defn- contains-join [src-entity relname [target-entity attrs tg-alias]]
   (let [traverse-up? (not (cn/child-in? (li/normalize-name relname) src-entity))
-        src-alias (or (get-alias relname src-entity) (keyword (as-table-name src-entity)))
-        target-alias (or (get-alias relname target-entity) (keyword (as-table-name target-entity)))
+        same-ents? (= src-entity target-entity)
+        src-alias (or (when-not same-ents? (get-alias relname src-entity)) (keyword (as-table-name src-entity)))
+        target-alias (or tg-alias (get-alias relname target-entity)
+                         (if same-ents?
+                           (keyword (str (name src-alias) "1"))
+                           (keyword (as-table-name target-entity))))
         join-pat
         (concat
          [[(as-table-name target-entity) target-alias]

@@ -17,6 +17,12 @@
  :ParentChild
  {:meta {:contains [:Member :Member :as [:Parent :Child]]}})
 
+(dataflow
+ :FindChildren
+ {:Family.Core/Member? {},
+  :Family.Core/ParentChild?
+  {:Family.Core/Member {:Email "mary@abc.com"} :as :P},
+  :as :children})
 
 {:Agentlang.Core/LLM {:Name :llm01}}
 

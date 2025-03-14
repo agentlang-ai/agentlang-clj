@@ -60,17 +60,17 @@
         ks (keys attrs)]
     (when (not= (set nns) (set ks))
       (u/throw-ex (str "Invalid attribute(s) for " relname " - " ks)))
-    (let [fent (partial cn/relationship-node-entity nns)
+    (let [fent (partial cn/relationship-node-entity relname nns)
           qpats (mapv (fn [n]
                         (let [ent (fent n)
                               idattr (cn/identity-attribute-name ent)]
-                          {ent {(li/name-as-query-pattern idattr) (n attrs)} :as n}))
+                          {ent {(li/name-as-query-pattern idattr) (n attrs)} :as [n]}))
                       nns)
           new-attrs (into {} (mapv (fn [k] [k (li/make-ref k li/path-attr)]) ks))]
       (vec
        (concat
         qpats
-        (merge {relname new-attrs} (when alias {:as alias})))))))
+        [(merge {relname new-attrs} (when alias {:as alias}))])))))
 
 (defn- parse-make [[n attrs :as expr] alias]
   (when (validate-record-expr expr alias)
