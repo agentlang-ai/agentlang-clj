@@ -1775,3 +1775,24 @@
   (cn/set-current-component :Dc01)
   (is (= :Dc01/A (entity :A {:Id :Identity :X :Int})))
   (is (= :Dc01/B (record :B {:Name :String}))))
+
+(deftest fetch-from-raw
+  (defcomponent :Ffr
+    (entity
+     :Ffr/E
+     {:Id :Identity
+      :rbac [{:roles ["user"] :allow [:create]}]})
+    (entity
+     :Ffr/F
+     {:X {:type :Int :id true}})
+    (relationship
+     :Ffr/R
+     {:meta {:between [:Ffr/E :Ffr/F]}
+      :Y :Int}))
+  (is (= {:Id :Identity
+          :rbac [{:roles ["user"] :allow [:create]}]}
+         (cn/fetch-user-schema :Ffr/E)))
+  (is (= {:X {:type :Int :id true}}
+         (cn/fetch-user-schema :Ffr/F)))
+  (is (= {:meta {:between [:Ffr/E :Ffr/F], :cascade-on-delete true}, :Y :Int}
+         (cn/fetch-user-schema :Ffr/R))))
