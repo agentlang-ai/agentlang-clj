@@ -203,7 +203,7 @@
 (defn with-case [case r]
   (assoc r li/except-tag case))
 
-(defn with-meta [meta r]
+(defn _with-meta [meta r]
   (assoc r :meta meta))
 
 (def distinct-tag :distinct)
