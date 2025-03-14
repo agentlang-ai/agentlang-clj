@@ -203,20 +203,33 @@
 (defn with-case [case r]
   (assoc r li/except-tag case))
 
+(defn with-meta [meta r]
+  (assoc r :meta meta))
+
 (def distinct-tag :distinct)
 
 (defn with-distinct [d r]
   (assoc r distinct-tag d))
 
+(defn- introspect-meta [obj]
+  (when obj
+    (when-not (map? obj)
+      (u/throw-ex (str ":meta must be a map, instead found " obj)))
+    obj))
+
+(def raw-meta introspect-meta)
+
 (defn- introspect-optional-keys [pat]
   {:as (introspect-alias (:as pat))
    :into (when-let [into (:into pat)] (introspect-into into))
+   :meta (introspect-meta (:meta pat))
    li/except-tag (when-let [c (li/except-tag pat)] (introspect-case c))})
 
 (defn- raw-optional-keys [r]
   (merge
    (when-let [a (:as r)] {:as (raw-alias a)})
    (when-let [into (:into r)] {:into (raw-into into)})
+   (when-let [meta (:meta r)] {:meta (raw-meta meta)})
    (when-let [c (li/except-tag r)] {li/except-tag (raw-case c)})))
 
 (def except-tag li/except-tag)
