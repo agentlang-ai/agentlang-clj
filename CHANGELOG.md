@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2025-03-14
+
+- Support for :filter construct
+- Fix Okta URL encode issue
+
 ## [0.6.2-alpha1] - 2024-12-19
 
 - Add anthropic provider APIs
