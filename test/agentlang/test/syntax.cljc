@@ -188,3 +188,16 @@
     (is (= :R (ls/alias-tag r)))
     (is (= testpat (ls/raw r)))
     (is (= testpat (ls/raw (ls/with-alias :R (ls/call '(acme.com/f :A :B.X 100))))))))
+
+(deftest empty-pats
+  (let [p? (fn [predic pat]
+             (is (ls/empty-pattern? pat))
+             (is (predic pat)))]
+    (p? ls/for-each? (ls/for-each))
+    (p? ls/match? (ls/match))
+    (p? ls/try? (ls/_try))
+    (p? ls/upsert? (ls/upsert))
+    (p? ls/query? (ls/query))
+    (p? ls/query-object? (ls/query-object))
+    (p? ls/call? (ls/call))
+    (p? ls/delete? (ls/delete))))

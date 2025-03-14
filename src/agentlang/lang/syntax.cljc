@@ -20,8 +20,18 @@
 (def ^:private not-case (partial not-kw li/except-tag))
 (def ^:private not-check (partial not-kw :check))
 
-(def empty-pattern (constantly {}))
-(defn empty-pattern? [x] (= x {}))
+(def syntax-type :type)
+(def record-name :record)
+(def attributes :attributes)
+(def relationships :rels)
+(def query-pattern :query)
+
+(defn empty-pattern
+  ([of-type]
+   {syntax-type of-type :empty-pattern? true})
+  ([] (empty-pattern nil)))
+
+(defn empty-pattern? [x] (and (map? x) (:empty-pattern? x)))
 
 (defn conditional? [pat]
   (and (seqable? pat) (li/match-operator? (first pat))))
@@ -207,12 +217,6 @@
 (def except-tag li/except-tag)
 (def meta-tag :meta)
 
-(def syntax-type :type)
-(def record-name :record)
-(def attributes :attributes)
-(def relationships :rels)
-(def query-pattern :query)
-
 (defn- introspect-query-upsert [recname pat]
   (let [attrs (validate-attributes pat (li/normalize-name recname) (get pat recname))
         upsattrs (filter update-attribute? attrs)
@@ -236,7 +240,8 @@
     record-name recname
     attributes attrs
     relationships rels})
-  ([tag recname attrs] (query-upsert-helper tag recname attrs nil)))
+  ([tag recname attrs] (query-upsert-helper tag recname attrs nil))
+  ([tag] (empty-pattern tag)))
 
 (def upsert (partial query-upsert-helper :upsert))
 (def query (partial query-upsert-helper :query))
@@ -271,10 +276,12 @@
     query-pattern (introspect-query-pattern (:? (li/record-attributes pat)))}
    (introspect-optional-keys pat)))
 
-(defn query-object [recname qpat]
-  {syntax-type :query-object
-   record-name recname
-   query-pattern (introspect-query-pattern qpat)})
+(defn query-object
+  ([recname qpat]
+   {syntax-type :query-object
+    record-name recname
+    query-pattern (introspect-query-pattern qpat)})
+  ([] (empty-pattern :query-object)))
 
 (defn- raw-query-object [r]
   (merge {(record-name r) {:? (raw-query-pattern (query-pattern r))}}
@@ -299,7 +306,8 @@
      function-expression fnexpr}
     (when check
       {:check check})))
-  ([fnexpr] (call fnexpr nil)))
+  ([fnexpr] (call fnexpr nil))
+  ([] (empty-pattern :call)))
 
 (defn- maybe-add-optional-raw-tags [r pat]
   (let [a (when-let [a (:as r)] (raw-alias a))
@@ -342,7 +350,8 @@
    {syntax-type :delete
     query-pattern q
     :purge? purge?})
-  ([q] (delete q false)))
+  ([q] (delete q false))
+  ([] (empty-pattern :delete)))
 
 (def quote-value :value)
 
@@ -384,12 +393,14 @@
               pat0)]
     (maybe-add-optional-raw-tags (dissoc r li/except-tag) pat)))
 
-(defn _try [body cases]
-  (when-not (vector? body)
-    (u/throw-ex "Try body must be a vector"))
-  {syntax-type :try
-   try-body body
-   li/except-tag cases})
+(defn _try
+  ([body cases]
+   (when-not (vector? body)
+     (u/throw-ex "Try body must be a vector"))
+   {syntax-type :try
+    try-body body
+    li/except-tag cases})
+  ([] (empty-pattern :try)))
 
 (def for-each-value :src)
 (def for-each-body :body)
@@ -408,10 +419,12 @@
   (let [pat `[:for-each ~(raw (for-each-value r)) ~@(mapv raw (for-each-body r))]]
     (maybe-add-optional-raw-tags r pat)))
 
-(defn for-each [src body]
-  {syntax-type :for-each
-   for-each-value src
-   for-each-body body})
+(defn for-each
+  ([src body]
+   {syntax-type :for-each
+    for-each-value src
+    for-each-body body})
+  ([] (empty-pattern :for-each)))
 
 (def match-value :value)
 (def match-body :body)
@@ -467,7 +480,8 @@
    {syntax-type :match
     match-value value
     match-body body})
-  ([body] (match nil body)))
+  ([body] (match nil body))
+  ([] (empty-pattern :match)))
 
 (defn- introspect-filter [pat]
   )
