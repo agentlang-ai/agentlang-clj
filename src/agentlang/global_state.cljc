@@ -88,6 +88,8 @@
 
 (def ^:dynamic kernel-mode nil)
 
+(defn kernel-mode? [] kernel-mode)
+
 (defn kernel-call [f]
   (binding [kernel-mode true]
     (f)))

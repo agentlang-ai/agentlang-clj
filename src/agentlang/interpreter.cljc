@@ -20,6 +20,7 @@
             [agentlang.resolver.core :as r]
             [agentlang.datafmt.json :as json]
             [agentlang.suspension :as sp]
+            [agentlang.exec-graph :as exg]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
@@ -882,31 +883,33 @@
 (defn evaluate-pattern
   ([env pat]
    (gs/reset-error-code!)
-   (cond
-     (ls/literal? pat)
-     (make-result env pat)
+   (let [r
+         (cond
+           (ls/literal? pat)
+           (make-result env pat)
 
-     (fncall-expr? pat)
-     (make-result env (evaluate-expr env pat))
+           (fncall-expr? pat)
+           (make-result env (evaluate-expr env pat))
 
-     :else
-     (let [env (or env (env/make (store/get-default-store) nil))
-           pat (maybe-normalize-pattern pat)
-           [condition-handlers pat] (ls/maybe-extract-condition-handlers pat)
-           [pat sub-pats] (maybe-preprocecss-pattern env pat)]
-       (if-let [handler (pattern-handler pat)]
-         (try
-           (let [r (handler env pat sub-pats)
-                 res (:result r)
-                 no-data (or (nil? res) (and (seqable? res) (not (seq res))))]
-             (if-let [on-not-found (and no-data (:not-found condition-handlers))]
-               (evaluate-pattern env on-not-found)
-               r))
-           (catch #?(:clj Exception :cljs js/Error) ex
-             (if-let [on-error (:error condition-handlers)]
-               (evaluate-pattern env on-error)
-               (throw ex))))
-         (u/throw-ex (str "Cannot handle invalid pattern " pat))))))
+           :else
+           (let [env (or env (env/make (store/get-default-store) nil))
+                 pat (maybe-normalize-pattern pat)
+                 [condition-handlers pat] (ls/maybe-extract-condition-handlers pat)
+                 [pat sub-pats] (maybe-preprocecss-pattern env pat)]
+             (if-let [handler (pattern-handler pat)]
+               (try
+                 (let [r (handler env pat sub-pats)
+                       res (:result r)
+                       no-data (or (nil? res) (and (seqable? res) (not (seq res))))]
+                   (if-let [on-not-found (and no-data (:not-found condition-handlers))]
+                     (evaluate-pattern env on-not-found)
+                     r))
+                 (catch #?(:clj Exception :cljs js/Error) ex
+                   (if-let [on-error (:error condition-handlers)]
+                     (evaluate-pattern env on-error)
+                     (throw ex))))
+               (u/throw-ex (str "Cannot handle invalid pattern " pat)))))]
+     (and (exg/add-pattern pat r) r)))
   ([pat] (evaluate-pattern nil pat)))
 
 (defn evaluate-dataflow
