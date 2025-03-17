@@ -138,17 +138,19 @@
                  reftok)
             (refresh-tokens auth-config reftok sid))))))
 
-(defn- introspection-required? [auth-config cookie-created-millis]
+(defn- introspection-required? [auth-config cookie-created-millis [_ auth-res]]
   (if cookie-created-millis
     (if-let [ttl-ms (:cookie-ttl-ms auth-config)]
-      (< ttl-ms (- (System/currentTimeMillis) cookie-created-millis))
+      (let [cookie-ttl (* 1000 (get-in auth-res [:authentication-result :expires-in] 0))
+            ttl-ms1 (if (> ttl-ms cookie-ttl) ttl-ms cookie-ttl)]
+        (< ttl-ms1 (- (System/currentTimeMillis) cookie-created-millis)))
       (:introspect auth-config))
     (:introspect auth-config)))
 
 (defmethod auth/verify-token tag [auth-config [data cookie-created-millis]]
   (if (vector? data)
     (let [result
-          (if (introspection-required? auth-config cookie-created-millis)
+          (if (introspection-required? auth-config cookie-created-millis data)
             (do (log/debug (str "auth/okta: introspecting token remotely - " data))
                 (introspect auth-config data))
             (do (log/debug (str "auth/okta: verifying token locally - " data))
