@@ -24,7 +24,6 @@
             [agentlang.util.http :as uh]
             [agentlang.util.logger :as log]
             [agentlang.interpreter :as ev]
-            [agentlang.exec-graph :as exg]
             [org.httpkit.server :as h]
             [org.httpkit.client :as hc]
             [agentlang.datafmt.json :as json]
@@ -280,12 +279,6 @@
 (defmacro log-request [msg request]
   `(log/info (str ~msg " - " (filter-request-for-logging ~request))))
 
-(defn evaluate-dataflow-with-exec-graph [event-instance]
-  (exg/init-event-graph (cn/instance-type-kw event-instance))
-  (let [r (gs/evaluate-dataflow event-instance)]
-    (and (exg/save-current-graph)
-         r)))
-
 (defn- process-dynamic-eval
   ([[auth-config maybe-unauth] event-name request]
    (log-request (str "HTTP request received to process event " event-name) request)
@@ -298,7 +291,7 @@
                (bad-request
                 (str "cannot invoke internal event - " (cn/instance-type-kw obj))
                 data-fmt "INTERNAL_EVENT_ERROR")
-               (maybe-ok data-fmt #(evaluate-dataflow-with-exec-graph obj)))))
+               (maybe-ok data-fmt #(gs/evaluate-dataflow obj)))))
          (unsupported-media-type request))))
   ([auth-info request]
    (process-dynamic-eval auth-info nil request)))
@@ -428,7 +421,7 @@
 
                  (cn/event? recname)
                  (if (= recname (first path) (li/record-name obj))
-                   (evaluate-dataflow-with-exec-graph obj)
+                   (gs/evaluate-dataflow obj)
                    (bad-request (str "Event is not of type " recname " - " obj)))
 
                  :else (bad-request (str "Invalid POST resource - " path))))))))))

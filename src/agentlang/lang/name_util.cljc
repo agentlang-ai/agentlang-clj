@@ -78,9 +78,10 @@
         n (first (keys x))
         attrs (first (vals x))
         mvs (vals-sanitizer attrs)]
-    (maybe-merge-non-attrs
-     {(fq-name n) (map-with-fq-names mvs is-recdef)}
-     inst)))
+    (binding [scoped-names (set (keys attrs))]
+      (maybe-merge-non-attrs
+       {(fq-name n) (map-with-fq-names mvs is-recdef)}
+       inst))))
 
 (defn- fq-map
   "Update the keys and values in a map literal with

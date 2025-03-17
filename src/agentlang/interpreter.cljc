@@ -909,7 +909,7 @@
                      (evaluate-pattern env on-error)
                      (throw ex))))
                (u/throw-ex (str "Cannot handle invalid pattern " pat)))))]
-     (and (exg/add-pattern pat r) r)))
+     (and (exg/add-pattern pat (:result r)) r)))
   ([pat] (evaluate-pattern nil pat)))
 
 (defn evaluate-dataflow
@@ -920,7 +920,9 @@
                           (if (cn/an-instance? event-instance-or-patterns)
                             event-instance-or-patterns
                             (cn/make-instance event-instance-or-patterns))
-                          {})]
+                          {})
+         with-event-inst? (cn/an-instance? event-instance)]
+     (when with-event-inst? (exg/add-event-node (cn/instance-type-kw event-instance)))
      (gs/call-with-event-context
       (:EventContext event-instance)
       (fn []
@@ -943,11 +945,13 @@
                              env (env/bind-eval-state env pat pat-count)
                              {env1 :env r :result :as er} (evaluate-pattern env pat)]
                          (if-let [susp-pats (and (sp/dataflow-suspended?) (seq (rest df-patterns)))]
-                           (let [sid (sp/suspension-id)]
+                           (let [sid (sp/suspension-id)
+                                 result {:suspension-id sid :suspended-with r}]
                              (and (sp/save env1 (vec susp-pats) (ls/alias-from-pattern pat))
-                                  (assoc er :result {:suspension-id sid :suspended-with r})))
+                                  (if with-event-inst? (exg/exit-node result) true)
+                                  (assoc er :result result)))
                            (recur (rest df-patterns) pat-count env1 r)))
-                       (make-result env result)))
+                       (do (when with-event-inst? (exg/exit-node result)) (make-result env result))))
                    (finally
                      (when txn-set? (gs/set-active-txn! nil)))))))))))))
   ([store event-instance] (evaluate-dataflow store nil event-instance))

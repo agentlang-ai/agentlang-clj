@@ -3,6 +3,8 @@
                :cljs [cljs.test :refer-macros [deftest is]])
             [agentlang.util :as u]
             [agentlang.component :as cn]
+            [agentlang.suspension :as susp]
+            [agentlang.exec-graph :as exg]
             [agentlang.lang.internal :as li]
             [agentlang.lang
              :refer [component attribute event
@@ -49,3 +51,34 @@
           r (first rs)]
       (is (b? r))
       (is (= 20 (:Z r))))))
+
+(deftest exec-graph-01
+  (defcomponent :Exg01
+    (entity
+     :Exg01/A
+     {:Id {:type :Int :id true}
+      :X :Int})
+    (entity
+     :Exg01/B
+     {:Id {:type :Int :id true}
+      :Y :Int})
+    (event :Exg01/E {:Y :Int})
+    (dataflow
+     :Exg01/Create
+     {:Exg01/A {:Id :Exg01/Create.Id :X :Exg01/Create.X}}
+     {:Exg01/E {:Y :Exg01/Create.Y}})
+    (dataflow
+     :Exg01/E
+     {:Exg01/B {:Id '(* :Exg01/E.Y 10) :Y :Exg01/E.Y}}))
+  (exg/call-with-exec-graph
+   (fn []
+     (let [b (tu/invoke {:Exg01/Create {:Id 1 :X 10 :Y 100}})]
+       (is (cn/instance-of? :Exg01/B b))
+       (let [g (exg/load-graph :Exg01/Create)]
+         (is (and (exg/graph? g) (exg/event-graph? g)))
+         (is (= (exg/graph-name g) :Exg01/Create))
+         (let [[n1 n2] (exg/graph-nodes g)]
+           (is (exg/pattern? n1))
+           (is (cn/instance-of? :Exg01/A (exg/pattern-result n1)))
+           (is (and (exg/graph? n2) (exg/event-graph? n2)))
+           (is (cn/instance-of? :Exg01/B (:result n2)))))))))
