@@ -58,7 +58,8 @@
                              :into {:Y :SynRel/B.Y
                                     :X :SynRel/A.X}
                              :case {:not-found {:SynRel/B {:Id 1 :Y 1}}}})]
-    (is (= (ls/record-name r) :SynRel/B?))
+    (is (= (ls/record-name r) :SynRel/B))
+    (is (= (ls/record-name-tag r) :SynRel/B?))
     (is (= (ls/attributes r) {}))
     (is (= (ls/raw-relationships (ls/relationships r))
            #:SynRel{:AB? #:SynRel{:A {:Id :SynRel/FindB.A}}}))

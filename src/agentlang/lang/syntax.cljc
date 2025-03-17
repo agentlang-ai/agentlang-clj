@@ -21,10 +21,13 @@
 (def ^:private not-check (partial not-kw :check))
 
 (def syntax-type :type)
-(def record-name :record)
+(def record-name-tag :record)
 (def attributes :attributes)
 (def relationships :rels)
 (def query-pattern :query)
+
+(defn record-name [r]
+  (li/normalize-name (record-name-tag r)))
 
 (defn empty-pattern
   ([of-type]
@@ -246,18 +249,25 @@
                       :query-upsert
                       :upsert)
                     :query)
-      record-name recname
+      record-name-tag recname
       attributes attrs
       distinct-tag (distinct-tag pat)
       relationships rels-spec}
      (introspect-optional-keys pat))))
 
+(defn- maybe-recname-as-query [recname attrs]
+  (cond
+    (li/query-pattern? recname) recname
+    (not (seq attrs)) (li/name-as-query-pattern recname)
+    :else recname))
+
 (defn- query-upsert-helper
   ([tag recname attrs rels]
-   {syntax-type tag
-    record-name recname
-    attributes attrs
-    relationships rels})
+   (let [recname (maybe-recname-as-query recname attrs)]
+     {syntax-type tag
+      record-name-tag recname
+      attributes attrs
+      relationships rels}))
   ([tag recname attrs] (query-upsert-helper tag recname attrs nil))
   ([tag] (empty-pattern tag)))
 
@@ -269,7 +279,7 @@
 
 (defn- raw-query [r]
   (merge
-   {(record-name r) (attributes r)}
+   {(record-name-tag r) (attributes r)}
    (when-let [rels (relationships r)] (raw-relationships rels))
    (when-let [d (distinct-tag r)] {distinct-tag d})
    (raw-optional-keys r)))
@@ -290,19 +300,19 @@
 (defn- introspect-query-object [recname pat]
   (merge
    {syntax-type :query-object
-    record-name recname
+    record-name-tag recname
     query-pattern (introspect-query-pattern (:? (li/record-attributes pat)))}
    (introspect-optional-keys pat)))
 
 (defn query-object
   ([recname qpat]
    {syntax-type :query-object
-    record-name recname
+    record-name-tag recname
     query-pattern (introspect-query-pattern qpat)})
   ([] (empty-pattern :query-object)))
 
 (defn- raw-query-object [r]
-  (merge {(record-name r) {:? (raw-query-pattern (query-pattern r))}}
+  (merge {(record-name-tag r) {:? (raw-query-pattern (query-pattern r))}}
          (raw-optional-keys r)))
 
 (def function-expression :fn)
