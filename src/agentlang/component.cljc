@@ -246,9 +246,7 @@
    (let [p (if (string? path)
              (keyword path)
              path)
-         c (first (li/split-path p))
-         e (last (li/split-path p))]
-
+         [c e] (li/split-path p)]
      (if-let [scm (get-in @components [c (or recversion (get-model-version c))
                                        e mt/meta-key])]
        (assoc
@@ -258,7 +256,6 @@
           p
           (li/make-path p)))
        (fetch-attribute-meta p))))
-
   ([path]
    (fetch-meta path nil)))
 
@@ -2590,3 +2587,10 @@
   (when-let [meta (fetch-meta event-name)]
     (and (= :event (:record-type meta))
          (= :Agentlang.Core/Inference (:inherits meta)))))
+
+(defn entity-action [tag entity-name]
+  (tag (:actions (fetch-meta entity-name))))
+
+(def entity-create-action (partial entity-action :create))
+(def entity-update-action (partial entity-action :update))
+(def entity-delete-action (partial entity-action :delete))

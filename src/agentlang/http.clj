@@ -436,9 +436,9 @@
             data-fmt
             #(when-let [parsed-path (parse-rest-uri request)]
                (let [path (:path parsed-path)
-                     [c n] (li/split-path (:entity parsed-path))]
+                     [c n :as en] (li/split-path (:entity parsed-path))]
                  (gs/evaluate-pattern
-                  {(cn/crud-event-name c n :Update)
+                  {(or (cn/entity-update-action en) (cn/crud-event-name c n :Update))
                    {:Data (li/record-attributes obj)
                     :path (li/vec-to-path path)}})))))))))
 
@@ -506,9 +506,9 @@
             data-fmt
             #(when-let [parsed-path (parse-rest-uri request)]
                (let [path (:path parsed-path)
-                     [c n] (li/split-path (:entity parsed-path))]
+                     [c n :as en] (li/split-path (:entity parsed-path))]
                  (gs/evaluate-pattern
-                  {(cn/crud-event-name c n :Delete)
+                  {(or (cn/entity-delete-action en) (cn/crud-event-name c n :Delete))
                    {:path (li/vec-to-path path)}})))))))))
 
 ;; TODO: Add layer of domain filtering on top of cognito.

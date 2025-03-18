@@ -255,9 +255,14 @@
     (when (and relname (not (cn/contains-relationship? relname)))
       (u/throw-ex (str relname " is not a contains relationship")))
     (let [id-val (or (idn attrs) li/id-attr-s)
-          path (concat path [id-val])]
-      {entity-name
-       (merge
-        (assoc attrs li/path-attr (li/vec-to-path path))
-        (when has-parent
-          {li/parent-attr (li/path-attr parent)}))})))
+          path (concat path [id-val])
+          pat {entity-name
+               (merge
+                (assoc attrs li/path-attr (li/vec-to-path path))
+                (when has-parent
+                  {li/parent-attr (li/path-attr parent)}))}
+          create-event (cn/entity-create-action entity-name)]
+      (if create-event
+        {create-event
+         {:Instance (cn/make-instance pat)}}
+        pat))))

@@ -24,12 +24,12 @@
        :Y '(agentlang.lang.datetime/now)}})
 
 (entity :A {:Id {:type :Int :id true} :X :Int
-            :meta {:audit true}
+            :meta {:audit true :actions {:create :CreateA :delete :DeleteA}}
             :rbac [{:roles ["user"] :allow [:create]}]})
 (entity :B {:Id {:type :Int :id true} :Y :Int})
 (relationship :AB {:meta {:contains [:A :B]}})
 
-(entity :C {:Id {:type :Int :id true} :Z :Int})
+(entity :C {:meta {:actions {:update :UpdateC}} :Id {:type :Int :id true} :Z :Int})
 (relationship :AC {:meta {:between [:A :C]}})
 
 (dataflow
@@ -39,6 +39,22 @@
   :into
   {:A :A1.X
    :CZ :C.Z}})
+
+(dataflow
+ :CreateA
+ [:call '(println "create-a")]
+ {:A {} :from :CreateA.Instance})
+
+(dataflow
+ :DeleteA
+ [:call '(println "delete-a")]
+ [:delete {:A {:__path__? :DeleteA.path}}])
+
+(dataflow
+ :UpdateC
+ [:call '(println "update-c")]
+ {:C {:__path__? :UpdateC.path
+      :Z :UpdateC.Data.Z}})
 
 ;; Enable for testing auth+rbac
 #_(dataflow
