@@ -924,8 +924,16 @@
                             event-instance-or-patterns
                             (cn/make-instance event-instance-or-patterns))
                           {})
-         with-event-inst? (cn/an-instance? event-instance)]
-     (when with-event-inst? (exg/add-event-node (cn/instance-type-kw event-instance)))
+         with-event-inst? (cn/an-instance? event-instance)
+         exg-disabled? (atom false)]
+     (when with-event-inst?
+       (let [n (cn/instance-type-kw event-instance)
+             [c nn] (li/split-path n)]
+         (if (and c nn (cn/internal-component? c))
+           (when (exg/exec-graph-enabled?)
+             (exg/disable!)
+             (reset! exg-disabled? true))
+           ((if (cn/inference? n) exg/add-agent-node exg/add-event-node) n))))
      (gs/call-with-event-context
       (:EventContext event-instance)
       (fn []
@@ -956,6 +964,7 @@
                            (recur (rest df-patterns) pat-count env1 r)))
                        (do (when with-event-inst? (exg/exit-node result)) (make-result env result))))
                    (finally
+                     (when @exg-disabled? (exg/enable!))
                      (when txn-set? (gs/set-active-txn! nil)))))))))))))
   ([store event-instance] (evaluate-dataflow store nil event-instance))
   ([event-instance] (evaluate-dataflow nil nil event-instance)))

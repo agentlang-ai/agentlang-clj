@@ -45,7 +45,7 @@
  [xs]
  (let
   [xs (mapv u/string-as-keyword xs)]
-  (every? (fn* [p1__705#] (some #{p1__705#} oprs)) (set xs))))
+  (every? (fn* [p1__1295#] (some #{p1__1295#} oprs)) (set xs))))
 (entity
  :Agentlang.Kernel.Rbac/Privilege
  {:Name
@@ -64,9 +64,7 @@
    li/path-identity true},
   :Role {:ref :Agentlang.Kernel.Rbac/Role.Name, :indexed true},
   :Privilege {:ref :Agentlang.Kernel.Rbac/Privilege.Name},
-  :meta
-  {:unique
-   [:Agentlang.Kernel.Rbac/Role :Agentlang.Kernel.Rbac/Privilege]}})
+  :meta {:unique [:Role :Privilege]}})
 (entity
  :Agentlang.Kernel.Rbac/RoleAssignment
  {:Name
@@ -76,7 +74,7 @@
    li/path-identity true},
   :Role {:ref :Agentlang.Kernel.Rbac/Role.Name, :indexed true},
   :Assignee {:type :String, :indexed true},
-  :meta {:unique [:Agentlang.Kernel.Rbac/Role :Assignee]}})
+  :meta {:unique [:Role :Assignee]}})
 (dataflow
  :Agentlang.Kernel.Rbac/LookupRoleAssignment
  {:Agentlang.Kernel.Rbac/RoleAssignment
@@ -164,4 +162,4 @@
                           :Agentlang.Kernel.Rbac/AssignOwnership.Assignee}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "1775fa5c-0ffa-4d08-b069-c3ca109940eb")
+ "dc02a601-bc9f-407d-b26d-e65c9d608462")

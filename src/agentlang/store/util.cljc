@@ -3,7 +3,9 @@
             [clojure.string :as s]
             [agentlang.component :as cn]
             [agentlang.lang.internal :as li]
-            [agentlang.util :as u]))
+            [agentlang.util :as u]
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])))
 
 (def deleted-flag-col "AGENTLANG__IS_DELETED")
 (def deleted-flag-col-kw (keyword (str "_" deleted-flag-col)))
@@ -183,6 +185,18 @@
       (subs s 2)
       (subs s 1))))
 
+(defn- clob-to-string [attr-name clob]
+  (if (string? clob)
+    clob
+    #?(:clj
+       (let [len0 (.length clob)
+             len (if (>= len0 Integer/MAX_VALUE)
+                   (do (log/warn (str "Value of " attr-name " too large to read, will be trimmed"))
+                       Integer/MAX_VALUE)
+                   len0)]
+         (.getSubString clob 1 (int len)))
+       :cljs clob)))
+
 (defn- normalize-attribute [schema kw-type-attrs [k v]]
  (let [attr-type (or (get (cn/find-attribute-schema (get schema k)) :type) (get schema k))]
   [k
@@ -191,6 +205,7 @@
      (uuid? v) (str v)
      (and v (= :Agentlang.Kernel.Lang/Boolean attr-type)) (not (#{0 false} v))
      (and (number? v) (= :Agentlang.Kernel.Lang/Decimal attr-type)) #?(:clj (bigdec v) :cljs (float v))
+     (= :Agentlang.Kernel.Lang/Text attr-type) (clob-to-string k v)
      (encoded-clj-object? v) (decode-clj-object v)
      :else v)]))
 

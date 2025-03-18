@@ -35,9 +35,7 @@
   :Email {:type :Email, li/path-identity true},
   :UserData {:type :Any, :optional true},
   :AppId {:type :UUID, :default u/uuid-string, :indexed true}})
-(event
- :Agentlang.Kernel.Identity/SignUp
- {:User :Agentlang.Kernel.Identity/User})
+(event :Agentlang.Kernel.Identity/SignUp {:User :User})
 (event
  :Agentlang.Kernel.Identity/PostSignUp
  {:SignupRequest :Agentlang.Kernel.Identity/SignUp, :SignupResult :Any})
@@ -47,7 +45,7 @@
   :from :Agentlang.Kernel.Identity/SignUp.User})
 (entity
  :Agentlang.Kernel.Identity/UserExtra
- {:User :Agentlang.Kernel.Identity/User, :OtherDetails :Map})
+ {:User :User, :OtherDetails :Map})
 (entity
  :Agentlang.Kernel.Identity/UserSession
  {:User {:type :String, :id true}, :LoggedIn :Boolean})
@@ -111,4 +109,4 @@
  [:delete :Agentlang.Kernel.Rbac/RoleAssignment :purge])
 (def
  Agentlang_Kernel_Identity___COMPONENT_ID__
- "2059f0eb-504f-4b2a-9579-d9168e074e98")
+ "86dbf9bb-9414-4bb1-b6b7-76c3580936ca")

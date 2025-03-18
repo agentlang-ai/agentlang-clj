@@ -2,40 +2,48 @@
   (:require [agentlang.util :as u]
             [agentlang.lang :as ln]
             [agentlang.global-state :as gs]
+            [agentlang.lang.internal :as li]
             [agentlang.lang.datetime :as dt]
             [agentlang.component :as cn]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
 
-(def ^:private exec-graph-enabled-flag (atom nil))
+(def ^:private exec-graph-enabled-flag #?(:clj (ThreadLocal.) :cljs (atom nil)))
 
-(defn- exec-graph-enabled? []
-  (let [f @exec-graph-enabled-flag]
-    (if (nil? f)
-      (let [f (:exec-graph-enabled? (gs/get-app-config))]
-        (reset! exec-graph-enabled-flag f)
-        f)
-      f)))
+(defn- enabled? []
+  (let [r #?(:clj (.get exec-graph-enabled-flag)
+             :cljs @exec-graph-enabled-flag)]
+    (if (nil? r)
+      true
+      r)))
 
-(defn call-without-exec-graph [f]
-  (let [v @exec-graph-enabled-flag]
-    (if v
-      (do (reset! exec-graph-enabled-flag false)
-          (try
-            (f)
-            (finally
-              (reset! exec-graph-enabled-flag true))))
-      (f))))
+(defn enable! []
+  #?(:clj (.set exec-graph-enabled-flag true)
+     :cljs (reset! exec-graph-enabled-flag true)))
+
+(defn disable! []
+  #?(:clj (.set exec-graph-enabled-flag false)
+     :cljs (reset! exec-graph-enabled-flag false)))
+
+(def ^:private global-enabled-flag (atom nil))
+
+(defn exec-graph-enabled? []
+  (and (or (:exec-graph-enabled? (gs/get-app-config)) @global-enabled-flag)
+       (enabled?)))
+
+(defn call-disabled [f]
+  (disable!)
+  (try
+    (f)
+    (finally
+      (enable!))))
 
 (defn call-with-exec-graph [f]
-  (let [v @exec-graph-enabled-flag]
-    (if v
-      (f)
-      (do (reset! exec-graph-enabled-flag true)
-          (try
-            (f)
-            (finally
-              (reset! exec-graph-enabled-flag v)))))))
+  (reset! global-enabled-flag true)
+  (try
+    (f)
+    (finally
+      (reset! global-enabled-flag false))))
 
 (def ^:private current-graph #?(:clj (ThreadLocal.) :cljs (atom nil)))
 
@@ -122,7 +130,7 @@
 (ln/entity
  :Agentlang.Kernel.Eval/ExecutionGraph
  {:Name {:type :String :id true}
-  :Graph :String
+  :Graph :Text
   :Created {:type :String :default dt/now}})
 
 (ln/event :Agentlang.Kernel.Eval/CreateExecutionGraph {:Name :String :Graph :String})
@@ -143,27 +151,60 @@
  {:Agentlang.Kernel.Eval/ExecutionGraph
   {:Name? :Agentlang.Kernel.Eval/LoadExecutionGraph.Name}})
 
+(defn user-graph? [g]
+  (let [gn (:name g)]
+    (when (keyword? gn)
+      (let [[c n] (li/split-path gn)]
+        (and c n (not (cn/internal-component? c)))))))
+
+(defn- make-empty-exec-graph [g]
+  (cn/make-instance
+   :Agentlang.Kernel.Eval/ExecutionGraph
+   {:Name (pr-str (:name g)) :Graph "--"}))
+
+(def ^:private saved-graphs (u/make-cell []))
+
 (defn save-current-graph []
   (when (exec-graph-enabled?)
     (let [g (get-current-graph)
-          r (call-without-exec-graph
-             #(:result (gs/evaluate-dataflow
-                        {:Agentlang.Kernel.Eval/CreateExecutionGraph
-                         {:Name (pr-str (:name g)) :Graph (pr-str g)}})))]
+          save? (user-graph? g)
+          r (if save?
+              (call-disabled
+               #(:result (gs/evaluate-dataflow
+                          {:Agentlang.Kernel.Eval/CreateExecutionGraph
+                           {:Name (pr-str (:name g)) :Graph (pr-str g)}})))
+              (make-empty-exec-graph g))]
       (when-not (cn/instance-of? :Agentlang.Kernel.Eval/ExecutionGraph r)
         (log/error (str "Failed to save graph for " (:name g))))
+      (when save? (u/safe-set saved-graphs (conj @saved-graphs (:name g))))
       (reset-current-graph!)
       (reset-graph-stack!)))
   true)
 
-(defn load-graph [graph-name]
-  (when-let [g (call-without-exec-graph
-                #(first
-                  (:result
-                   (gs/evaluate-dataflow
-                    {:Agentlang.Kernel.Eval/LoadExecutionGraph
-                     {:Name (pr-str graph-name)}}))))]
-    (u/parse-string (:Graph g))))
+(defn load-graph
+  ([graph-name]
+   (when-let [g (call-disabled
+                 #(first
+                   (:result
+                    (gs/evaluate-dataflow
+                     {:Agentlang.Kernel.Eval/LoadExecutionGraph
+                      {:Name (pr-str graph-name)}}))))]
+     (u/parse-string (:Graph g))))
+  ([]
+   (when-let [n (peek @saved-graphs)]
+     (load-graph n))))
+
+(defn saved-graph-names [] @saved-graphs)
+
+(defn pop-saved-graph-name []
+  (let [sgs @saved-graphs]
+    (when-let [n (peek sgs)]
+      (u/safe-set saved-graphs (pop sgs)))))
+
+(defn reset-saved-graph-names []
+  (let [sgs @saved-graphs]
+    (u/safe-set saved-graphs [])
+    sgs))
 
 (defn graph? [x] (and (map? x) (:graph x) (:patterns x)))
 (defn event-graph? [g] (and (graph? g) (= :event (:graph g))))

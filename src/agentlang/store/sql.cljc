@@ -183,6 +183,7 @@
         :Keyword :Email
         :Password :DateTime :Date :Time :List :Edn :Any
         :Map :Path) (str "VARCHAR(" max-varchar-length ")")
+       :Text "TEXT"
        (:UUID :Identity) "UUID"
        :Int "INT"
        (:Int64 :Integer :BigInteger) "BIGINT"

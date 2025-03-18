@@ -78,6 +78,7 @@
   (concat
    numeric-types
    [:Agentlang.Kernel.Lang/String
+    :Agentlang.Kernel.Lang/Text
     :Agentlang.Kernel.Lang/Keyword
     :Agentlang.Kernel.Lang/Path
     :Agentlang.Kernel.Lang/DateTime

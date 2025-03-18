@@ -8,6 +8,7 @@
                           [agentlang.component :as cn])]})
 
 (attribute :String {:check k/kernel-string?})
+(attribute :Text {:check k/kernel-string?})
 (attribute :Keyword {:check #(or (keyword? %) (string? %))})
 (attribute :Path {:check k/path?})
 (attribute :DateTime {:check k/date-time?})

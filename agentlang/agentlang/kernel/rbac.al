@@ -38,9 +38,9 @@
          :unique true
          :default u/uuid-string
          li/path-identity true}
-  :Role {:ref :Role.Name
+  :Role {:ref :Agentlang.Kernel.Rbac/Role.Name
          :indexed true}
-  :Privilege {:ref :Privilege.Name}
+  :Privilege {:ref :Agentlang.Kernel.Rbac/Privilege.Name}
   :meta {:unique [:Role :Privilege]}})
 
 (entity
@@ -49,7 +49,7 @@
          :unique true
          :default u/uuid-string
          li/path-identity true}
-  :Role {:ref :Role.Name
+  :Role {:ref :Agentlang.Kernel.Rbac/Role.Name
          :indexed true}
   :Assignee {:type :String ; usually a :Agentlang.Kernel.Identity/User.Name
              :indexed true}

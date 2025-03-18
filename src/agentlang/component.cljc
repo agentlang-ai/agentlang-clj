@@ -75,6 +75,9 @@
   [components]
   (vec (set/difference (set components) (set (internal-component-names)))))
 
+(defn internal-component? [c]
+  (some #{c} (set (internal-component-names))))
+
 (def components
   "Table that maps component names to their definitions."
   #?(:clj  (ref {})
@@ -2582,3 +2585,8 @@
                                                   [n k]))
                                               scm)))]
       (into {} entities))))
+
+(defn inference? [event-name]
+  (when-let [meta (fetch-meta event-name)]
+    (and (= :event (:record-type meta))
+         (= :Agentlang.Core/Inference (:inherits meta)))))

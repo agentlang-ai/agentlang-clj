@@ -31,9 +31,11 @@
      [agentlang.resolver.registry :as r]
      [agentlang.component :as cn])]})
 (attribute :Agentlang.Kernel.Lang/String {:check k/kernel-string?})
+(attribute :Agentlang.Kernel.Lang/Text {:check k/kernel-string?})
 (attribute
  :Agentlang.Kernel.Lang/Keyword
- {:check (fn* [p1__703#] (or (keyword? p1__703#) (string? p1__703#)))})
+ {:check
+  (fn* [p1__1293#] (or (keyword? p1__1293#) (string? p1__1293#)))})
 (attribute :Agentlang.Kernel.Lang/Path {:check k/path?})
 (attribute :Agentlang.Kernel.Lang/DateTime {:check k/date-time?})
 (attribute :Agentlang.Kernel.Lang/Date {:check k/date?})
@@ -185,4 +187,4 @@
     :paths [:Agentlang.Kernel.Lang/DataSync]})])
 (def
  Agentlang_Kernel_Lang___COMPONENT_ID__
- "fd046664-ac58-4a72-b6ea-eca7965011e3")
+ "6386eef3-dd6e-4326-afd2-f4eca46f2135")
