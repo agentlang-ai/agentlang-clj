@@ -141,7 +141,7 @@
 (defn- introspection-required? [auth-config cookie-created-millis [_ auth-res]]
   (if cookie-created-millis
     (if-let [ttl-ms (:cookie-ttl-ms auth-config)]
-      (let [cookie-ttl (* 1000 (get-in auth-res [:authentication-result :expires-in] 0))
+      (let [cookie-ttl (get auth-res :ttl-ms 0)
             ttl-ms1 (if (> ttl-ms cookie-ttl) ttl-ms cookie-ttl)]
         (< ttl-ms1 (- (System/currentTimeMillis) cookie-created-millis)))
       (:introspect auth-config))

@@ -56,7 +56,8 @@
  :Agentlang.Kernel.Identity/SessionCookie
  {:Id {:type :String, :guid true},
   :UserData :Any,
-  :CreatedTimeMillis :Int64})
+  :CreatedTimeMillis :Int64
+  :TtlMs {:type :Int64 :default 3600000}})
 (event
  :Agentlang.Kernel.Identity/UpdateUser
  {:UserDetails :Agentlang.Kernel.Identity/UserExtra})
