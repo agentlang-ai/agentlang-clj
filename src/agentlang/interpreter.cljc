@@ -867,9 +867,12 @@
             data1 (if (map? data0) data0 (u/throw-ex (str "Failed to resolve " from " in " pat)))
             data (if (cn/an-instance? data1) (cn/instance-attributes data1) data1)
             k (first (keys pat))
+            bet-create? (cn/between-relationship? k)
             attrs (merge (get pat k) data)
             pat (merge {k attrs} (when alias {:as alias}))]
-        (maybe-lift-relationship-patterns env pat))
+        (if bet-create?
+          [pat]
+          (maybe-lift-relationship-patterns env pat)))
       (if (cn/between-relationship? (li/record-name pat))
         [pat]
         (maybe-lift-relationship-patterns env pat)))

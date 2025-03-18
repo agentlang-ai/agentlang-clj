@@ -1796,3 +1796,33 @@
          (cn/fetch-user-schema :Ffr/F)))
   (is (= {:meta {:between [:Ffr/E :Ffr/F], :cascade-on-delete true}, :Y :Int}
          (cn/fetch-user-schema :Ffr/R))))
+
+(defn one-to-one-helper [cn uq-tag]
+  (let [mkn (partial li/make-path cn)
+        A (mkn :A)
+        B (mkn :B)
+        AB (mkn :AB)]
+    (defcomponent cn
+      (entity A {:Id {:type :Int :id true} :X :Int})
+      (entity B {:Id {:type :Int :id true} :Y :Int})
+      (relationship AB {:meta (merge {:between [A B]} (when uq-tag {uq-tag true}))}))
+    (let [cra (fn [id x] (tu/invoke {(mkn :Create_A) {:Instance {A {:Id id :X x}}}}))
+          crb (fn [id y] (tu/invoke {(mkn :Create_B) {:Instance {B {:Id id :Y y}}}}))
+          crab (fn [a b] (tu/invoke {(mkn :Create_AB) {:Instance {AB {:A a :B b}}}}))
+          a? (partial cn/instance-of? A)
+          b? (partial cn/instance-of? B)
+          ab? (partial cn/instance-of? AB)
+          as (mapv cra [1 2 3] [10 20 30])
+          bs (mapv crb [90 91 92] [101 102 103])
+          _ (is (and (= 3 (count as)) (every? a? as)))
+          _ (is (and (= 3 (count bs)) (every? b? bs)))]
+      (let [f #(crab (li/path-attr (first as)) (li/path-attr (first bs)))]
+        (is (ab? (f)))
+        (if (= uq-tag :one-one)
+          (tu/is-error "duplicate between relationship" f)
+          (is (ab? (f)))))
+      (is (ab? (crab (li/path-attr (second as)) (li/path-attr (nth bs 2))))))))
+
+(deftest one-to-one
+  (one-to-one-helper :Oto1 nil)
+  (one-to-one-helper :Oto2 :one-one))
