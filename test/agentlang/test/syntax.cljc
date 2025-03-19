@@ -202,3 +202,13 @@
     (p? ls/query-object? (ls/query-object))
     (p? ls/call? (ls/call))
     (p? ls/delete? (ls/delete))))
+
+(deftest match-with-block
+  (let [pat [:match :SynMatch/Event.Flag
+             true
+             [{:DataflowTest.Core/TestEntity {:Id 1}}
+              {:DataflowTest.Core/TestEntity {:X 2}}]
+             false
+             [{:DataflowTest.Core/TestEntity {:Id 3, :X 4}}
+              {:DataflowTest.Core/TestEntity {:Id 2}}]]]
+    (is-pat ls/match? pat)))

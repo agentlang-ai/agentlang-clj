@@ -514,6 +514,15 @@
 (defn- introspect-filter [pat]
   )
 
+(def block-body :body)
+
+(defn- introspect-block [pat]
+  {syntax-type :block
+   block-body (mapv introspect pat)})
+
+(defn- raw-block [r]
+  (mapv raw (block-body r)))
+
 (def literal-value :value)
 
 (defn- introspect-literal [pat]
@@ -523,18 +532,18 @@
 (def ^:private raw-literal literal-value)
 
 (defn- introspect-command [pat]
-  (when-let [f
-        (case (first pat)
-          :call introspect-call
-          :delete introspect-delete
-          :q# introspect-quote
-          :s# introspect-sealed
-          :try introspect-try
-          :for-each introspect-for-each
-          :match introspect-match
-          :filter introspect-filter
-          (do (raise-syntax-error pat "Not a valid expression") nil))]
-    (f (rest pat))))
+  (if-let [f (case (first pat)
+               :call introspect-call
+               :delete introspect-delete
+               :q# introspect-quote
+               :s# introspect-sealed
+               :try introspect-try
+               :for-each introspect-for-each
+               :match introspect-match
+               :filter introspect-filter
+               nil)]
+    (f (rest pat))
+    (introspect-block pat)))
 
 (defn- introspect-map [pat]
   (let [main-recname (or (extract-main-record-name pat)
@@ -573,6 +582,7 @@
                  :quote raw-quote
                  :sealed raw-sealed
                  :literal raw-literal
+                 :block raw-block
                  identity)]
     (f r)))
 
@@ -590,6 +600,7 @@
 (def sealed? (partial syntax-type? :sealed))
 (def literal-object? (partial syntax-type? :literal))
 (def call? (partial syntax-type? :call))
+(def block? (partial syntax-type? :block))
 
 (defn- skip-root-component [n]
   (let [parts (s/split (name n) #"\.")]
