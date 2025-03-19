@@ -215,6 +215,8 @@
     (let [n (csk/->PascalCase agent-name)]
       (cn/canonical-type-name n))))
 
+(def ^:private inference-event-schema {:meta {:inherits :Agentlang.Core/Inference}})
+
 (defn- preproc-agent-input-spec [agent-name input]
   (if input
     (cond
@@ -222,7 +224,7 @@
       (keyword? input) (subs (str input) 1)
       :else (u/throw-ex (str "Invalid agent input: " input)))
     (let [event-name (as-event-name agent-name)]
-      (and (event-internal event-name {:UserInstruction :String})
+      (and (event-internal event-name inference-event-schema)
            (preproc-agent-input-spec nil event-name)))))
 
 (defn- preproc-agent-docs [docs]
@@ -317,7 +319,7 @@
     (if (cn/event? event-name)
       event-name
       (u/throw-ex (str "not an event - " event-name)))
-    (event {event-name {:meta {:inherits :Agentlang.Core/Inference}}})))
+    (event {event-name inference-event-schema})))
 
 (defn maybe-input-as-inference [agent]
   (when-let [input (:Input agent)]

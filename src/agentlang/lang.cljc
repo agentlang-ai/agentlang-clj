@@ -703,8 +703,7 @@
       (if-let [llm-name (:with-llm agent-spec)]
         {:Agentlang.Core/Agent
          (preproc-agent-messages (dissoc agent-spec :with-llm))
-         :-> [[{:Agentlang.Core/AgentLLM {}}
-               {:Agentlang.Core/LLM {:Name? llm-name}}]]}
+         :-> {:Agentlang.Core/AgentLLM {:Agentlang.Core/LLM {:Name? llm-name}}}}
         agent-spec))))
 
 (defn instance-assoc [inst & params]
@@ -721,13 +720,14 @@
                        aspec))
         is-agent-query (string? agent-spec)
         agent0 (preproc-inference-agent is-agent-query agent-spec)
+        relspec (when-not is-agent-query (:-> agent0))
         agent1 (dissoc agent0 :->)
         agent-attrs (li/record-attributes agent1)
         agent {(li/record-name agent1)
                (assoc agent-attrs :Context inference-name)}
         p0 (if is-agent-query
              (assoc agent :as [:Agent])
-             (assoc agent :as :Agent :-> (:-> agent0)))
+             (merge (assoc agent :as :Agent) relspec))
         pfn (:with-prompt-fn spec)
         rh (:with-response-handler spec)
         pfns (when (or pfn rh)

@@ -153,9 +153,12 @@
 
 (defn user-graph? [g]
   (let [gn (:name g)]
-    (when (keyword? gn)
+    (if (keyword? gn)
       (let [[c n] (li/split-path gn)]
-        (and c n (not (cn/internal-component? c)))))))
+        (if (and c n)
+          (not (cn/internal-component? c))
+          true))
+      true)))
 
 (defn- make-empty-exec-graph [g]
   (cn/make-instance
@@ -164,9 +167,51 @@
 
 (def ^:private saved-graphs (u/make-cell []))
 
+(defn graph? [x] (and (map? x) (:graph x) (:patterns x)))
+(defn event-graph? [g] (and (graph? g) (= :event (:graph g))))
+(defn agent-graph? [g] (and (graph? g) (= :agent (:graph g))))
+(def graph-name :name)
+(def graph-result :result)
+(def graph-nodes :patterns)
+
+(defn pattern? [x] (and (map? x) (:pattern x)))
+(def pattern :pattern)
+(def pattern-result :result)
+
+(defn- call-inference-pattern? [p]
+  (let [pat (pattern p)]
+    (and (vector? pat) (= :call (first pat))
+         (= 'agentlang.inference/run-inference-for-event (first (second pat))))))
+
+(defn- graph-name-as-kw [g]
+  (let [n (graph-name g)]
+    (if (keyword? n)
+      n
+      (keyword n))))
+
+(defn- find-real-agent-graph [n nodes]
+  (first (filter #(and (agent-graph? %) (= n (graph-name-as-kw %))) nodes)))
+
+(defn- extract-core-agent-graph [g]
+  (let [n (graph-name-as-kw g)
+        nodes (graph-nodes g)
+        ag (find-real-agent-graph n nodes)]
+    (or ag g)))
+
+(defn- maybe-trim-agent-graph [g]
+  (if (agent-graph? g)
+    (let [nodes (graph-nodes g)
+          final-nodes (if (call-inference-pattern? (last nodes))
+                        (drop-last nodes)
+                        nodes)]
+      (assoc g graph-nodes (mapv #(if (agent-graph? %) (maybe-trim-agent-graph %) %) final-nodes)))
+    g))
+
 (defn save-current-graph []
   (when (exec-graph-enabled?)
-    (let [g (get-current-graph)
+    (let [g (maybe-trim-agent-graph
+             (extract-core-agent-graph
+              (get-current-graph)))
           save? (user-graph? g)
           r (if save?
               (call-disabled
@@ -206,13 +251,3 @@
     (u/safe-set saved-graphs [])
     sgs))
 
-(defn graph? [x] (and (map? x) (:graph x) (:patterns x)))
-(defn event-graph? [g] (and (graph? g) (= :event (:graph g))))
-(defn agent-graph? [g] (and (graph? g) (= :agent (:graph g))))
-(def graph-name :name)
-(def graph-result :result)
-(def graph-nodes :patterns)
-
-(defn pattern? [x] (and (map? x) (:pattern x)))
-(def pattern :pattern)
-(def pattern-result :result)
