@@ -140,9 +140,9 @@
 
     :else
     (let [owner? (partial cn/user-is-owner? user)
-          has-base-priv ((opr actions) user check-input)]
+          base-privs ((opr actions) user check-input)]
       (if (= :create opr)
-        (or (and has-base-priv arg)
+        (or (and base-privs arg)
             (let [inst-type (when (cn/an-instance? resource) (cn/instance-type-kw resource))
                   rel-ctx (when inst-type (inst-type (env/relationship-context env)))
                   [parent between-nodes] (when rel-ctx
@@ -152,11 +152,11 @@
                                       (when (seq between-nodes)
                                         (has-between-ownership? owner? inst-type between-nodes)))]
               (and has-owner-privs arg)))
-        (let [is-owner (owner? resource)
+        (let [is-owner (or (rbac/has-admin-privilege? base-privs) (owner? resource))
               has-inst-priv (when-not is-owner (has-instance-privilege? user opr resource))]
           (cond
             (or is-owner has-inst-priv) arg
-            has-base-priv
+            base-privs
             (case opr
               :read arg
               (:delete :update) (when-not (owner-exclusive? resource) arg))
