@@ -1826,3 +1826,14 @@
 (deftest one-to-one
   (one-to-one-helper :Oto1 nil)
   (one-to-one-helper :Oto2 :one-one))
+
+;; TODO: add more HTTP-apis test, move to separate test-file.
+(deftest basic-http-api
+  (defcomponent :Bha
+    (entity :Bha/A {:Id {:type :Int :id true} :X :Int}))
+  #?(:clj
+     (let [r (tu/api-post "Bha/A" {:Bha/A {:Id 1 :X 100}})]
+       (is (= 200 (:status r)))
+       (let [body (:body r)]
+         (is (= :Bha/A (:type body)))
+         (is (= 1 (:Id (:result body))))))))

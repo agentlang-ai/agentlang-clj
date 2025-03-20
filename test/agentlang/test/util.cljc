@@ -13,7 +13,10 @@
                :cljs [cljs.test :refer-macros [is]])
             [agentlang.util :as u]
             [agentlang.store :as store]
-            [agentlang.global-state :as gs]))
+            [agentlang.global-state :as gs]
+            [agentlang.datafmt.json :as json]
+            #?(:clj [agentlang.http :as http]))
+  #?(:clj (:import [org.httpkit BytesInputStream])))
 
 (defn evaluate-dataflow [event-instance]
   (intrp/evaluate-dataflow (store/get-default-store) event-instance))
@@ -318,3 +321,50 @@
 
 (defn windows? []
   (= :windows (u/host-os)))
+
+#?(:clj
+   (do
+     (def auth-handler (constantly false))
+     (def auth-info [nil auth-handler])
+
+     (defn- make-body [obj]
+       (let [^String s (json/encode obj)
+             content-len (.length s)
+             ^BytesInputStream ins (BytesInputStream. (.getBytes s) content-len)]
+         {:content-length content-len
+          :body ins}))
+
+     (defn- make-request [ep obj]
+       (let [body (make-body obj)]
+         (merge
+          {:params {:* ep},
+           :route-params {:* ep}
+           :headers
+           {"host" "localhost:8000"
+            "user-agent" "al-unit-tests"
+            "content-type" "application/json"
+            "content-length" (:content-length body)
+            "accept" "application/json"}
+           :content-type "application/json"
+           :character-encoding "utf8"
+           :url (str "/api/" ep)}
+          body)))
+
+     (defn- format-api-result [result]
+       (let [body (:body result)]
+         (merge
+          result
+          (when body
+            (let [r (if (and (seq body) (string? body))
+                      (json/decode body)
+                      body)
+                  type (if (map? r) (:type r) r)]
+              {:body
+               (if type
+                 (assoc r :type (u/string-as-keyword type))
+                 r)})))))
+
+     ;; TODO: add all handler-functions required for testing the HTTP apis.
+     (defn api-post [ep obj]
+       (let [result (http/process-post-request auth-info (make-request ep obj))]
+         (format-api-result result)))))
