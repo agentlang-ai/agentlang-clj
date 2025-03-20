@@ -123,29 +123,42 @@
 (def ^:private clj-defn? (partial tagged-expr? 'defn))
 (def ^:private clj-def? (partial tagged-expr? 'def))
 
-(defn- upsert-function [component-name function-name params-vector upsert-fn]
+(defn- upsert-function
+  [component-name function-name params-vector upsert-fn]
   (when-not (symbol? function-name)
     (u/throw-ex (str "invalid function name: " function-name)))
   (when-not (vector? params-vector)
     (u/throw-ex (str "not a vector: " params-vector)))
   (upsert-fn))
 
-(defn create-function [component-name function-name params-vector body]
-  (upsert-function
-   component-name function-name params-vector
-   #(append-to-component component-name `(~'defn ~function-name ~params-vector ~body))))
+(defn create-function
+  ([component-name function-name params-vector body]
+   (create-function component-name function-name nil params-vector body))
+  ([component-name function-name docstring params-vector body]
+   (upsert-function
+    component-name function-name params-vector
+    #(append-to-component
+      component-name
+      (if docstring
+        `(~'defn ~function-name ~docstring ~params-vector ~body)
+        `(~'defn ~function-name ~params-vector ~body))))))
 
-(defn update-function [component-name function-name params-vector body]
-  (upsert-function
-   component-name function-name params-vector
-   #(update-in-component
-     component-name (partial clj-defn? function-name)
-     `(~'defn ~function-name ~params-vector ~body))))
+(defn update-function
+  ([component-name function-name params-vector body]
+   (update-function component-name function-name nil params-vector body))
+  ([component-name function-name docstring params-vector body]
+   (upsert-function
+    component-name function-name params-vector
+    #(update-in-component
+      component-name (partial clj-defn? function-name)
+      (if docstring
+        `(~'defn ~function-name ~docstring ~params-vector ~body)
+        `(~'defn ~function-name ~params-vector ~body))))))
 
 (defn delete-function [component-name function-name]
   (remove-from-component component-name (partial clj-defn? function-name)))
 
-(defn- find-defn [component-name function-name]
+(defn find-defn [component-name function-name]
   (first (find-in-component component-name (partial clj-defn? function-name))))
 
 (defn get-function-params [component-name function-name]
