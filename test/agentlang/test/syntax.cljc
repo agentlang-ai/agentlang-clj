@@ -26,6 +26,8 @@
   (let [r (is-pat ls/upsert? {:SynInst/E {:Id 1 :X 100}})]
     (is (= (ls/record-name r) :SynInst/E))
     (is (= (ls/attributes r) {:Id 1 :X 100})))
+  (is (= {:SynInst/E {}} (ls/raw (ls/upsert :SynInst/E {}))))
+  (is (= {:SynInst/E? {}} (ls/raw (ls/query :SynInst/E {}))))
   (is-pat ls/upsert? {:SynInst/E {:Id 1 :X 100} :as :A})
   (is-pat ls/query-upsert? {:SynInst/E {:Id? 1 :X 200} :as :A})
   (is-pat ls/query? {:SynInst/E {:Id? 1} :as [:A]})

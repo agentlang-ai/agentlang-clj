@@ -263,7 +263,7 @@
 
 (defn- query-upsert-helper
   ([tag recname attrs rels]
-   (let [recname (maybe-recname-as-query recname attrs)]
+   (let [recname (if (= tag :upsert) recname (maybe-recname-as-query recname attrs))]
      {syntax-type tag
       record-name-tag recname
       attributes attrs
