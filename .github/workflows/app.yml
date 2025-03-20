@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         platform: [ubuntu-latest]
-    if: true
+    if: false
     runs-on: ${{ matrix.platform }}
 
     steps:
