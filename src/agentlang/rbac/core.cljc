@@ -70,6 +70,11 @@
 
 (def ^:private admin-priv [{:Resource [:*] :Actions [:*]}])
 
+(defn has-admin-privilege? [privs]
+  (and (seqable? privs)
+       (let [apriv (first admin-priv)]
+         (first (filter #(= % apriv) privs)))))
+
 (def privileges
   (fn [user-name]
     (when-let [rs (role-assignments user-name)]
