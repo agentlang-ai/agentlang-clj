@@ -171,7 +171,7 @@
   :UserInstruction {:type :String :optional true}
   :ToolComponents {:check tool-components-list? :optional true}
   :Input {:type :String :optional true}
-  :Context {:type :Map :optional true}
+  :Context {:type :Map :optional true :dynamic true}
   :Response {:type :Any :read-only true}
   :Integrations {:listof :String :optional true}
   :Delegates {:listof :String :optional true}
@@ -279,11 +279,20 @@
 
     :else attrs))
 
+(defn- maybe-start-channel [agent-name ch]
+  (when (map? ch)
+    (cc/channel-start (assoc ch :agent agent-name)))
+  ch)
+
+(defn- start-channels [agent-name channels]
+  (mapv (partial maybe-start-channel agent-name) channels))
+
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
  (fn [pat]
    (let [attrs (maybe-cast-to-planner (li/record-attributes pat))
          nm (:Name attrs)
+         agent-name (u/keyword-as-string nm)
          input (preproc-agent-input-spec nm (:Input attrs))
          tools (preproc-agent-tools-spec (:Tools attrs))
          delegates (preproc-agent-delegates (:Delegates attrs))
@@ -292,12 +301,13 @@
          llm (or (:LLM attrs) {:Type "openai"})
          docs (:Documents attrs)
          channels (:Channels attrs)
+         _ (when (seq channels) (start-channels agent-name channels))
          integs (when-let [xs (:Integrations attrs)] (mapv u/keyword-as-string xs))
          tools (vec (concat tools (flatten (us/nonils (mapv fetch-channel-tools channels)))))
          new-attrs
          (-> attrs
              (cond->
-                 nm (assoc :Name (u/keyword-as-string nm))
+                 nm (assoc :Name agent-name)
                  input (assoc :Input input)
                  tools (assoc :Tools tools)
                  delegates (assoc :Delegates delegates)
@@ -305,7 +315,7 @@
                  tp (assoc :Type (u/keyword-as-string tp))
                  features (assoc :Features features)
                  integs (assoc :Integrations integs)
-                 channels (assoc :Channels (mapv name channels))
+                 channels (assoc :Channels channels)
                  llm (assoc :LLM (u/keyword-as-string llm))))]
      (when (seq channels)
        (maybe-register-subscription-handlers! channels (keyword input)))

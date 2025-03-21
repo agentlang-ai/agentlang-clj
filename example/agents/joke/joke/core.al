@@ -1,8 +1,11 @@
 (component :Joke.Core)
 
+(require '[agentlang.inference.service.channel.cmdline])
+
 {:Agentlang.Core/Agent
  {:Name :joke-agent
   :UserInstruction "I am an AI bot who tell jokes"
+  :Channels [{:channel-type :cmdline :name :joke-channel}]
   :Input :Joke.Core/TellAJoke}}
 
 ;; Usage:

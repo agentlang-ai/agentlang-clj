@@ -26,13 +26,13 @@
      #(gs/evaluate-pattern
        {:Agentlang.Core/Agent {:Name? agent-name}})))))
 
-(defn send-instruction-to-agent [run-inference-for-event channel-name agent-name chat-id message]
+(defn send-instruction-to-agent [channel-name agent-name chat-id message]
   (try
     (if-let [agent (find-agent-by-name agent-name)]
-      (if-not (some #{channel-name} (:Channels agent))
+      (if-not (some #{channel-name} (map :name (:Channels agent)))
         (str "Channel " channel-name " is not attached to agent " agent-name)
         (if-let [input (:Input agent)]
-          (run-inference-for-event
+          (gs/run-inference
            (cn/make-instance input {:ChatId chat-id :UserInstruction message})
            agent)
           (str "No input-event defined for agent " agent-name)))

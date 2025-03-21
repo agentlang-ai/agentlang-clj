@@ -618,6 +618,8 @@
 
 (def read-only-attributes (make-attributes-filter :read-only))
 
+(def dynamic-attributes (make-attributes-filter :dynamic))
+
 (def ref-attribute-schemas
   "Return the names and schemas of all attributes which has a :ref."
   (partial filter-attribute-schemas :ref))

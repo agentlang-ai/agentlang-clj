@@ -184,7 +184,7 @@
       (case k
         (:unique
          :immutable :optional :indexed
-         :write-only :read-only
+         :write-only :read-only :dynamic
          :cascade-on-delete :var :secure-hash)
         (li/validate-bool k v)
         :check (li/validate fn-or-name? ":check is not a predicate" v)

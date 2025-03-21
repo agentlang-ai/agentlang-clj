@@ -89,37 +89,6 @@
   (let [s (str (:UserInstruction instance) "\nGenerate an agent with `core.al` file contents and `model.al` file contents.\n")]
     (handle-chat-agent (assoc instance :UserInstruction s))))
 
-(defn- start-chat [agent-instance]
-  ;; TODO: integrate messaging resolver
-  (println (str (:Name agent-instance) ": " (:UserInstruction agent-instance)))
-  (:ChatUuid agent-instance))
-
-(defn- get-next-chat-message [_]
-  ;; TODO: integrate messaging resolver
-  (print " ? ")
-  (flush)
-  (read-line))
-
-(defn- make-chat-completion [instance]
-  (let [agent-name (:Name instance)
-        chat-id (start-chat instance)]
-    (loop [iter 0, instance instance]
-      (if (< iter 5)
-        (let [[result _ :as r] (provider/make-completion instance)
-              chat-session (model/lookup-agent-chat-session instance)
-              msgs (:Messages chat-session)]
-          (log/debug (str "Response " iter " from " agent-name " - " result))
-          (if (= \{ (first (s/trim result)))
-            (do (println (str agent-name ": Thanks, your request is queued for processing."))
-                r)
-            (do (println (str agent-name ": " result))
-                (model/update-agent-chat-session
-                 chat-session
-                 (vec (concat msgs [{:role :user :content (get-next-chat-message chat-id)}])))
-                (recur (inc iter) (if (zero? iter) (dissoc instance :UserInstruction) instance)))))
-        (do (println (str agent-name ": session expired"))
-            [(json/encode {:error "chat session with agent " agent-name " has expired."}) "agentlang"])))))
-
 (defn- format-planner-result [r]
   (cond
     (or (vector? r) (map? r) (string? r)) r

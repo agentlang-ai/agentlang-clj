@@ -494,3 +494,15 @@
         (apply f rest)
         (catch #?(:clj Exception :cljs :default) ex
           (handler ex))))))
+
+(defn- delay-parallel-call [ms f]
+  (fn []
+    #?(:clj (Thread/sleep ms))
+    (f)))
+
+(defn parallel-call
+  ([{delay-ms :delay-ms} f]
+   (let [f (if delay-ms (delay-parallel-call delay-ms f) f)]
+     #?(:clj (.start (Thread. f))
+        :cljs (f))))
+  ([f] (parallel-call nil f)))

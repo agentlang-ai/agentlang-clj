@@ -150,3 +150,11 @@
      (.get dataflow-suspend-flag)
      :cljs
      @dataflow-suspend-flag))
+
+(def ^:private run-inference-fn (atom nil))
+
+(defn set-run-inference-fn! [f] (reset! run-inference-fn f))
+
+(defn run-inference [event agent-instance]
+  (when-let [f @run-inference-fn]
+    (f event agent-instance)))
