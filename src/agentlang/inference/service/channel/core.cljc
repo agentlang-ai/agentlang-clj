@@ -1,30 +1,38 @@
 (ns agentlang.inference.service.channel.core
   (:require [agentlang.util :as u]
             [agentlang.component :as cn]
-            [agentlang.inference :as i]
-            [agentlang.inference.service.model :as model]))
+            [agentlang.global-state :as gs]))
 
 (def channel-type-tag :channel-type)
 
 ;; The argument-map of `channel-start` should contain the following keys:
+;; :channel-type - [keyword]
 ;; :name - channel-name [string]
 ;; :config - channel configuration [map]
 ;; `channel-start` may never return. If this function finishes without an error,
 ;; return a truth value.
 (defmulti channel-start channel-type-tag)
 
-;; The argument-map of `channel-shutdown should contain the following key:
+;; The argument-map of `channel-shutdown should contain the following keys:
+;; :channel-type - [keyword]
 ;; :name - channel-name [string]
 ;; On success, return a truth value.
 (defmulti channel-shutdown channel-type-tag)
 
-(defn send-instruction-to-agent [channel-name agent-name chat-id message]
+(defn- find-agent-by-name [agent-name]
+  (first
+   (:result
+    (gs/kernel-call
+     #(gs/evaluate-pattern
+       {:Agentlang.Core/Agent {:Name? agent-name}})))))
+
+(defn send-instruction-to-agent [run-inference-for-event channel-name agent-name chat-id message]
   (try
-    (if-let [agent (model/force-find-agent-by-name agent-name)]
+    (if-let [agent (find-agent-by-name agent-name)]
       (if-not (some #{channel-name} (:Channels agent))
         (str "Channel " channel-name " is not attached to agent " agent-name)
         (if-let [input (:Input agent)]
-          (i/run-inference-for-event
+          (run-inference-for-event
            (cn/make-instance input {:ChatId chat-id :UserInstruction message})
            agent)
           (str "No input-event defined for agent " agent-name)))

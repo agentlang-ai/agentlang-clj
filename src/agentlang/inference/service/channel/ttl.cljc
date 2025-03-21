@@ -1,12 +1,12 @@
 (ns agentlang.inference.service.channel.ttl
   (:require [agentlang.inference.service.channel.core :as cc]))
 
-(def ^:private tag :ttl-channel)
+(def ^:private tag :ttl)
 
 (def ^:private run-flags (atom {}))
 
 (defn- can-run? [channel-name]
-  (get run-flags channel-name))
+  (get @run-flags channel-name))
 
 (defmethod cc/channel-start tag [{channel-name :name}]
   (swap! run-flags assoc channel-name true)
@@ -14,7 +14,7 @@
     (when run?
       (print (str channel-name "> "))
       (flush)
-      (println (read-string))
+      (println (read-line))
       (recur (can-run? channel-name))))
   (println "Bye.")
   channel-name)

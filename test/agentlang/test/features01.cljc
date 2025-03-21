@@ -82,3 +82,12 @@
            (is (cn/instance-of? :Exg01/A (exg/pattern-result n1)))
            (is (and (exg/graph? n2) (exg/event-graph? n2)))
            (is (cn/instance-of? :Exg01/B (:result n2)))))))))
+
+(require '[agentlang.inference.service.model])
+(require '[agentlang.inference.service.channel.core :as cc])
+(require '[agentlang.inference.service.channel.ttl])
+
+(def ch {:channel-type :ttl :name :test01})
+(.start (Thread. #(cc/channel-start ch)))
+(Thread/sleep 60000)
+(cc/channel-shutdown ch)
