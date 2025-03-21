@@ -177,6 +177,11 @@
   :Channels {:listof :Any :optional true}
   :CacheChatSession {:type :Boolean :default true}})
 
+(dataflow
+ :Agentlang.Core/FindAgentByName
+ {:Agentlang.Core/Agent {:Name? :Agentlang.Core/FindAgentByName.Name} :as [:A]}
+ :A)
+
 (defn- agent-of-type? [typ agent-instance]
   (= typ (:Type agent-instance)))
 
@@ -197,6 +202,11 @@
 (defn- eval-internal-event [event & args]
   (gs/kernel-call
    #(apply eval-event (cn/make-instance event) args)))
+
+(defn force-find-agent-by-name [agent-name]
+  (eval-internal-event
+   {:Agentlang.Core/FindAgentByName
+    {:Name (u/keyword-as-string agent-name)}}))
 
 (defn- preproc-agent-tools-spec [tools]
   (when tools
