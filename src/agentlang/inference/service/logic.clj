@@ -13,9 +13,7 @@
             [agentlang.inference.embeddings.core :as ec]
             [agentlang.inference.service.model :as model]
             [agentlang.inference.service.tools :as tools]
-            [agentlang.inference.service.planner :as planner]
-            [agentlang.inference.service.lib.agent :as agent]
-            [agentlang.inference.service.lib.prompt :as prompt])
+            [agentlang.inference.service.planner :as planner])
   (:import (clojure.lang ExceptionInfo)))
 
 (def ^:private generic-agent-handler (atom nil))
