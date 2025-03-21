@@ -1,4 +1,4 @@
-(ns agentlang.inference.service.channel
+(ns agentlang.inference.service.channel.core
   (:require [agentlang.util :as u]
             [agentlang.component :as cn]
             [agentlang.inference :as i]
@@ -6,7 +6,16 @@
 
 (def channel-type-tag :channel-type)
 
+;; The argument-map of `channel-start` should contain the following keys:
+;; :name - channel-name [string]
+;; :config - channel configuration [map]
+;; `channel-start` may never return. If this function finishes without an error,
+;; return a truth value.
 (defmulti channel-start channel-type-tag)
+
+;; The argument-map of `channel-shutdown should contain the following key:
+;; :name - channel-name [string]
+;; On success, return a truth value.
 (defmulti channel-shutdown channel-type-tag)
 
 (defn send-instruction-to-agent [channel-name agent-name chat-id message]
