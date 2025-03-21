@@ -503,7 +503,7 @@
 (defn- lookup-for-agent [event-name proc agent-instance]
   (eval-event
    {event-name {:Agent agent-instance}}
-   #(mapv proc %)))
+   #(when (seq %) (mapv proc %))))
 
 (def lookup-llms-for-agent (memoize (partial lookup-for-agent :Agentlang.Core/LLMsForAgent :Name)))
 

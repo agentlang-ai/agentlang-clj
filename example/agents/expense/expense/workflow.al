@@ -10,7 +10,8 @@
 
 (event
  :ReceiptImageToExpenseReport
- {:meta {:doc "Returns a textual expense report, and not an instance with attributes like UserInstruction."}
+ {:meta {:doc (str "Returns a textual expense report, so do not try "
+                   "to access attributes like `UserInstruction` on the return value.")}
   :Url :String})
 
 {:Agentlang.Core/Agent
