@@ -73,39 +73,3 @@
       (is-find-a 1)
       (is-find-a 2)
       (is (nil? (tu/invoke {:Bres/FindA {:Id 3}}))))))
-
-#_(deftest resolver-with-contains-01
-  (let [db (atom [])]
-    (defcomponent :ResC
-      (entity :ResC/A {:Id {:type :Int :id true} :X :Int})
-      (entity :ResC/B {:Id {:type :Int :id true} :Y :Int})
-      (relationship :ResC/AB {:meta {:contains [:ResC/A :ResC/B]}})
-      (dataflow
-       :ResC/CreateB
-       {:ResC/B {:Id :ResC/CreateB.Id :Y :ResC/CreateB.Y}
-        :ResC/AB {:ResC/A {:Id? :ResC/CreateB.A}}})
-      (dataflow
-       :ResC/FindB
-       {:ResC/B? {}
-        :ResC/AB? {:ResC/A {:Id :ResC/FindB.A}}}))
-    (make-db-resolver db :ResC/Resolver [:ResC/A])
-    (u/run-init-fns)
-    (let [cra (fn [id x]
-                (tu/invoke
-                 {:ResC/Create_A
-                  {:Instance
-                   {:ResC/A {:Id id :X x}}}}))
-          a? (partial cn/instance-of? :ResC/A)
-          as (mapv cra [1 2 3] [10 20 30])
-          crb (fn [id y a]
-                (tu/invoke {:ResC/CreateB {:Id id :Y y :A a}}))
-          b? (partial cn/instance-of? :ResC/B)
-          bs (mapv crb [100 200 300 100] [90 91 92 93] [1 2 1 3])
-          is-bs (fn [ids bs]
-                  (is (= (count ids) (count bs)))
-                  (is (every? b? bs))
-                  (is (= (set (mapv :Id bs)) (set ids))))]
-      (is (every? a? as))
-      (is (every? b? bs))
-      (is-bs [100 300] (tu/invoke {:ResC/FindB {:A 1}}))
-      (is-bs [200] (tu/invoke {:ResC/FindB {:A 2}})))))
