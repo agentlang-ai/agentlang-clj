@@ -8,7 +8,6 @@
             [agentlang.lang.tools.loader :as loader]
             [agentlang.lang.tools.replcmds :as replcmds]
             [agentlang.component :as cn]
-            [agentlang.evaluator :as ev]
             [agentlang.store :as store]
             [agentlang.util :as u]
             [agentlang.util.logger :as log]
@@ -57,16 +56,7 @@
     (if (keyword? pat)
       (or (env/lookup env pat) pat)
       (try
-        (let [res (eval-pattern-as-dataflow env evaluator pat)
-              {env :env status :status result :result}
-              (if (map? res) res (first res))]
-          (if (= :ok status)
-            (do (ev/fire-post-events env)
-                (reset!
-                 env-handle
-                 (env/disable-post-event-triggers env))
-                result)
-            (or status pat)))
+        (eval-pattern-as-dataflow env evaluator pat)
         (catch Exception ex
           (log/warn (.getMessage ex))
           pat)))))

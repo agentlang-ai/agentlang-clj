@@ -11,7 +11,7 @@
 
 (entity
  :Candidate
- {:Email {:type :Email :guid true}
+ {:Email {:type :Email :id true}
   :Name :String
   :Profile :String})
 
@@ -24,15 +24,15 @@
 
 (dataflow
  :NotifyInterviewer
- [:eval '(println "To: " :NotifyInterviewer.Slot.AssignedTo)]
- [:eval '(println "Interview scheduled with " :NotifyInterviewer.Candidate.Name " on "
+ [:call '(println "To: " :NotifyInterviewer.Slot.AssignedTo)]
+ [:call '(println "Interview scheduled with " :NotifyInterviewer.Candidate.Name " on "
                   :NotifyInterviewer.Slot.Date " " :NotifyInterviewer.Slot.Time)]
- [:eval '(println "Candidate profile: " :NotifyInterviewer.Candidate.Profile)])
+ [:call '(println "Candidate profile: " :NotifyInterviewer.Candidate.Profile)])
 
 (dataflow
  :NotifyCandidate
- [:eval '(println "To: " :NotifyCandidate.Slot.Candidate)]
- [:eval '(println "Interview scheduled on " :NotifyCandidate.Slot.Date " " :NotifyCandidate.Slot.Time)])
+ [:call '(println "To: " :NotifyCandidate.Slot.Candidate)]
+ [:call '(println "Interview scheduled on " :NotifyCandidate.Slot.Date " " :NotifyCandidate.Slot.Time)])
 
 (dataflow
  :ScheduleInterview
@@ -59,7 +59,7 @@
 
 (dataflow
  :RejectProfile
- [:eval '(println "Rejected profile: " :RejectProfile.CandidateEmail)]
+ [:call '(println "Rejected profile: " :RejectProfile.CandidateEmail)]
  :RejectProfile.Reason)
 
 {:Agentlang.Core/LLM {:Name :llm01}}

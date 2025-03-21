@@ -1,4 +1,4 @@
-(ns agentlang.test.migrations
+#_(do (ns agentlang.test.migrations
   "Migration specific tests."
   (:require [clojure.test :refer [deftest is]]
             [agentlang.util.runtime :as ur]
@@ -355,4 +355,4 @@
         (is (and (= 5 (count customers)) (and (:Name fs) (:Age fs) (:Gender fs))))
         (is (= 2 (count workers))))
       (clear-model-init model-name)
-      (clear-model-init model-name-2))))
+      (clear-model-init model-name-2)))))

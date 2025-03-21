@@ -2,11 +2,12 @@
   (:require #?(:clj [agentlang.store.h2 :as h2])
             #?(:clj [agentlang.store.postgres :as postgres])
             #?(:clj [agentlang.store.sqlite :as sqlite])
+            [agentlang.lang.internal :as li]
             [agentlang.store.mem.core :as mem]
             [agentlang.component :as cn]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
-            [agentlang.store.util :as su]
+            [agentlang.store.util :as stu]
             [agentlang.store.protocol :as p]
             [agentlang.global-state :as gs]
             [agentlang.util :as u]))
@@ -103,7 +104,7 @@
 
 (defn upsert-instance
   ([f store record-name instance]
-   (let [scm (su/find-entity-schema record-name)
+   (let [scm (stu/find-entity-schema record-name)
          instance (cn/secure-attributes record-name instance scm)]
      (f store record-name
         (cn/validate-instance instance))))
@@ -175,6 +176,9 @@
      %)
    insts))
 
+(defn create-instance [store inst]
+  (upsert-instance p/create-instance store (cn/instance-type-kw inst) inst))
+
 (defn upsert-instances [store record-name insts]
   (mapv
    #(upsert-instance store record-name %)
@@ -220,3 +224,14 @@
 (defn maybe-rollback-active-txn! []
   #?(:clj (when-let [txn (gs/get-active-txn)]
             (.rollback txn))))
+
+(defn assign-owner [store entity-name instance]
+  (let [ownership-entity-name (stu/inst-priv-entity entity-name)
+        priv-inst (cn/make-instance
+                   ownership-entity-name
+                   {:CanRead true
+                    :CanUpdate true
+                    :CanDelete true
+                    :ResourcePath (str (li/path-attr instance) "%")
+                    :Assignee (gs/active-user)})]
+    (p/create-instance store ownership-entity-name priv-inst)))

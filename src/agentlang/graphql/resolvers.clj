@@ -3,13 +3,11 @@
             [clojure.walk :as walk]
             [agentlang.auth.core :as auth]
             [agentlang.component :as cn]
-            [agentlang.evaluator :as e]
+            [agentlang.global-state :as gs]
             [agentlang.graphql.generator :as gg]
             [agentlang.lang :as lang]
             [agentlang.lang.internal :as fl]
             [agentlang.lang.raw :as lr]
-            [agentlang.evaluator :as ev]
-            [agentlang.paths.internal :as pi]
             [agentlang.util :as u]
             [agentlang.util.logger :as log]
             [agentlang.lang.internal :as li]))
@@ -273,7 +271,7 @@
   (let [event (register-event component (as-vec patterns))
         auth-event-context (make-auth-event-context context)]
     (try
-      (let [result (first (ev/eval-all-dataflows {event {:EventContext auth-event-context}}))]
+      (let [result (first (gs/evaluate-dataflow {event {:EventContext auth-event-context}}))]
         (if (= (:status result) :error)
           (u/throw-ex (str "Error: " (:message result)))
           (:result result)))
@@ -350,8 +348,12 @@
                           entity-def)]
         (or identity-attr guid-attr id-attr)))))
 
+(defn- as-fully-qualified-path [_] (u/raise-not-implemented 'as-fully-qualified-path))
+(defn- path-string [_] (u/raise-not-implemented 'path-string))
+(defn- uri-join-parts [_] (u/raise-not-implemented 'uri-join-parts))
+
 (defn- query-all-children [core-component parent-name parent-id relationship-name child-name context]
-  (let [fq (partial pi/as-fully-qualified-path core-component)
+  (let [fq (partial as-fully-qualified-path core-component)
         all-children-pattern {(form-pattern-name core-component "LookupAll" child-name)
                               {li/path-attr (fq (str "path://" parent-name "/" parent-id "/" relationship-name "/" child-name "/%"))}}]
     (eval-patterns core-component all-children-pattern context)))
@@ -508,14 +510,14 @@
           entity."))))
 
         (let [path-attr fl/path-attr
-              child-path (pi/path-string
-                           (pi/as-fully-qualified-path
-                             core-component
-                             (pi/uri-join-parts [(extract-entity-name parent-name)
-                                                 parent-guid-value
-                                                 (extract-entity-name relationship-name)
-                                                 (extract-entity-name child-name)
-                                                 child-id-value])))
+              child-path (path-string
+                          (as-fully-qualified-path
+                           core-component
+                           (uri-join-parts [(extract-entity-name parent-name)
+                                            parent-guid-value
+                                            (extract-entity-name relationship-name)
+                                            (extract-entity-name child-name)
+                                            child-id-value])))
               update-pattern {(form-pattern-name core-component "Update" (extract-entity-name child-name))
                               {:Data     child-params
                                path-attr (str "path:/" child-path)}}

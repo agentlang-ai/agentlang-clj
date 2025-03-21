@@ -11,28 +11,25 @@
             [clojure.edn :as edn]
             [agentlang.auth.core :as auth]
             [agentlang.auth.jwt :as jwt]
-            [agentlang.compiler :as compiler]
             [agentlang.component :as cn]
-            [agentlang.evaluator :as ev]
             [agentlang.global-state :as gs]
             [agentlang.gpt.core :as gpt]
             [agentlang.graphql.generator :as gg]
             [agentlang.lang :as ln]
             [agentlang.lang.internal :as li]
             [agentlang.lang.raw :as lr]
-            [agentlang.paths.internal :as pi]
             [agentlang.user-session :as sess]
             [agentlang.util :as u]
             [agentlang.util.errors :refer [get-internal-error-message]]
             [agentlang.util.http :as uh]
             [agentlang.util.logger :as log]
+            [agentlang.interpreter :as ev]
             [org.httpkit.server :as h]
             [org.httpkit.client :as hc]
             [agentlang.datafmt.json :as json]
             [ring.util.codec :as codec]
             [ring.middleware.cors :as cors]
             [agentlang.util.errors :refer [get-internal-error-message]]
-            [agentlang.evaluator :as ev]
             [com.walmartlabs.lacinia :refer [execute]]
             [agentlang.graphql.core :as graphql]
             [ring.middleware.params :refer [wrap-params] :as params]
@@ -78,59 +75,40 @@
     (case status
       400 :bad-request
       401 :unauthorized
+      403 :forbidden
       404 :not-found
       415 :unsupported-media-type
       :error)))
-
-(defn- maybe-kernel-response [json-obj data-fmt]
-  (if (vector? json-obj)
-    (maybe-kernel-response (first json-obj) data-fmt)
-    (when-let [http-resp (maybe-extract-http-response json-obj)]
-      (let [status (:status http-resp)]
-        (merge
-         {:status status
-          :headers (headers data-fmt)}
-         (when-let [body (:body http-resp)]
-           {:body
-            ((uh/encoder data-fmt)
-             (let [[t r] (if (and (map? body) (cn/an-instance? body))
-                           [(cn/instance-type-kw body) [(cn/cleanup-inst body)]]
-                           [nil body])]
-                  (merge
-                   {:status (http-status-as-code status)
-                    :result r}
-                   (when t {:type t}))))}))))))
 
 (defn- request-content-type [request]
   (or (when-let [s (get-in request [:headers "content-type"])]
         (s/lower-case s))
       "application/json"))
 
-(defn- maybe-not-found-as-ok [status json-obj]
-  (if (= 404 status)
-    (if (if (map? json-obj) (:result json-obj) (:result (first json-obj)))
-      [200 [{:status :ok :result []}]]
-      [status json-obj])
-    [status json-obj]))
-
 (defn- response
   "Create a Ring response from a map object and an HTTP status code.
    The map object will be encoded as JSON in the response.
    Also see: https://github.com/ring-clojure/ring/wiki/Creating-responses"
   [json-obj status data-fmt]
-  (let [[status json-obj] (maybe-not-found-as-ok status json-obj)]
-    (or (maybe-kernel-response json-obj data-fmt)
-        {:status status
-         :headers (headers data-fmt)
-         :body ((uh/encoder data-fmt) json-obj)})))
+  {:status status
+   :headers (headers data-fmt)
+   :body ((uh/encoder data-fmt) json-obj)})
 
 (defn- unauthorized
   ([msg data-fmt errtype]
-   (response {:reason msg :type errtype} 401 data-fmt))
-  ([data-fmt errtype]
-   (unauthorized "not authorized to access this resource" data-fmt errtype))
+   (response {:reason msg :type errtype :status :unauthorized} 401 data-fmt))
+  ([msg data-fmt]
+   (unauthorized msg data-fmt "UNAUTHORIZED"))
   ([data-fmt]
-   (unauthorized "not authorized to access this resource" data-fmt "UNAUTHORIZED")))
+   (unauthorized "not authorized to access this resource" data-fmt)))
+
+(defn- _not-found
+  ([s data-fmt] (response {:reason s :status :not-found} 404 data-fmt))
+  ([s] (_not-found s :json)))
+
+(defn- forbidden
+  ([s data-fmt] (response {:reason s :status :forbidden} 403 data-fmt))
+  ([s] (forbidden s :json)))
 
 (defn- bad-request
   ([s data-fmt errtype]
@@ -159,15 +137,6 @@
          (assoc hdrs "Set-Cookie" (str cookie "; Domain=" (if (= "NULL" cd) "" cd) "; Path=/")))
        hdrs))})
 
-(defn- maybe-assoc-root-type [mode obj result]
-  (if-let [t
-           (case mode
-             :single (cn/instance-type-kw obj)
-             :seq (cn/instance-type-kw (first obj))
-             nil)]
-    (assoc result :type t)
-    result))
-
 (defn- find-data-format [request]
   (let [ct (request-content-type request)]
     (uh/content-types ct)))
@@ -178,42 +147,38 @@
        ((uh/decoder data-fmt) (String. (.bytes body)))) data-fmt nil]
     [nil nil (unsupported-media-type request)]))
 
-(defn- cleanup-result [rs]
-  (if-let [result (:result rs)]
-    (let [mode (cond
-                 (cn/an-instance? result) :single
-                 (and (seqable? result) (seq result) (cn/an-instance? (first result))) :seq
-                 :else :none)]
-      (maybe-assoc-root-type
-       mode result
-       (assoc rs :result (case mode
-                           :single (cn/cleanup-inst result)
-                           :seq (mapv cn/cleanup-inst result)
-                           result))))
-    rs))
+(defn- cleanup-result [obj]
+  (if (cn/an-instance? obj)
+    (cn/cleanup-inst obj)
+    obj))
 
-(defn- cleanup-results [rs]
-  (if (map? rs)
-    (cleanup-result rs)
-    (mapv cleanup-result rs)))
+(defn- maybe-instance-type [obj]
+  (and (cn/an-instance? obj)
+       (cn/instance-type-kw obj)))
 
-(defn- maybe-non-ok-result [rs]
-  (if rs
-    (if (map? rs)
-      (case (:status rs)
-        :ok 200
-        :not-found 404
-        :error 500
-        nil 200
-        ;; TODO: handle other cases, like :timeout
-        500)
-      (maybe-non-ok-result (first rs)))
-    500))
+(defn- cleanup-results [result]
+  (if (and (map? result) (:status result))
+    result
+    (let [[t rs]
+          (cond
+            (map? result)
+            [(maybe-instance-type result) (cleanup-result result)]
+
+            (vector? result)
+            [(maybe-instance-type (first result)) (mapv cleanup-result result)]
+
+            :else [nil result])
+          status (if (or (and (seqable? rs) (seq rs)) rs)
+                   :ok
+                   :not-found)]
+      (merge
+       {:result rs
+        :status status}
+       (when t {:type t})))))
 
 (defn- ok
   ([obj data-fmt]
-   (let [status (maybe-non-ok-result obj)]
-     (response (cleanup-results obj) status data-fmt)))
+   (response (cleanup-results obj) 200 data-fmt))
   ([obj]
    (ok obj :json)))
 
@@ -231,61 +196,57 @@
 (defn- remove-all-read-only-attributes [obj]
   (w/prewalk maybe-remove-read-only-attributes obj))
 
-(defn- evaluate [evaluator event-instance]
-  (let [result (remove-all-read-only-attributes
-                (evaluator event-instance))]
-    result))
-
-(defn- extract-status [r]
-  (cond
-    (map? r) (:status r)
-    (vector? r) (extract-status (first r))
-    :else nil))
-
 (defn- wrap-result
   ([on-no-perm r data-fmt]
-   (let [status (extract-status r)]
-     (case status
-       nil (bad-request "invalid request" data-fmt "NILL_REQUEST")
-       :ok (ok (cleanup-results r) data-fmt)
-       :error (if (gs/error-no-perm?)
-                (if on-no-perm
-                  (ok on-no-perm data-fmt)
-                  (unauthorized r data-fmt "UNAUTHORIZED"))
-                (internal-error r data-fmt))
-       (ok r data-fmt))))
+   (ok (if (seq r) (cleanup-results r) r) data-fmt))
   ([r data-fmt]
    (wrap-result nil r data-fmt)))
 
+(defn- generic-exception-handler
+  ([ex data-fmt]
+   (log/exception ex)
+   (internal-error {:messasge "Runtime error, please see server logs for details."
+                    :exception (.getMessage ex)}
+                   data-fmt))
+  ([ex] (generic-exception-handler ex :json)))
+
 (defn- maybe-ok
-  ([on-no-perm exp data-fmt request]
+  ([on-no-perm data-fmt exp]
    (try
-     (let [r (exp)
-           s (extract-status r)]
-       (when (and s (not= s :ok))
-         (if request
-           (log/error (str "agentlang.http maybe-ok: error: status not ok evaluating http request - "
-                          request " - " (request-object request) " - response: " r))
-           (log/error (str "agentlang.http maybe-ok: error: status not ok - " r))))
-       (wrap-result on-no-perm r data-fmt))
+     (let [result (exp)]
+       (if (map? result)
+         (let [s (:status result)]
+           (if (number? s)
+             result
+             (wrap-result on-no-perm (:result result) data-fmt)))
+         result))
      (catch Exception ex
-       (log/exception ex)
-       (internal-error (.getMessage ex) data-fmt))))
-  ([exp data-fmt request]
-   (maybe-ok nil exp data-fmt request)))
+       (if-let [c (gs/get-error-code)]
+         (let [s (.getMessage ex)]
+           ((case c
+              :forbidden forbidden
+              :not-found _not-found
+              :unauthorized unauthorized
+              internal-error)
+            s data-fmt))
+         (generic-exception-handler ex data-fmt)))))
+  ([data-fmt exp]
+   (maybe-ok nil data-fmt exp)))
+
+(defn- make-event-context [request auth-config]
+  (when auth-config
+    (let [user (auth/session-user (assoc auth-config :request request
+                                         :cookie (get (:headers request) "cookie")))]
+      {:User (:email user)
+       :Sub (:sub user)
+       :UserDetails user})))
 
 (defn- assoc-event-context [request auth-config event-instance]
-  (if auth-config
-    (let [user (auth/session-user (assoc auth-config :request request
-                                         :cookie (get (:headers request) "cookie")))
-          event-instance (if (cn/an-instance? event-instance)
+  (if-let [ctx (make-event-context request auth-config)]
+    (let [event-instance (if (cn/an-instance? event-instance)
                            event-instance
                            (cn/make-instance event-instance))]
-      (cn/assoc-event-context-values
-       {:User (:email user)
-        :Sub (:sub user)
-        :UserDetails user}
-       event-instance))
+      (cn/assoc-event-context-values ctx event-instance))
     event-instance))
 
 (defn- event-from-request [request event-name data-fmt auth-config]
@@ -319,7 +280,7 @@
   `(log/info (str ~msg " - " (filter-request-for-logging ~request))))
 
 (defn- process-dynamic-eval
-  ([evaluator [auth-config maybe-unauth] event-name request]
+  ([[auth-config maybe-unauth] event-name request]
    (log-request (str "HTTP request received to process event " event-name) request)
    (or (maybe-unauth request)
        (if-let [data-fmt (find-data-format request)]
@@ -330,18 +291,18 @@
                (bad-request
                 (str "cannot invoke internal event - " (cn/instance-type-kw obj))
                 data-fmt "INTERNAL_EVENT_ERROR")
-               (maybe-ok #(evaluate evaluator obj) data-fmt nil))))
+               (maybe-ok data-fmt #(gs/evaluate-dataflow obj)))))
          (unsupported-media-type request))))
-  ([evaluator auth-info request]
-   (process-dynamic-eval evaluator auth-info nil request)))
+  ([auth-info request]
+   (process-dynamic-eval auth-info nil request)))
 
-(defn process-request [evaluator auth request]
+(defn process-request [auth request]
   (let [params (:params request)
         component (keyword (:component params))
         event (keyword (:event params))
         n [component event]]
     (if (cn/find-event-schema n)
-      (process-dynamic-eval evaluator auth n request)
+      (process-dynamic-eval auth n request)
       (bad-request (str "Event not found - " n) "NOT_FOUND"))))
 
 (defn- paths-info [component]
@@ -372,15 +333,14 @@
                    :Content (if (string? desc)
                               desc
                               (:content desc))})
-            result (first
-                    (ev/eval-all-dataflows
-                     (cn/make-instance {:Selfservice.Core/ProcessWebhook
-                                        {:Tickets [inst]}})))
+            result (ev/evaluate-dataflow
+                    (cn/make-instance {:Selfservice.Core/ProcessWebhook
+                                       {:Tickets [inst]}}))
             final-result (dissoc result :env)]
         (if (= :ok (:status final-result))
           (ok final-result)
           (internal-error final-result)))
-      (ok {:result "done"}))))
+      (ok "done"))))
 
 (defn- process-gpt-chat [[_ maybe-unauth] request]
   (or (maybe-unauth request)
@@ -424,304 +384,132 @@
   (when path
     {li/path-attr path}))
 
-(defn- process-generic-request [handler evaluator [auth-config maybe-unauth] request]
-  (log-request "Processing HTTP request" request)
-  (or (maybe-unauth request)
-      (if-let [parsed-path (parse-rest-uri request)]
-        (let [query-params (when-let [s (:query-string request)] (uh/form-decode s))
-              [obj data-fmt err-response] (request-object request)
-              parsed-path (assoc parsed-path :query-params query-params :data-fmt data-fmt)
-              ent (:entity parsed-path)
-              err-response (or err-response
-                               (when (and obj ent (not (some #{ent} (keys obj))))
-                                 (bad-request (str "invalid object type in request, expected " ent))))]
-          (or err-response (let [[event-gen resp options] (handler parsed-path obj)]
-                             (if resp
-                               resp
-                               (let [[evt post-fn] (if (fn? event-gen) (event-gen) [event-gen nil])
-                                     evt (assoc-event-context request auth-config evt)]
-                                 (try
-                                   (maybe-ok
-                                    (and options (:on-no-perm options))
-                                    #(evaluate evaluator evt) data-fmt request)
-                                   (finally
-                                     (when post-fn (post-fn)))))))))
-        (bad-request (str "invalid request uri - " (:* (:params request))) "INVALID_REQUEST_URI"))))
-
 (defn- multi-post-request? [obj]
   (>= (count (keys obj)) 2))
 
 (defn- maybe-generate-multi-post-event [obj component path-attr]
   (when (multi-post-request? obj)
-    (let [event-name (li/temp-event-name component)]
-      (and (apply ln/dataflow event-name (compiler/parse-relationship-tree path-attr obj))
-           event-name))))
+    (u/throw-ex (str "Multiple object POST - not implemented"))))
 
-(def process-post-request
-  (partial
-   process-generic-request
-   (fn [{entity-name :entity component :component path :path} obj]
-     (let [path-attr (when path {li/path-attr (pi/as-partial-path path)})]
-       (if (cn/event? entity-name)
-         [obj nil]
-         (if-let [evt (maybe-generate-multi-post-event obj component path-attr)]
-           [(fn [] [{evt {}} #(cn/remove-event evt)]) nil]
-           [{(cn/crud-event-name component entity-name :Create)
-             (merge {:Instance obj} path-attr)}
-            nil]))))))
+(defn- as-partial-path [_]
+  (u/raise-not-implemented 'as-partial-path))
 
-(def process-put-request
-  (partial
-   process-generic-request
-   (fn [{entity-name :entity id :id component :component path :path} obj]
-     (if-not (or id path)
-       [nil (bad-request (str "id or path required to update " entity-name) "UPDATE_FAILED")]
-       [{(cn/crud-event-name component entity-name :Update)
-         (merge
-          (when-not path
-            (let [id-attr (cn/identity-attribute-name entity-name)]
-              {id-attr (cn/parse-attribute-value entity-name id-attr id)}))
-          {:Data (li/record-attributes obj)}
-          (maybe-path-attribute path))}
-        nil]))))
+(defn lookup-instance-by-path [path]
+  (let [entity-name (last (drop-last path))]
+    (first
+     (:result
+      (gs/evaluate-pattern
+       {entity-name {li/path-attr? (li/vec-to-path path)}})))))
 
-(defn- generate-filter-query-event
-  ([component entity-name query-params deleted]
-   (let [event-name (li/temp-event-name component)]
-     (and (apply ln/dataflow
-                 event-name [{(li/name-as-query-pattern entity-name)
-                              (merge
-                               (when deleted {:deleted true})
-                               {:where
-                                (if (map? query-params)
-                                  `[:and ~@(mapv
-                                            (fn [[k v]]
-                                              [(if (= k li/path-attr) :like :=)
-                                               k (cn/parse-attribute-value entity-name k v)])
-                                            query-params)]
-                                  query-params)})}])
-          event-name)))
-  ([component entity-name query-params]
-   (generate-filter-query-event component entity-name query-params false)))
+(defn process-post-request [[auth-config maybe-unauth] request]
+  ;; TODO: support sub-tree creation
+  (or (maybe-unauth request)
+      (gs/call-with-event-context
+       (make-event-context request auth-config)
+       (fn []
+         (let [[obj data-fmt _] (request-object request)]
+           (maybe-ok
+            data-fmt
+            #(when-let [{path :path recname :entity} (parse-rest-uri request)]
+               (cond
+                 (cn/entity? recname)
+                 (let [parent-path (drop-last 2 path)]
+                   (if-let [parent (or (not (seq parent-path)) (lookup-instance-by-path parent-path))]
+                     (let [pat (uh/create-pattern-from-path recname obj path parent)]
+                       (gs/evaluate-pattern pat))
+                     (_not-found (str "Parent not found - " (li/vec-to-path parent-path)))))
 
-(defn- make-lookup-event [component entity-name id path]
-  {(cn/crud-event-name component entity-name :Lookup)
-   (merge
-    (when-not path
-      (let [id-attr (cn/identity-attribute-name entity-name)]
-        {id-attr (cn/parse-attribute-value entity-name id-attr id)}))
-    (maybe-path-attribute path))})
+                 (cn/event? recname)
+                 (if (= recname (first path) (li/record-name obj))
+                   (gs/evaluate-dataflow obj)
+                   (bad-request (str "Event is not of type " recname " - " obj)))
 
-(defn- make-lookupall-event [component entity-name path]
-  {(cn/crud-event-name component entity-name :LookupAll)
-   (or (when path (maybe-path-attribute path)) {})})
+                 :else (bad-request (str "Invalid POST resource - " path))))))))))
 
-(declare maybe-merge-child-uris)
+(defn process-put-request [[auth-config maybe-unauth] request]
+  (or (maybe-unauth request)
+      (gs/call-with-event-context
+       (make-event-context request auth-config)
+       (fn []
+         (let [[obj data-fmt _] (request-object request)]
+           (maybe-ok
+            data-fmt
+            #(when-let [parsed-path (parse-rest-uri request)]
+               (let [path (:path parsed-path)
+                     [c n :as en] (li/split-path (:entity parsed-path))]
+                 (gs/evaluate-pattern
+                  {(or (cn/entity-update-action en) (cn/crud-event-name c n :Update))
+                   {:Data (li/record-attributes obj)
+                    :path (li/vec-to-path path)}})))))))))
 
-(defn- merge-child-uris [evaluator evt-context data-fmt
-                         component entity-name
-                         parent-insts children]
-  (mapv (fn [r]
-          (reduce
-           (fn [parent-inst [relname _ child-entity]]
-             (let [[c n] (li/split-path child-entity)
-                   path (cn/full-path-from-references parent-inst relname child-entity)
-                   evt (evt-context (make-lookupall-event c child-entity path))
-                   rs (let [rs (evaluate evaluator evt)]
-                        (if (map? rs) rs (first rs)))]
-               (if (= :ok (:status rs))
-                 (let [result (maybe-merge-child-uris
-                               evaluator evt-context data-fmt
-                               c child-entity (cn/cleanup-inst (:result rs)))
-                       rels (li/rel-tag parent-inst)]
-                   (assoc (cn/cleanup-inst parent-inst) li/rel-tag (assoc rels relname result)))
-                 (cn/cleanup-inst parent-inst))))
-           r children))
-        parent-insts))
+(defn- fetch-all [entity-name path]
+  (let [relname (last (drop-last path))]
+    (gs/evaluate-pattern
+     (if (cn/between-relationship? relname)
+       (let [other-entity (first path)
+             other-path (drop-last 2 path)]
+         {(li/name-as-query-pattern entity-name) {}
+          (li/name-as-query-pattern relname)
+          {other-entity {li/path-attr (li/vec-to-path other-path)}}})
+       {entity-name
+        {li/path-attr? [:like (str (li/vec-to-path path) "%")]}}))))
 
-(defn- maybe-merge-child-uris [evaluator evt-context data-fmt component entity-name insts]
-  (if-let [children (seq (cn/contained-children entity-name))]
-    (merge-child-uris evaluator evt-context data-fmt component entity-name insts children)
+(defn- fetch-tree [entity-name insts]
+  (if-let [rels (seq (cn/contained-children entity-name))]
+    (apply
+     concat
+     (mapv
+      (fn [[relname _ child-entity]]
+        (mapv
+         (fn [parent-inst]
+           (let [path (concat (li/path-to-vec (li/path-attr parent-inst))
+                              [relname child-entity])
+                 rs (cleanup-results (:result (fetch-all child-entity path)))]
+             (if (seq rs)
+               (assoc parent-inst relname (fetch-tree child-entity rs))
+               parent-inst)))
+         insts))
+      rels))
     insts))
 
-(defn- get-tree [evaluator [auth-config maybe-unauth] request
-                 component entity-name id path data-fmt]
-  (if-not id
-    (bad-request (str "identity of " entity-name " required for tree lookup") "IDENTITY_REQUIRED")
-    (or (maybe-unauth request)
-        (let [evt-context (partial assoc-event-context request auth-config)
-              evt (evt-context (make-lookup-event component entity-name id path))
-              rs (let [rs (evaluate evaluator evt)]
-                   (if (map? rs) rs (first rs)))
-              status (extract-status rs)]
-          (if (= :ok status)
-            (let [result (:result rs)]
-              (if (seq result)
-                (ok (maybe-merge-child-uris
-                     evaluator evt-context data-fmt
-                     component entity-name result)
-                    data-fmt)
-                (ok result data-fmt)))
-            (wrap-result rs data-fmt))))))
-
-(defn- between-rel-path? [path]
-  (when path
-    (when-let [p (first (take-last 2 (pi/uri-path-split path)))]
-      (cn/between-relationship? (pi/decode-uri-path-part p)))))
-
-(defn- generate-query-by-between-rel-event [component path]
-  (let [parts (pi/uri-path-split path)
-        relname (pi/decode-uri-path-part (first (take-last 2 parts)))
-        query-entity (pi/decode-uri-path-part (last parts))
-        entity-name (pi/decode-uri-path-part (first (take-last 4 parts)))
-        event-name (li/temp-event-name component)
-        pats (if (= 4 (count parts))
-               (let [id (get parts 1)]
-                 [{(li/name-as-query-pattern query-entity) {}
-                   :-> [[{relname {(li/name-as-query-pattern
-                                    (first (cn/find-between-keys relname entity-name))) id}}]]}])
-               (let [alias (li/unq-name)
-                     id (li/make-ref alias li/id-attr)]
-                 [{entity-name
-                   {li/path-attr? (pi/uri-join-parts (drop-last 2 parts))}
-                   :as [alias]}
-                  {(li/name-as-query-pattern query-entity) {}
-                   :-> [[{relname {(li/name-as-query-pattern
-                                    (first (cn/find-between-keys relname entity-name))) id}}]]}]))]
-    (when (apply ln/dataflow event-name pats)
-      event-name)))
-
-(defn process-get-request [evaluator auth-info request]
-  (process-generic-request
-   (fn [{entity-name :entity id :id component :component path :path
-         suffix :suffix query-params :query-params data-fmt :data-fmt
-         :as p} obj]
-     (cond
-       query-params
-       [(fn []
-          (let [evt (generate-filter-query-event
-                     component entity-name
-                     (merge query-params (when path (maybe-path-attribute (str path "%")))))]
-            [{evt {}} #(cn/remove-event evt)]))
-        nil]
-
-       (= suffix :tree)
-       [nil (get-tree evaluator auth-info request component
-                      entity-name id path data-fmt)]
-
-       (between-rel-path? path)
-       [(fn []
-          (let [evt (generate-query-by-between-rel-event component path)]
-            [{evt {}} #(cn/remove-event evt)]))
-        nil]
-
-       :else
-       [(if id
-          (make-lookup-event component entity-name id path)
-          (make-lookupall-event component entity-name (when path (str path "%"))))
-        nil (when-not id {:on-no-perm []})]))
-   evaluator auth-info request))
-
-(def process-delete-request
-  (partial
-   process-generic-request
-   (fn [{entity-name :entity id :id component :component path :path} _]
-     (if-not (or id path)
-       [nil (bad-request (str "id or path required to delete " entity-name) "ID_PATH_REQUIRED")]
-       [{(cn/crud-event-name component entity-name :Delete)
-         (merge
-          (when-not path
-            (let [id-attr (cn/identity-attribute-name entity-name)]
-              {id-attr (cn/parse-attribute-value entity-name id-attr id)}))
-          (maybe-path-attribute path))}
-        nil]))))
-
-(defn- like-pattern? [x]
-  ;; For patterns that include the `_` wildcard,
-  ;; the caller should provide an explicit where clause:
-  ;;  {:from :EntityName
-  ;;   :where [:like :AttributeName "pattern%"]}
-  (and (string? x)
-       (s/includes? x "%")))
-
-(defn- filter-as-where-clause [[k v]]
-  (let [n (u/string-as-keyword k)]
-    (cond
-      (vector? v) [(u/string-as-keyword (first v))
-                   n (second v)]
-      (like-pattern? v) [:like n v]
-      :else [:= n v])))
-
-(defn- preprocess-query [q]
-  (if-let [fls (:filters q)]
-    (let [or-cond (:or fls)
-          f (or or-cond fls)]
-      (assoc
-       (dissoc q :filters)
-       :where
-       (let [r (mapv filter-as-where-clause f)]
-         (if (= 1 (count r))
-           (first r)
-           `[~(if or-cond :or :and) ~@r]))))
-    q))
-
-(defn- process-query [evaluator [auth-config maybe-unauth] request]
-  (log-request "Processing HTTP query request" request)
+(defn process-get-request [[auth-config maybe-unauth] request]
   (or (maybe-unauth request)
-      (if-let [data-fmt (find-data-format request)]
-        (let [reqobj ((uh/decoder data-fmt) (String. (.bytes (:body request))))
-              qobj (:Query reqobj)
-              q (preprocess-query qobj)
-              deleted (:deleted qobj)
-              entity-name (:from q)
-              [component _] (li/split-path entity-name)
-              evn (generate-filter-query-event component entity-name (:where q) deleted)
-              evt (assoc-event-context request auth-config {evn {}})]
-          (try
-            (maybe-ok #(evaluate evaluator evt) data-fmt request)
-            (catch Exception ex
-              (log/exception ex)
-              (internal-error (get-internal-error-message :query-failure (.getMessage ex))))
-            (finally (cn/remove-event evn))))
-        (unsupported-media-type request))))
+      (gs/call-with-event-context
+       (make-event-context request auth-config)
+       (fn []
+         (let [[_ data-fmt _] (request-object request)]
+           (maybe-ok
+            data-fmt
+            #(if-let [parsed-path (parse-rest-uri request)]
+               (let [path (:path parsed-path)
+                     entity-name (:entity parsed-path)]
+                 (if (cn/entity? entity-name)
+                   (let [result
+                         (if (= entity-name (last path))
+                           (fetch-all entity-name path)
+                           (gs/evaluate-dataflow
+                            {(cn/crud-event-name entity-name :Lookup)
+                             {:path (li/vec-to-path path)}}))]
+                     (if (and (seq (:result result)) (= :tree (:suffix parsed-path)))
+                       {:result (fetch-tree entity-name (:result result))}
+                       result))
+                   (bad-request (str entity-name " is not an entity"))))
+               (bad-request "invalid GET request"))))))))
 
-(defn- process-start-debug-session [evaluator [auth-config maybe-unauth] request]
-  (log-request "Start debug request received" request)
+(defn process-delete-request [[auth-config maybe-unauth] request]
   (or (maybe-unauth request)
-      (if-let [data-fmt (find-data-format request)]
-        (let [[obj _ err-response] (request-object request)]
-          (or err-response
-              (ok-html (ev/debug-dataflow obj))))
-        (unsupported-media-type request))))
-
-(defn- process-debug-step [evaluator [auth-config maybe-unauth] request]
-  (log-request "Debug-step request received" request)
-  (or (maybe-unauth request)
-      (let [id (get-in request [:params :id])]
-        (ok (ev/debug-step id)))))
-
-(defn- process-debug-continue [evaluator [auth-config maybe-unauth] request]
-  (log-request "Debug-continue request received" request)
-  (or (maybe-unauth request)
-      (let [id (get-in request [:params :id])]
-        (ok (ev/debug-continue id)))))
-
-(defn- process-delete-debug-session [evaluator [auth-config maybe-unauth] request]
-  (log-request "Debug-delete request received" request)
-  (or (maybe-unauth request)
-      (let [id (get-in request [:params :id])]
-        (ok (ev/debug-cancel id)))))
-
-(defn- eval-ok-result [eval-result]
-  (if (vector? eval-result)
-    (eval-ok-result (first eval-result))
-    (when (and (map? eval-result) (= :ok (:status eval-result)))
-      (:result eval-result))))
-
-(defn- eval-result [eval-res]
-  (if (vector? eval-res)
-    (eval-result (first eval-res))
-    eval-res))
+      (gs/call-with-event-context
+       (make-event-context request auth-config)
+       (fn []
+         (let [[obj data-fmt _] (request-object request)]
+           (maybe-ok
+            data-fmt
+            #(when-let [parsed-path (parse-rest-uri request)]
+               (let [path (:path parsed-path)
+                     [c n :as en] (li/split-path (:entity parsed-path))]
+                 (gs/evaluate-pattern
+                  {(or (cn/entity-delete-action en) (cn/crud-event-name c n :Delete))
+                   {:path (li/vec-to-path path)}})))))))))
 
 ;; TODO: Add layer of domain filtering on top of cognito.
 (defn- whitelisted-email? [email]
@@ -767,7 +555,7 @@
   {cn/type-tag-key :event
    cn/instance-type (keyword event-name)})
 
-(defn- process-signup [evaluator call-post-signup [auth-config _] request]
+(defn- process-signup [call-post-signup [auth-config _] request]
   (log-request "Signup request received" request)
   (if-not auth-config
     (internal-error (get-internal-error-message :auth-disabled "sign-up"))
@@ -785,21 +573,21 @@
           (if-not (whitelisted? (:Email (:User evobj)) auth-config)
             (unauthorized "Your email is not whitelisted yet." data-fmt "NOT_WHITELISTED")
             (try
-              (let [result (evaluate evaluator evobj)
-                    r (eval-ok-result result)]
-                (when (not r) (throw (Exception. (:message (eval-result result)))))
+              (let [r (gs/kernel-call #(:result (gs/evaluate-dataflow evobj)))]
+                (when (not r) (throw (Exception. "Signup failed")))
                 (let [user (if (map? r) r (first r))
                       post-signup-result
                       (when call-post-signup
-                        (evaluate
-                         evaluator
-                         (assoc
-                          (create-event :Agentlang.Kernel.Identity/PostSignUp)
-                          :SignupResult result :SignupRequest evobj)))]
+                        (gs/kernel-call
+                         #(:result
+                           (gs/evaluate-dataflow
+                            (assoc
+                             (create-event :Agentlang.Kernel.Identity/PostSignUp)
+                             :SignupResult r :SignupRequest evobj)))))]
                   (if user
                     (ok (or (when (seq post-signup-result) post-signup-result)
-                            {:status :ok :result (dissoc user :Password)}) data-fmt)
-                    (bad-request (or post-signup-result result) data-fmt "POST_SIGNUP_FAILED"))))
+                            (dissoc user :Password)) data-fmt)
+                    (bad-request (or post-signup-result r) data-fmt "POST_SIGNUP_FAILED"))))
               (catch Exception ex
                 (log/warn ex)
                 (let [[message errtype] (get-signup-error-message ex)]
@@ -816,7 +604,7 @@
   (let [hdrs (:headers resp)]
     (assoc resp :headers (assoc hdrs "Set-Cookie" cookie))))
 
-(defn- process-login [evaluator [auth-config _ :as _auth-info] request]
+(defn- process-login [[auth-config _ :as _auth-info] request]
   (log-request "Login request received" request)
   (if-not auth-config
     (internal-error (get-internal-error-message :auth-disabled "login"))
@@ -826,14 +614,16 @@
           (do (log/warn (str "bad login request - " err))
               (bad-request err data-fmt "BAD_REQUEST_FORMAT"))
           (try
-            (let [result (auth/user-login
+            (let [r0 (auth/user-login
                           (assoc
                            auth-config
-                           :event evobj
-                           :eval evaluator))
+                           :event evobj))
+                  result (if (map? r0)
+                           (or (:result r0) r0)
+                           r0)
                   user-id (get (decode-jwt-token-from-response result) :sub)
                   cookie (get-in result [:authentication-result :user-data :cookie])
-                  resp (ok {:result (if cookie {:authentication-result :success} result)} data-fmt)]
+                  resp (ok (if cookie {:authentication-result :success} result) data-fmt)]
               (sess/upsert-user-session user-id true)
               (if cookie
                 (do (sess/session-cookie-create cookie result)
@@ -866,7 +656,7 @@
                           (assoc
                            auth-config
                            :event evobj))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "Resending confirmation code failed. "
@@ -893,7 +683,7 @@
                           (assoc
                            auth-config
                            :event evobj))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "Verify user failed. "
@@ -920,7 +710,7 @@
                           (assoc
                            auth-config
                            :event evobj))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "Forgot Password failed. "
@@ -947,7 +737,7 @@
                           (assoc
                            auth-config
                            :event evobj))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "Confirm Forgot Password failed. "
@@ -974,7 +764,7 @@
                           (assoc
                            auth-config
                            :event evobj))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "Change Password failed. "
@@ -997,11 +787,11 @@
           (when cookie
             (when-not (sess/session-cookie-delete cookie)
               (log/warn (str "session-cookie not deleted for " cookie))))
-          (ok {:result result} data-fmt))
+          (ok result data-fmt))
         (catch Exception ex
           (log/warn ex)
           (unauthorized (str "logout failed. " (ex-message ex)) data-fmt "LOGOUT_FAILED")))
-      (ok {:result :bye} data-fmt))
+      (ok :bye data-fmt))
     (unsupported-media-type request)))
 
 (defn- process-get-user [auth-config request]
@@ -1013,7 +803,7 @@
                     (assoc auth-config :request request))
               result (auth/get-user
                       (assoc auth-config :user user))]
-          (ok {:result result} data-fmt))
+          (ok result data-fmt))
         (catch Exception ex
           (log/warn ex)
           (unauthorized (str "get-user failed" (ex-message ex)) data-fmt "GET_USER_FAILED")))
@@ -1043,7 +833,7 @@
                            auth-config
                            :instance evobj
                            :user user))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "update-user failed. " (ex-message ex)) data-fmt "UPDATE_USER_FAILED")))))
@@ -1072,7 +862,7 @@
                            auth-config
                            :event evobj
                            :user user))]
-              (ok {:result result} data-fmt))
+              (ok result data-fmt))
             (catch Exception ex
               (log/warn ex)
               (unauthorized (str "refresh-token failed. " (ex-message ex)) data-fmt "REFRESH_TOKEN_FAILED")))))
@@ -1084,7 +874,7 @@
     :ok (ok (:message result))
     (bad-request (:error result))))
 
-(defn- process-auth [evaluator [auth-config _] request]
+(defn- process-auth [[auth-config _] request]
   (log-request "Auth request" request)
   (let [cookie (get-in request [:headers "cookie"])
         query-params (when-let [s (:query-string request)] (uh/form-decode s))]
@@ -1094,13 +884,11 @@
                                        :client-url (:origin query-params)
                                        :server-redirect-host (:server_redirect_host query-params))))))
 
-(defn- process-auth-callback [evaluator call-post-signup [auth-config _] request]
+(defn- process-auth-callback [call-post-signup [auth-config _] request]
   (log-request "Auth-callback request" request)
   (auth-response
    (auth/handle-auth-callback
-    (assoc auth-config :args {:evaluate evaluate
-                              :evaluator evaluator
-                              :call-post-signup call-post-signup
+    (assoc auth-config :args {:call-post-signup call-post-signup
                               :request request}))))
 
 (defn- make-magic-link [username op payload description expiry]
@@ -1132,7 +920,7 @@
         (bad-request (str "authentication not valid") "INVALID_AUTHENTICATION")))
     (internal-error "cannot process register-magiclink - authentication not enabled")))
 
-(defn- process-get-magiclink [_ request]
+(defn- process-get-magiclink [request]
   (log-request "Get-magiclink request" request)
   (let [query (when-let [s (:query-string request)] (uh/form-decode s))]
     (if-let [token (:code query)]
@@ -1140,12 +928,12 @@
             operation (:operation decoded-token)
             payload (:payload decoded-token)]
         (if (and operation payload)
-          (let [result (ev/eval-all-dataflows (cn/make-instance {operation payload}))]
+          (let [result (ev/evaluate-dataflow (cn/make-instance {operation payload}))]
             (ok (dissoc (first result) :env)))
           (bad-request (str "bad token") "BAD_TOKEN")))
       (bad-request (str "token not specified") "ID_TOKEN_REQUIRED"))))
 
-(defn- process-preview-magiclink [_ request]
+(defn- process-preview-magiclink [request]
   (log-request "Preview-magiclink request" request)
   (let [[obj _ _] (request-object request)]
     (if-let [token (:code obj)]
@@ -1228,7 +1016,6 @@
            (PUT (str uh/debug-prefix "/step/:id") [] (:debug-step handlers))
            (PUT (str uh/debug-prefix "/continue/:id") [] (:debug-continue handlers))
            (DELETE (str uh/debug-prefix "/:id") [] (:delete-debug-session handlers))
-           (POST uh/query-prefix [] (:query handlers))
            (POST uh/dynamic-eval-prefix [] (:eval handlers))
            (POST uh/ai-prefix [] (:ai handlers))
            (GET uh/auth-prefix [] (:auth handlers))
@@ -1301,39 +1088,36 @@
       (log/error (str "Failed to compile GraphQL schema:"
                       (s/join "\n" (.getStackTrace e)))))))
 
-(defn- create-route-handlers [evaluator auth auth-info config]
-  {:graphql                  (partial graphql-handler auth-info)
-   :login                    (partial process-login evaluator auth-info)
-   :logout                   (partial process-logout auth)
-   :signup                   (partial process-signup evaluator (:call-post-sign-up-event config) auth-info)
-   :confirm-sign-up           (partial process-confirm-sign-up auth)
-   :get-user                 (partial process-get-user auth)
-   :update-user              (partial process-update-user auth)
-   :forgot-password          (partial process-forgot-password auth)
-   :confirm-forgot-password   (partial process-confirm-forgot-password auth)
-   :change-password          (partial process-change-password auth)
-   :refresh-token            (partial process-refresh-token auth)
-   :resend-confirmation-code  (partial process-resend-confirmation-code auth)
-   :put-request              (partial process-put-request evaluator auth-info)
-   :post-request             (partial process-post-request evaluator auth-info)
-   :get-request              (partial process-get-request evaluator auth-info)
-   :delete-request           (partial process-delete-request evaluator auth-info)
-   :start-debug-session      (partial process-start-debug-session evaluator auth-info)
-   :debug-step               (partial process-debug-step evaluator auth-info)
-   :debug-continue           (partial process-debug-continue evaluator auth-info)
-   :delete-debug-session     (partial process-delete-debug-session evaluator auth-info)
-   :query                    (partial process-query evaluator auth-info)
-   :eval                     (partial process-dynamic-eval evaluator auth-info nil)
-   :ai                       (partial process-gpt-chat auth-info)
-   :auth                     (partial process-auth evaluator auth-info)
-   :auth-callback            (partial process-auth-callback evaluator (:call-post-sign-up-event config) auth-info)
-   :register-magiclink       (partial process-register-magiclink auth-info auth)
-   :get-magiclink            (partial process-get-magiclink auth-info)
-   :preview-magiclink        (partial process-preview-magiclink auth-info)
-   :webhooks                 process-webhooks
-   :meta                     (partial process-meta-request auth-info)})
+(def safe-partial (partial u/safe-partial generic-exception-handler))
 
-(defn- start-http-server [evaluator config auth auth-info nrepl-enabled nrepl-handler]
+(defn- create-route-handlers [auth auth-info config]
+  {:graphql (safe-partial graphql-handler auth-info)
+   :login (safe-partial process-login auth-info)
+   :logout (safe-partial process-logout auth)
+   :signup (safe-partial process-signup (:call-post-sign-up-event config) auth-info)
+   :confirm-sign-up (safe-partial process-confirm-sign-up auth)
+   :get-user (safe-partial process-get-user auth)
+   :update-user (safe-partial process-update-user auth)
+   :forgot-password (safe-partial process-forgot-password auth)
+   :confirm-forgot-password (safe-partial process-confirm-forgot-password auth)
+   :change-password (safe-partial process-change-password auth)
+   :refresh-token (safe-partial process-refresh-token auth)
+   :resend-confirmation-code (safe-partial process-resend-confirmation-code auth)
+   :put-request (safe-partial process-put-request auth-info)
+   :post-request (safe-partial process-post-request auth-info)
+   :get-request (safe-partial process-get-request auth-info)
+   :delete-request (safe-partial process-delete-request auth-info)
+   :eval (safe-partial process-dynamic-eval auth-info nil)
+   :ai (safe-partial process-gpt-chat auth-info)
+   :auth (safe-partial process-auth auth-info)
+   :auth-callback (safe-partial process-auth-callback (:call-post-sign-up-event config) auth-info)
+   :register-magiclink (safe-partial process-register-magiclink auth-info auth)
+   :get-magiclink (safe-partial process-get-magiclink auth-info)
+   :preview-magiclink (safe-partial process-preview-magiclink auth-info)
+   :webhooks process-webhooks
+   :meta (safe-partial process-meta-request auth-info)})
+
+(defn- start-http-server [config auth auth-info nrepl-enabled nrepl-handler]
   (if (or (not auth) (auth-service-supported? auth))
     (let [config (merge {:port 8080 :thread (+ 1 (u/n-cpu))} config)]
       (println (str "The HTTP server is listening on port " (:port config)))
@@ -1341,14 +1125,14 @@
         (make-routes
           config auth
           (merge
-            (create-route-handlers evaluator auth auth-info config)
+            (create-route-handlers auth auth-info config)
             (when (and nrepl-handler nrepl-enabled)
               {:nrepl (partial nrepl-http-handler auth-info nrepl-handler)})))
         config))
     (u/throw-ex (str "authentication service not supported - " (:service auth)))))
 
 (defn run-server
-  ([evaluator config nrepl-handler]
+  ([config nrepl-handler]
    (let [core-component-name (first (cn/remove-internal-components (cn/component-names)))
          schema (cn/schema-info core-component-name)
          contains-graph-map (gg/generate-contains-graph schema)
@@ -1363,7 +1147,7 @@
      (when graphql-enabled
        (generate-graphql-schema core-component-name schema contains-graph-map))
      (if nrepl-enabled
-       (start-http-server evaluator config auth auth-info true nrepl-handler)
-       (start-http-server evaluator config auth auth-info false nil))))
-  ([evaluator nrepl-handler]
-   (run-server evaluator {} nrepl-handler)))
+       (start-http-server config auth auth-info true nrepl-handler)
+       (start-http-server config auth auth-info false nil))))
+  ([nrepl-handler]
+   (run-server {} nrepl-handler)))

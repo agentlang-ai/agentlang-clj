@@ -15,9 +15,9 @@
 
 (dataflow
  :GetWeatherForCity
- {:Weather?
-  {:where [:= :City :GetWeatherForCity.City]
-   :order-by [:Date]}
+ {:Weather
+  {:? {:where [:= :City :GetWeatherForCity.City]
+       :order-by [:Date]}}
   :as [:Result]}
  :Result)
 

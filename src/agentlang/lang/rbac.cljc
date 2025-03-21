@@ -3,6 +3,7 @@
             [clojure.string :as s]
             [agentlang.lang.internal :as li]
             [agentlang.component :as cn]
+            [agentlang.global-state :as gs]
             [agentlang.util :as u]
             [agentlang.util.seq :as su]))
 
@@ -30,9 +31,9 @@
   (when-let [roles (seq (set/difference roles (set @inited-roles)))]
     (let [r (mapv
              (fn [r]
-               [:try
-                {:Agentlang.Kernel.Rbac/Role {:Name? r}}
-                :not-found {:Agentlang.Kernel.Rbac/Role {:Name r}}])
+               {:Agentlang.Kernel.Rbac/Role {:Name? r}
+                li/except-tag
+                {:not-found {:Agentlang.Kernel.Rbac/Role {:Name r}}}})
              roles)]
       (u/safe-set inited-roles (set/union roles @inited-roles))
       r)))
@@ -47,23 +48,23 @@
               pname (str "priv_" (name c) "_" (name n)
                          "_" (s/join "_" roles))]
           (concat
-           [[:try
-             {:Agentlang.Kernel.Rbac/Privilege
-              {:Name? pname
-               :Actions [:q# allow]
-               :Resource [:q# [recname]]}}
-             :not-found
-             {:Agentlang.Kernel.Rbac/Privilege
-              {:Name pname
-               :Actions [:q# allow]
-               :Resource [:q# [recname]]}}]]
+           [{:Agentlang.Kernel.Rbac/Privilege
+             {:Name? pname
+              :Actions [:q# allow]
+              :Resource [:q# [recname]]}
+             li/except-tag
+             {:not-found
+              {:Agentlang.Kernel.Rbac/Privilege
+               {:Name pname
+                :Actions [:q# allow]
+                :Resource [:q# [recname]]}}}}]
            (mapv
             (fn [r]
-              [:try
-               {:Agentlang.Kernel.Rbac/PrivilegeAssignment
-                {:Role? r :Privilege? pname}}
-               :not-found {:Agentlang.Kernel.Rbac/PrivilegeAssignment
-                           {:Role r :Privilege pname}}])
+              {:Agentlang.Kernel.Rbac/PrivilegeAssignment
+               {:Role? r :Privilege? pname}
+               li/except-tag
+               {:not-found {:Agentlang.Kernel.Rbac/PrivilegeAssignment
+                            {:Role r :Privilege pname}}}})
             roles)))))
      spec)))
 
@@ -106,7 +107,7 @@
 
 (defn eval-events [evaluator]
   (su/nonils
-   (mapv #(% evaluator) @postproc-events)))
+   (mapv #(:result (% evaluator)) @postproc-events)))
 
 (defn reset-events! [] (u/safe-set postproc-events []))
 
@@ -117,10 +118,11 @@
       (seqable? r) (ok? (first r))
       :else false)))
 
-(defn finalize-events [evaluator]
-  (let [rs (eval-events evaluator)]
-    (doseq [r rs]
-      (when-not (ok? r)
-        (u/throw-ex (str "post-process event failed - " r))))
-    (reset-events!)
-    rs))
+(defn finalize-events
+  ([evaluator]
+   (let [rs (eval-events evaluator)]
+     (when-not rs
+       (u/throw-ex (str "post-process event failed - " rs)))
+     (reset-events!)
+     rs))
+  ([] (finalize-events gs/evaluate-dataflow-internal)))

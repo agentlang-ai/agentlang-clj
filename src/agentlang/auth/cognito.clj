@@ -14,6 +14,7 @@
             [agentlang.component :as cn]
             [agentlang.user-session :as sess]
             [agentlang.lang.internal :as li]
+            [agentlang.global-state :as gs]
             [agentlang.util :as u]
             [agentlang.util.http :as uh]
             [agentlang.util.logger :as log]))
@@ -201,7 +202,7 @@
 
 (defn- make-session-info [token]
   (let [parts (str/split token #" ")]
-    {:token-type (first parts) :id-token (second parts)}))
+    {:token-type (first parts) :id-token (last parts)}))
 
 (defmethod auth/session-user tag [all-stuff-map]
   (let [user-details (get-in all-stuff-map [:request :identity])]
@@ -227,9 +228,7 @@
    cn/instance-type (keyword event-name)})
 
 (defmethod auth/handle-auth-callback tag [auth-config]
-  (let [{evaluate :evaluate
-         evaluator :evaluator
-         call-post-signup :call-post-signup
+  (let [{call-post-signup :call-post-signup
          request :request} (:args auth-config)
         query (when-let [s (:query-string request)]
                 (w/keywordize-keys (codec/form-decode s)))
@@ -262,17 +261,16 @@
                     {:Agentlang.Kernel.Identity/SignUp
                      {:User {:Agentlang.Kernel.Identity/User user-obj}}}
                     new-sign-up
-                    (= :not-found
-                       (:status
-                        (first
-                         (evaluator
-                          {:Agentlang.Kernel.Identity/FindUser
-                           {:Email (:Email user-obj)}}))))]
+                    (not
+                     (first
+                      (:result
+                       (gs/evaluate-dataflow
+                        {:Agentlang.Kernel.Identity/FindUser
+                         {:Email (:Email user-obj)}}))))]
                 (when new-sign-up
-                  (let [sign-up-result (u/safe-ok-result (evaluator sign-up-request))]
+                  (let [sign-up-result (:result (gs/evaluate-dataflow sign-up-request))]
                     (when call-post-signup
-                      (evaluate
-                       evaluator
+                      (gs/evaluate-dataflow
                        (assoc
                         (create-event :Agentlang.Kernel.Identity/PostSignUp)
                         :SignupResult sign-up-result :SignupRequest {:User user-obj})))))

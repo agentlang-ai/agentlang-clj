@@ -2,7 +2,6 @@
   (:require [clojure.string :as s]
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
-            [agentlang.evaluator :as ev]
             [agentlang.global-state :as gs]
             [agentlang.inference.service.model :as model]
             [agentlang.inference.service.resolver :as api-resolver]

@@ -8,11 +8,16 @@
             [agentlang.resolver.registry
              #?(:clj :refer :cljs :refer-macros)
              [defmake]]
-            [agentlang.evaluator.state :as es]
             [agentlang.lang.datetime :as dt])
   #?(:clj
      (:import [java.util.concurrent ExecutorService Executors
                Future TimeUnit])))
+
+(defn get-safe-eval-patterns []
+  (u/raise-not-implemented 'get-safe-eval-patterns))
+
+(defn get-active-evaluator []
+  (u/raise-not-implemented 'get-active-evaluator))
 
 ;; TODO:
 ;; If the timer-manager flag is set in config:
@@ -46,7 +51,7 @@
 (defn- update-heartbeat! [task-name]
   (let [result
         (first
-         ((es/get-safe-eval-patterns)
+         ((get-safe-eval-patterns)
           :Agentlang.Kernel.Lang
           [{:Agentlang.Kernel.Lang/SetTimerHeartbeat
             {:TimerName task-name}}]))]
@@ -57,7 +62,7 @@
 (defn- set-status! [status task-name]
   (let [result
         (first
-         ((es/get-safe-eval-patterns)
+         ((get-safe-eval-patterns)
           :Agentlang.Kernel.Lang
           [{:Agentlang.Kernel.Lang/SetTimerStatus
             {:TimerName task-name :Status status}}]))]
@@ -95,7 +100,7 @@
   (let [n (:Name inst)]
     (log/info (str "running timer task - " n))
     (try
-      (let [result ((es/get-active-evaluator) (cn/make-instance (:ExpiryEvent inst)))]
+      (let [result ((get-active-evaluator) (cn/make-instance (:ExpiryEvent inst)))]
         (set-status-ok! n)
         (log/info (str "timer " n " result: " result))
         result)
@@ -106,7 +111,7 @@
 
 (defn- timer-cancelled? [n]
   (let [inst (first
-              ((es/get-safe-eval-patterns)
+              ((get-safe-eval-patterns)
                :Agentlang.Kernel.Lang
                [{:Agentlang.Kernel.Lang/Lookup_Timer {:Name n}}]))]
     (if inst
@@ -192,4 +197,4 @@
       (case (:Status timer)
         "ready" (start-timer timer)
         "running" (when (no-heartbeat? timer) (start-timer timer))))
-    (extract-result ((es/get-active-evaluator) (cn/make-instance {:Agentlang.Kernel.Lang/FindRunnableTimers {}}))))))
+    (extract-result ((get-active-evaluator) (cn/make-instance {:Agentlang.Kernel.Lang/FindRunnableTimers {}}))))))
