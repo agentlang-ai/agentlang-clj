@@ -420,6 +420,9 @@
     r
     (log/error (str "failed to load components from " model-name))))
 
+(defn load-test-components [model-name]
+  (loader/load-test-components model-name))
+
 (defn load-model-migration 
   ([model-name migration-type path-or-branch model-paths]
    (log/info (str "loading model for migration " migration-type " - " type " - " path-or-branch))
