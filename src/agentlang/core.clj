@@ -278,6 +278,8 @@
       (log/create-syslogger syslog-cfg))
     (when (get-in basic-config [:logging :dev-mode])
       (log/enable-dev-logging!))
+    (when-let [logback-config (get-in basic-config [:logging :logback-config])]
+      (log/apply-custom-logback-config logback-config))
     (initialize)
     (gs/set-app-config! basic-config)
     (cond
