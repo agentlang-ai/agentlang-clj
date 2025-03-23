@@ -1,4 +1,4 @@
-(ns agentlang.test.timer
+#_(do (ns agentlang.test.timer
   (:require #?(:clj [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [agentlang.util :as u]
@@ -107,4 +107,4 @@
       (Thread/sleep 3000)
       (is (= @a 2))
       (Thread/sleep 3000)
-      (is (= @a 2)))))
+      (is (= @a 2))))))

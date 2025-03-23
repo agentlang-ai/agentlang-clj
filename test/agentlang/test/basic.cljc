@@ -2,159 +2,91 @@
   (:require #?(:clj [clojure.test :refer [deftest is testing]]
                :cljs [cljs.test :refer-macros [deftest is testing]])
             [agentlang.util :as u]
+            [agentlang.api :as api]
             [agentlang.util.hash :as sh]
             [agentlang.store :as store]
             [agentlang.component :as cn]
-            [agentlang.compiler :as c]
             [agentlang.lang
              :as ln
              :refer [component attribute event relationship
-                     entity record dataflow inference]]
+                     entity record dataflow inference resolver]]
             [agentlang.lang.internal :as li]
-            [agentlang.api :as api]
-            [agentlang.evaluator :as e]
-            [agentlang.lang.opcode :as opc]
-            [agentlang.compiler.context :as ctx]
+            [agentlang.suspension :as sp]
             [agentlang.lang.datetime :as dt]
+            [agentlang.lang.relgraph :as rg]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
 
-#? (:clj
-    (def store (store/open-default-store nil))
-    :cljs
-    (def store (store/open-default-store {:type :reagent})))
-
-(defn- install-test-component []
-  (cn/remove-component :CompileTest)
-  (component :CompileTest)
-  (entity {:CompileTest/E1
-           {:X :Int
-            :Y :Int}}))
-
-(defn- init-test-context []
-  (install-test-component)
-  (let [ctx (c/make-context)
-        f (partial store/compile-query store)]
-    (ctx/bind-compile-query-fn! ctx f)
-    ctx))
-
-(defn- compile-pattern [ctx pat]
-  (:opcode (c/compile-pattern ctx pat)))
-
-(defn- pattern-compiler []
-  (let [ctx (init-test-context)]
-    [ctx (partial compile-pattern ctx)]))
-
-(defn- valid-opcode? [opc-predic opcode v]
-  (is (opc-predic opcode))
-  (if (fn? v)
-    (is (v (opc/arg opcode)))
-    (is (= v (opc/arg opcode)))))
-
-(defn- valid-opcode-with-query? [opcode farg]
-  (is (opc/query-instances? opcode))
-  (let [arg (opc/arg opcode)]
-    (is (= farg (first arg)))))
-
-(def ^:private load-instance? (partial valid-opcode? opc/load-instance?))
-(def ^:private match-inst? (partial valid-opcode? opc/match-instance?))
-
-(deftest compile-path
-  (let [[_ c] (pattern-compiler)
-        p1 :CompileTest/E1
-        p1e :CompileTest/E111
-        p2 :CompileTest/Create_E1
-        p2e :CompileTest/Update_E111]
-    (load-instance? (c p1) [[:CompileTest :E1] nil])
-    (tu/is-error #(c p1e))
-    (load-instance? (c p2) [[:CompileTest :Create_E1] nil])
-    (tu/is-error #(c p2e))))
-
-(deftest compile-pattern-01
-  (let [[_ c] (pattern-compiler)
-        p1 {:CompileTest/E1
-            {:X 100
-             :Y 200}}
-        opcs (c p1)]
-    (is (valid-opcode? opc/new-instance?
-                       (first opcs) [:CompileTest :E1]))
-    (is (valid-opcode? opc/set-literal-attribute?
-                       (second opcs) [:X 100]))
-    (is (valid-opcode? opc/set-literal-attribute?
-                       (nth opcs 2) [:Y 200]))
-    (is (valid-opcode? opc/intern-instance?
-                       (nth opcs 3)
-                       (fn [[r a _ v u]]
-                         (and (= r [:CompileTest :E1])
-                              (= a nil) (= v true) 
-                              (= u true)))))))
-
-(deftest compile-pattern-02
-  (let [[ctx c] (pattern-compiler)
-        p1 {:CompileTest/E1
-            {tu/q-id-attr 'id
-             :X 100
-             :Y '(+ :X 10)}}
-        uuid (u/uuid-string)]
-    ;; Variable `id` not in context.
-    (tu/is-error #(c p1))
-    ;; Any value will do, variable validation
-    ;; will happen only during runtime.
-    ;; In this case, the variable is resolved at
-    ;; compile-time itself.
-    (ctx/bind-variable! ctx 'id uuid)
-    (let [opcs (c p1)]
-      (is (valid-opcode-with-query? (first opcs) [:CompileTest :E1]))
-      (is (valid-opcode? opc/set-literal-attribute?
-                         (second opcs) [:X 100]))
-      (is (valid-opcode? opc/set-compound-attribute?
-                         (nth opcs 2) (fn [[n f]]
-                                        (and (= :Y n) (fn? f)))))
-      (is (valid-opcode? opc/intern-instance?
-                         (nth opcs 3)
-                         (fn [[r a _ v u]]
-                           (and (= r [:CompileTest :E1])
-                                (= a nil) (= v true)
-                                (= u true))))))))
-
-(deftest circular-dependency
-  (let [[ctx c] (pattern-compiler)
-        p1 {:CompileTest/E1
-            {tu/q-id-attr 'id
-             :X '(+ :Y 20)
-             :Y '(+ :X 10)}}
-        uuid (u/uuid-string)]
-    (ctx/bind-variable! ctx 'id uuid)
-    ;; Compilation fail on cyclic-dependency
-    (tu/is-error #(c p1))))
-
-(deftest compile-ref
-  (defcomponent :Df01
-    (entity {:Df01/E
-             {:X :Int
-              :Y :Int}}))
-  (let [e (cn/make-instance :Df01/E {:X 10 :Y 20})
-        evt {:Df01/Create_E {:Instance e}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
-    (is (cn/same-instance? e result))))
-
-(deftest compile-create
-  (defcomponent :Df02
-    (entity {:Df02/E
-             {:X :Int
-              :Y :Int}})
-    (record {:Df02/R {:A :Int}})
-    (event {:Df02/PostE {:R :Df02/R}}))
-  (dataflow :Df02/PostE
-            {:Df02/E {:X :Df02/PostE.R.A
-                      :Y '(* :X 10)}})
-  (let [r (cn/make-instance :Df02/R {:A 100})
-        evt (cn/make-instance :Df02/PostE {:R r})
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
-    (is (cn/instance-of? :Df02/E result))
-    (is (u/uuid-from-string (cn/id-attr result)))
-    (is (= 100 (:X result)))
-    (is (= 1000 (:Y result)))))
+(deftest basic-eval
+  (defcomponent :BasicEval
+    (entity
+     :BasicEval/E
+     {:Id :Identity
+      :X :Int
+      :Y :Int
+      :Z {:type :Int :expr '(* :X :Y)}})
+    (dataflow
+     :BasicEval/MakeE
+     {:BasicEval/E {:X :BasicEval/MakeE.X :Y (quote (+ :X :BasicEval/MakeE.X 1))} :as :E}
+     :E)
+    (dataflow
+     :BasicEval/LookupE
+     {:BasicEval/E {:Id? :BasicEval/LookupE.Id} :as [:E]}
+     :E)
+    (dataflow
+     :BasicEval/LookupAllE
+     {:BasicEval/E? {}})
+    (dataflow
+     :BasicEval/LookupEByX1
+     {:BasicEval/E {:X? :BasicEval/LookupEByX1.X} :as [:E]}
+     :E)
+    (dataflow
+     :BasicEval/LookupEByX2
+     {:BasicEval/E {:? {:where [:= :X :BasicEval/LookupEByX2.X]}}})
+    (dataflow
+     :BasicEval/UpdateE
+     {:BasicEval/E {:Id? :BasicEval/UpdateE.Id
+                    :Y (quote (+ :X :X 1))
+                    :X :BasicEval/UpdateE.X}})
+    (dataflow
+     :BasicEval/DeleteById
+     [:delete {:BasicEval/E {:Id? :BasicEval/DeleteById.Id}} :as :R]
+     :R)
+    (dataflow
+     :BasicEval/DeleteAll
+     [:delete :BasicEval/E :* :as :R]
+     :R))
+  (let [ev tu/invoke
+        cre #(ev {:BasicEval/MakeE {:X %}})
+        result (cre 100)
+        e? (partial cn/instance-of? :BasicEval/E)
+        verify-e (fn [e x]
+                   (is (e? e))
+                   (is (= x (:X e)))
+                   (let [y (+ x x 1)]
+                     (is (= y (:Y e)))
+                     (is (* x y) (:Z e))))
+        lookup-all-e #(let [rs (ev {:BasicEval/LookupAllE {}})]
+                        (is (= 2 (count rs)))
+                        (is (every? e? rs)))]
+    (verify-e result 100)
+    (is (cn/same-instance? result (ev {:BasicEval/LookupE {:Id (:Id result)}})))
+    (is (cn/same-instance? result (ev {:BasicEval/LookupEByX1 {:X 100}})))
+    (let [e2 (cre 200)]
+      (verify-e e2 200)
+      (is (cn/same-instance? e2 (ev {:BasicEval/LookupEByX1 {:X 200}})))
+      (is (cn/same-instance? e2 (first (ev {:BasicEval/LookupEByX2 {:X 200}}))))
+      (lookup-all-e)
+      (let [r0 (first (ev {:BasicEval/UpdateE {:Id (:Id result) :X 500}}))
+            r1 (ev {:BasicEval/LookupE {:Id (:Id result)}})]
+        (verify-e r0 500)
+        (is (= (:Id result) (:Id r0)))
+        (is (cn/same-instance? r0 r1))
+        (lookup-all-e)
+        (is (= (:Id r0) (:Id (first (ev {:BasicEval/DeleteById {:Id (:Id r0)}})))))
+        (is (nil? (ev {:BasicEval/LookupE {:Id (:Id result)}})))
+        (is (ev {:BasicEval/DeleteAll {}}))
+        (is (nil? (ev {:BasicEval/LookupE {:Id (:Id e2)}})))))))
 
 (deftest dependency
   (defcomponent :Df03
@@ -169,7 +101,7 @@
                       :Y '(* :X 10)}})
   (let [r (cn/make-instance :Df03/R {:A 100})
         evt {:Df03/PostE {:R r}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (is (cn/instance-of? :Df03/E result))
     (is (u/uuid-from-string (cn/id-attr result)))
     (is (= 100 (:X result)))
@@ -189,13 +121,13 @@
             {:Bool/E {:X :Bool/PostE2.B
                       :Y false}})
   (let [evt (cn/make-instance :Bool/PostE1 {:B true})
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (is (cn/instance-of? :Bool/E result))
     (is (u/uuid-from-string (cn/id-attr result)))
     (is (= true (:X result)))
     (is (= true (:Y result))))
   (let [evt (cn/make-instance :Bool/PostE2 {:B false})
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (is (cn/instance-of? :Bool/E result))
     (is (u/uuid-from-string (cn/id-attr result)))
     (is (= false (:X result)))
@@ -204,158 +136,498 @@
 (deftest self-reference
   (defcomponent :SelfRef
     (entity {:SelfRef/E
-             {:X :Int
+             {:Id :Identity
+              :X :Int
               :Y :Int
               :Z :Int}})
     (event {:SelfRef/AddToX {:EId :UUID
                              :Y :Int}}))
-  (dataflow :SelfRef/AddToX
-            {:SelfRef/E {tu/q-id-attr :SelfRef/AddToX.EId
-                         :X '(+ :X :SelfRef/AddToX.Y)
-                         :Y :SelfRef/AddToX.Y
-                         :Z 1}})
+  (dataflow
+   :SelfRef/AddToX
+   {:SelfRef/E {:Id? :SelfRef/AddToX.EId
+                :X '(+ :SelfRef/E.X :SelfRef/AddToX.Y)
+                :Y :SelfRef/AddToX.Y
+                :Z 1}})
   (let [e (cn/make-instance :SelfRef/E {:X 100 :Y 200 :Z 300})
         evt (cn/make-instance :SelfRef/Create_E {:Instance e})
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (is (cn/instance-of? :SelfRef/E result))
-    (is (u/uuid-from-string (cn/id-attr result)))
+    (is (u/uuid-from-string (:Id result)))
     (is (= 100 (:X result)))
     (is (= 200 (:Y result)))
     (is (= 300 (:Z result)))
-    (let [id (cn/id-attr result)
+    (let [id (:Id result)
           addevt (cn/make-instance :SelfRef/AddToX {:EId id :Y 10})
-          result (first (tu/fresult (e/eval-all-dataflows addevt)))
-          inst result]
+          inst (first (tu/invoke addevt))]
       (is (cn/instance-of? :SelfRef/E inst))
-      (is (u/uuid-from-string (cn/id-attr inst)))
+      (is (u/uuid-from-string (:Id inst)))
       (is (= 110 (:X inst)))
       (is (= 10 (:Y inst)))
       (is (= 1 (:Z inst))))))
 
-(deftest compound-attributes
-  (defcomponent :Df04
-    (entity {:Df04/E1 {:A :Int}})
-    (entity {:Df04/E2 {:AId {:ref (tu/append-id :Df04/E1)}
-                       :X :Int
-                       :Y {:type :Int
-                           :expr '(* :X :AId.A)}}})
-    (event {:Df04/PostE2 {:E1 :Df04/E1}}))
-  (dataflow :Df04/PostE2
-            {:Df04/E2 {:AId (tu/append-id :Df04/PostE2.E1)
-                       :X 500}})
-  (let [e (cn/make-instance :Df04/E1 {:A 100})
-        evt (cn/make-instance :Df04/Create_E1 {:Instance e})
-        e1 (first (tu/fresult (e/eval-all-dataflows evt)))
-        id (cn/id-attr e1)
-        e2 (cn/make-instance :Df04/E2 {:AId (cn/id-attr e1)
-                                       :X 20})
-        evt (cn/make-instance :Df04/PostE2 {:E1 e1})
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
-    (is (cn/instance-of? :Df04/E2 result))
-    (is (u/uuid-from-string (cn/id-attr result)))
-    (is (= (:AId result) id))
-    (is (= (:X result) 500))
-    (is (= (:Y result) 50000))))
+(deftest basic-contains
+  (defcomponent :BC01
+    (entity :BC01/A {:Id {:type :Int :id true} :X :Int})
+    (entity :BC01/B {:Id {:type :Int :id true} :Y :Int})
+    (entity :BC01/C {:Id {:type :Int :id true} :Z :Int})
+    (relationship :BC01/AB {:meta {:contains [:BC01/A :BC01/B]}})
+    (relationship :BC01/BC {:meta {:contains [:BC01/B :BC01/C]}})
+    (is (= #{:BC01/A} (rg/get-roots (rg/build-graph :BC01))))
+    (dataflow
+     :BC01/DeleteA
+     [:delete {:BC01/A {:Id? :BC01/DeleteA.Id}}])
+    (dataflow
+     :BC01/LookupAllA
+     {:BC01/A? {}})
+    (dataflow
+     :BC01/CreateB
+     {:BC01/B {:Id :BC01/CreateB.Id
+               :Y :BC01/CreateB.Y}
+      :BC01/AB {:BC01/A {:Id? :BC01/CreateB.A}}})
+    (dataflow
+     :BC01/LookupEveryB
+     {:BC01/B? {}})
+    (dataflow
+     :BC01/LookupEveryC
+     {:BC01/C? {}})
+    (dataflow
+     :BC01/LookupAllB
+     {:BC01/B? {}
+      :BC01/AB? {:BC01/A {:Id :BC01/LookupAllB.A}}})
+    (dataflow
+     :BC01/LookupAllBByX
+     {:BC01/B? {}
+      :BC01/AB? {:BC01/A {:X :BC01/LookupAllBByX.X}}})
+    (dataflow
+     :BC01/CreateC
+     {:BC01/C {:Id :BC01/CreateC.Id
+               :Z :BC01/CreateC.Z}
+      :BC01/BC {:BC01/B {:Id :BC01/CreateC.B}
+                :BC01/AB? {:BC01/A {:Id :BC01/CreateC.A}}}})
+    (dataflow
+     :BC01/LookupAllC
+     {:BC01/C? {}
+      :BC01/BC? {:BC01/B {:Id :BC01/LookupAllC.B}
+                 :BC01/AB {:BC01/A {:Id :BC01/LookupAllC.A}}}})
+    (dataflow
+     :BC01/UpdateC
+     {:BC01/C {:Id? :BC01/UpdateC.C
+               :Z '(* 10 :BC01/C.Z)}
+      :BC01/BC? {:BC01/B {:Id :BC01/UpdateC.B}
+                 :BC01/AB {:BC01/A {:Id :BC01/UpdateC.A}}}})
+    (dataflow
+     :BC01/LookupAllCByZ
+     {:BC01/C {:Z? :BC01/LookupAllCByZ.Z}
+      :BC01/BC? {:BC01/B {:Id :BC01/LookupAllCByZ.B}
+                 :BC01/AB {:BC01/A {:Id :BC01/LookupAllCByZ.A}}}})
+    (dataflow
+     :BC01/LookupAFromB
+     {:BC01/A? {}
+      :BC01/AB? {:BC01/B {:Id :BC01/LookupAFromB.B}}})
+    (dataflow
+     :BC01/LookupAFromC
+     {:BC01/A? {}
+      :BC01/AB? {:BC01/B {}
+                 :BC01/BC {:BC01/C {:Id :BC01/LookupAFromC.C}}}}))
+  (let [a? (partial cn/instance-of? :BC01/A)
+        b? (partial cn/instance-of? :BC01/B)
+        c? (partial cn/instance-of? :BC01/C)
+        check-paths (fn [aid b]
+                      (is (b? b))
+                      (is (= (cn/instance-path b)
+                             (li/vec-to-path (vec (concat [:BC01/A aid :BC01/AB :BC01/B] [(:Id b)]))))))
+        lookup-bs #(tu/invoke {:BC01/LookupAllB {:A %}})
+        lookup-bs-by-x #(tu/invoke {:BC01/LookupAllBByX {:X %}})
+        check-bs (fn [aid bs]
+                   (is (seq bs))
+                   (is (every? b? bs))
+                   (doseq [b bs] (check-paths aid b)))
+        create-c (fn [id z b a]
+                   (tu/invoke
+                    {:BC01/CreateC {:Id id :Z z :B b :A a}}))
+        lookup-cs #(tu/invoke {:BC01/LookupAllC {:B %1 :A %2}})
+        check-cs (fn [n s cs]
+                   (is (count cs) n)
+                   (is (every? c? cs))
+                   (is (= s (apply + (mapv :Z cs)))))
+        lookup-all-cs #(tu/invoke {:BC01/LookupAllCByZ {:Z %1 :B %2 :A %3}})
+        check-a (fn [id inst]
+                  (is (a? inst))
+                  (is (= id (:Id inst))))
+        update-c #(tu/invoke {:BC01/UpdateC {:C %1 :B %2 :A %3}})]
+    (is (a? (tu/invoke {:BC01/Create_A {:Instance {:BC01/A {:Id 1 :X 100}}}})))
+    (is (a? (tu/invoke {:BC01/Create_A {:Instance {:BC01/A {:Id 2 :X 300}}}})))
+    (is (b? (tu/invoke {:BC01/CreateB {:Id 101 :Y 10 :A 1}})))
+    (is (b? (tu/invoke {:BC01/CreateB {:Id 102 :Y 11 :A 1}})))
+    (is (b? (tu/invoke {:BC01/CreateB {:Id 103 :Y 12 :A 2}})))
+    (check-bs 1 (lookup-bs 1))
+    (check-bs 2 (lookup-bs 2))
+    (check-bs 1 (lookup-bs-by-x 100))
+    (check-bs 2 (lookup-bs-by-x 300))
+    (is (c? (create-c 201 30 101 1)))
+    (is (c? (create-c 202 40 101 1)))
+    (is (c? (create-c 203 40 101 1)))
+    (is (c? (create-c 204 50 102 1)))
+    (is (c? (create-c 205 60 102 1)))
+    (is (c? (create-c 206 70 103 2)))
+    (check-cs 3 (+ 40 40 30) (lookup-cs 101 1))
+    (check-cs 2 (+ 50 60) (lookup-cs 102 1))
+    (check-cs 2 70 (lookup-cs 103 2))
+    (check-cs 2 80 (lookup-all-cs 40 101 1))
+    (check-cs 1 30 (lookup-all-cs 30 101 1))
+    (check-cs 1 60 (lookup-all-cs 60 102 1))
+    (check-cs 1 70 (lookup-all-cs 70 103 2))
+    (check-cs 1 300 (update-c 201 101 1))
+    (check-cs 3 (+ 40 40 300) (lookup-cs 101 1))
+    (let [res (tu/invoke {:BC01/LookupAFromB {:B 101}})]
+      (is (= 1 (count res)))
+      (check-a 1 (first res)))
+    (let [res (tu/invoke {:BC01/LookupAFromB {:B 102}})]
+      (is (= 1 (count res)))
+      (check-a 1 (first res)))
+    (let [res (tu/invoke {:BC01/LookupAFromC {:C 206}})]
+      (is (= 1 (count res)))
+      (check-a 2 (first res)))
+    (let [as (tu/invoke {:BC01/LookupAllA {}})]
+      (is (= 2 (count as)))
+      (is (every? a? as)))
+    (let [as (tu/invoke {:BC01/DeleteA {:Id 1}})]
+      (is (= 1 (count as)))
+      (is (= 1 (:Id (first as)))))
+    (let [as (tu/invoke {:BC01/LookupAllA {}})]
+      (is (= 1 (count as)))
+      (is (every? a? as)))
+    (let [bs (tu/invoke {:BC01/LookupEveryB {}})]
+      (is (= 1 (count bs)))
+      (is (every? b? bs)))
+    (let [cs (tu/invoke {:BC01/LookupEveryC {}})]
+      (is (= 1 (count cs)))
+      (is (every? c? cs)))
+    (is (nil? (seq (lookup-bs 1))))
+    (check-bs 2 (lookup-bs 2))))
 
-(deftest compound-attributes-non-id
-  (defcomponent :Df04NID
-    (entity {:Df04NID/E1 {:A :Int
-                          :Name {:type :String
-                                 :unique true}}})
-    (entity {:Df04NID/E2 {:E1 {:ref :Df04NID/E1.Name}
-                          :X :Int
-                          :Y {:type :Int
-                              :expr '(* :X :E1.A)}}})
-    (event {:Df04NID/PostE2 {:E1Name :String}}))
-  (dataflow :Df04NID/PostE2
-            {:Df04NID/E2 {:E1 :Df04NID/PostE2.E1Name
-                          :X 500}})
-  (let [e (cn/make-instance :Df04NID/E1 {:A 100
-                                         :Name "E1-A"})
-        evt (cn/make-instance :Df04NID/Create_E1 {:Instance e})
-        e1 (first (tu/fresult (e/eval-all-dataflows evt)))
-        e1-name (:Name e1)
-        evt (cn/make-instance :Df04NID/PostE2 {:E1Name e1-name})
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
-    (is (cn/instance-of? :Df04NID/E2 result))
-    (is (u/uuid-from-string (cn/id-attr result)))
-    (is (= (:E1 result) e1-name))
-    (is (= (:X result) 500))
-    (is (= (:Y result) 50000))))
+(deftest basic-between
+  (defcomponent :BB01
+    (entity :BB01/A {:Id {:type :Int :id true} :X :Int})
+    (entity :BB01/B {:Id {:type :Int :id true} :Y :Int})
+    (entity :BB01/C {:Id {:type :Int :id true} :Z :Int})
 
-(defn- assert-ca-e! [result]
-  (is (cn/instance-of? :CA/E result))
-  (is (= 20 (:A result)))
-  (is (= 200 (:B result))))
+    (relationship :BB01/AB {:meta {:between [:BB01/A :BB01/B]}})
+    (relationship :BB01/BC {:meta {:contains [:BB01/B :BB01/C]}})
 
-(deftest compound-attributes-with-default-events
-  (defcomponent :CA
-    (entity {:CA/E {:A :Int
-                    :B {:type :Int
-                        :expr '(* :A 10)}}}))
-  (let [e (cn/make-instance :CA/E {:A 20})
-        evt {:CA/Create_E {:Instance e}}
-        r (e/eval-all-dataflows evt)
-        result (first (tu/fresult r))]
-    (assert-ca-e! result)
-    (let [id (cn/id-attr result)
-          evt {:CA/Lookup_E {cn/id-attr id}}
-          r (e/eval-all-dataflows evt)
-          result (first (tu/fresult r))]
-      (assert-ca-e! result))))
+    (dataflow
+     :BB01/CreateB
+     {:BB01/B {:Id :BB01/CreateB.Id :Y :BB01/CreateB.Y}
+      :BB01/AB {:BB01/A {:Id? :BB01/CreateB.A}}})
 
-(deftest compound-attributes-literal-arg
-  (defcomponent :Df041
-    (record {:Df041/R {:A :Int}})
-    (entity {:Df041/E {:X :Int
-                       :Y {:type :Int
-                           :expr '(* :X 10)}}})
-    (event {:Df041/PostE {:R :Df041/R}}))
-  (dataflow :Df041/PostE
-            {:Df041/E {:X :Df041/PostE.R.A}})
-  (let [r (cn/make-instance :Df041/R {:A 100})
-        evt (cn/make-instance :Df041/PostE {:R r})
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
-    (is (cn/instance-of? :Df041/E result))
-    (is (= (:X result) 100))
-    (is (= (:Y result) 1000))))
+    (dataflow
+     :BB01/CreateC
+     {:BB01/C {:Id :BB01/CreateC.Id :Z :BB01/CreateC.Z}
+      :BB01/BC {:BB01/B {:Id? :BB01/CreateC.B}}})
 
-(deftest fire-event
-  (#?(:clj do
-      :cljs cljs.core.async/go)
-   (defcomponent :Df05
-     (entity {:Df05/E1 {:A :Int}})
-     (entity {:Df05/E2 {:B :Int}})
-     (event {:Df05/Evt01 {:E1 :Df05/E1}})
-     (event {:Df05/Evt02 {:E1 :Df05/E1}})
-     (dataflow :Df05/Evt01
-               {:Df05/Evt02 {:E1 :Df05/Evt01.E1}})
-     (dataflow :Df05/Evt02
-               {:Df05/E2 {:B :Df05/Evt02.E1.A}}))
-   (let [e1 (cn/make-instance :Df05/E1 {:A 100})
-         evt {:Df05/Evt01 {:E1 e1}}
-         result (first (tu/fresult (e/eval-all-dataflows evt)))]
-     (is (cn/instance-of? :Df05/E2 result))
-     (is (= (:B result) 100)))))
+    (dataflow
+     :BB01/LookupB
+     {:BB01/B? {}
+      :BB01/AB? {:BB01/A {:Id :BB01/LookupB.A}}})
 
-(deftest refcheck
-  (defcomponent :RefCheck
-    (entity {:RefCheck/E1 {:A :Int}})
-    (entity {:RefCheck/E2 {:AId {:ref (tu/append-id :RefCheck/E1)}
-                           :X :Int}}))
-  (let [e (cn/make-instance :RefCheck/E1 {:A 100})
-        id (cn/id-attr e)
-        e2 (cn/make-instance :RefCheck/E2 {:AId (cn/id-attr e) :X 20})
-        evt (cn/make-instance :RefCheck/Create_E2 {:Instance e2})]
-    (is (= :not-found (:status (first (e/eval-all-dataflows evt)))))
-    (let [evt (cn/make-instance :RefCheck/Create_E1 {:Instance e})
-          e1 (first (tu/fresult (e/eval-all-dataflows evt)))
-          id (cn/id-attr e1)
-          e2 (cn/make-instance :RefCheck/E2 {:AId (cn/id-attr e1) :X 20})
-          evt (cn/make-instance :RefCheck/Create_E2 {:Instance e2})
-          inst (first (tu/fresult (e/eval-all-dataflows evt)))]
-      (is (cn/instance-of? :RefCheck/E2 inst))
-      (is (= (:AId inst) id)))))
+    (dataflow
+     :BB01/LookupC
+     {:BB01/C? {}
+      :BB01/BC? {:BB01/B {:Id :BB01/LookupC.B}}})
+
+    (dataflow
+     :BB01/LookupAllCforA
+     {:BB01/C? {}
+      :BB01/BC?
+      {:BB01/B {}
+       :BB01/AB?
+       {:BB01/A {:Id :BB01/LookupAllCforA.A}}}})
+
+    (dataflow
+     :BB01/LookupAllForA
+     {:BB01/C? {}
+      :BB01/BC?
+      {:BB01/B {}
+       :BB01/AB?
+       {:BB01/A {:Id :BB01/LookupAllForA.A} :as :A}}
+      :into
+      {:AX :A.X
+       :BY :BB01/B.Y
+       :CZ :BB01/C.Z}}))
+
+  (let [create-a #(tu/invoke {:BB01/Create_A
+                              {:Instance
+                               {:BB01/A {:Id %1 :X %2}}}})
+        create-b #(tu/invoke {:BB01/CreateB {:Id %1 :Y %2 :A %3}})
+        create-c #(tu/invoke {:BB01/CreateC {:Id %1 :Z %2 :B %3}})
+
+        lookup-b #(tu/invoke {:BB01/LookupB {:A %}})
+
+        lookup-c-for-a #(tu/invoke {:BB01/LookupAllCforA {:A %}})
+        lookup-all-for-a #(tu/invoke {:BB01/LookupAllForA {:A %}})
+
+        a? (partial cn/instance-of? :BB01/A)
+        b? (partial cn/instance-of? :BB01/B)
+        c? (partial cn/instance-of? :BB01/C)
+        check-bs (fn [ids bs]
+                   (is (= (count bs) (count ids)))
+                   (is (every? b? bs))
+                   (doseq [b bs]
+                     (is (some (fn [id] (= id (:Id b))) ids))))]
+    (is (a? (create-a 1 10)))
+    (is (a? (create-a 2 20)))
+    (is (b? (create-b 11 110 1)))
+    (is (b? (create-b 12 120 1)))
+    (is (b? (create-b 13 130 2)))
+
+    (is (c? (create-c 20 1010 11)))
+    (is (c? (create-c 21 1030 12)))
+    (is (c? (create-c 21 1030 13)))
+
+    (is (= 2 (count (lookup-c-for-a 1))))
+    (let [rs (lookup-all-for-a 1)]
+      (is (= 2 (count rs)))
+      (is (= 20 (apply + (mapv :AX rs))))
+      (is (= (+ 110 120) (apply + (mapv :BY rs))))
+      (is (= (+ 1010 1030) (apply + (mapv :CZ rs)))))
+    (check-bs [11 12] (lookup-b 1))
+    (check-bs [13] (lookup-b 2))))
+
+(deftest query-operators
+  (defcomponent :QO
+    (entity
+     :QO/E
+     {:Id :Identity
+      :S :String
+      :I :Int})
+    (dataflow
+     :QO/FindEByS
+     {:QO/E
+      {:S? [:in :QO/FindEByS.Values]}})
+    (dataflow
+     :QO/FindEByI
+     {:QO/E
+      {:I? [:between :QO/FindEByI.Start :QO/FindEByI.End]}}))
+  (let [cre #(tu/invoke
+              {:QO/Create_E
+               {:Instance
+                {:QO/E {:S %1 :I %2}}}})
+        e? (partial cn/instance-of? :QO/E)
+        es (mapv cre ["a" "b" "c" "d" "e"] [1 2 3 4 5])
+        chkes (fn [n predic? es]
+                (is (= n (count es)))
+                (is (every? e? es))
+                (when predic?
+                  (is (every? identity (mapv predic? es)))))]
+    (chkes 5 nil es)
+    (chkes 2 (fn [e] (some #{(:S e)} #{"a" "c"})) (tu/invoke {:QO/FindEByS {:Values ["a" "c"]}}))
+    (chkes 3 (fn [e] (some #{(:I e)} #{2 3 4})) (tu/invoke {:QO/FindEByI {:Start 2 :End 4}}))))
+
+(deftest handle-cases
+  (defcomponent :HC
+    (entity
+     :HC/E
+     {:Id {:type :Int :id true}})
+    (record :HC/R {:Id :Int})
+    (dataflow
+     :HC/FindE
+     {:HC/E {:Id? :HC/FindE.Id}
+      li/except-tag
+      {:not-found {:HC/R {:Id :HC/FindE.Id}}}}))
+  (let [r1 (tu/invoke
+            {:HC/Create_E {:Instance {:HC/E {:Id 10}}}})
+        e? (partial cn/instance-of? :HC/E)
+        find-e #(tu/invoke {:HC/FindE {:Id %}})]
+    (is (e? r1))
+    (is (cn/same-instance? r1 (first (find-e 10))))
+    (let [r (find-e 20)]
+      (is (cn/instance-of? :HC/R r))
+      (is (= 20 (:Id r))))))
+
+(defn ppe-update-y [inst]
+  (assoc inst :Y (* (:X inst) 10)))
+
+(deftest pre-post-events
+  (defcomponent :PPE
+    (entity
+     :PPE/E
+     {:Id {:type :Int :id true}
+      :X :Int
+      :Y {:type :Int :optional true}})
+    (entity
+     :PPE/F
+     {:Id {:type :Int :id true}
+      :Z :Int})
+    (dataflow
+     :PPE/LookupF
+     {:PPE/F {:Id? :PPE/LookupF.Id} :as [:F]}
+     :F)
+    (dataflow
+     [:before :create :PPE/E]
+     {:PPE/F {:Id :Instance.Id
+              :Z :Instance.X}}
+     [li/call-fn '(agentlang.test.basic/ppe-update-y :Instance)])
+    (dataflow
+     [:before :update :PPE/E]
+     [li/call-fn '(agentlang.test.basic/ppe-update-y :Instance)])
+    (dataflow
+     [:after :update :PPE/E]
+     {:PPE/F {:Id? :Instance.Id
+              :Z :Instance.X}})
+    (dataflow
+     [:after :delete :PPE/E]
+     [:delete {:PPE/F {:Id? :Instance.Id}}]))
+  (let [cre (fn [id x]
+              (tu/invoke
+               {:PPE/Create_E
+                {:Instance
+                 {:PPE/E
+                  {:Id id :X x}}}}))
+        upe (fn [path new-x]
+              (first
+               (tu/invoke
+                {:PPE/Update_E
+                 {:Data {:X new-x}
+                  :path path}})))
+        allf (fn [] (tu/invoke {:PPE/LookupAll_F {}}))
+        findf (fn [id] (tu/invoke {:PPE/LookupF {:Id id}}))
+        e? (partial cn/instance-of? :PPE/E)
+        f? (partial cn/instance-of? :PPE/F)
+        e1 (cre 1 10)
+        chkfs (fn [n]
+                (let [fs (allf)]
+                  (is (= n (count fs)))
+                  (is (every? f? fs))))
+        chkf (fn [id x]
+                (let [f (findf id)]
+                  (= (:Z f) x)))]
+    (is (e? e1))
+    (is (= 100 (:Y e1)))
+    (chkfs 1)
+    (tu/is-error "duplicate PPE/E.Id" #(cre 1 10))
+    (chkfs 1)
+    (is (e? (cre 2 20)))
+    (chkfs 2)
+    (chkf 1 10)
+    (chkf 2 20)
+    (let [e (upe (li/path-attr e1) 30)]
+      (is (e? e))
+      (is (= 30 (:X e)))
+      (is (= 300 (:Y e))))
+    (chkf 1 30)
+    (chkf 2 20)
+    (is (e? (first (tu/invoke {:PPE/Delete_E {:path (li/path-attr e1)}}))))
+    (chkfs 1)
+    (is (nil? (findf 1)))
+    (chkf 2 20)))
+
+(defn f1 [x y] (+ x y))
+(defn f2 [x] (cn/make-instance :Fnc/R {:X x}))
+
+(deftest fncall
+  (let [r? (partial cn/instance-of? :Fnc/R)]
+    (defcomponent :Fnc
+      (record :Fnc/R {:X :Int})
+      (dataflow
+       :Fnc/CallF1
+       [li/call-fn '(agentlang.test.basic/f1 :Fnc/CallF1.X 100) :as :R]
+       :R)
+      (dataflow
+       :Fnc/CallF2
+       [li/call-fn '(agentlang.test.basic/f2 :Fnc/CallF2.X) :check :Fnc/R :as :R]
+       :R)
+      (dataflow
+       :Fnc/CallF3
+       [li/call-fn '(agentlang.test.basic/f2 :Fnc/CallF3.X) :check (fn [r] (and (r? r) (= 10 (:X r)))) :as :R]
+       :R))
+    (is (= 105 (tu/invoke {:Fnc/CallF1 {:X 5}})))
+    (is (r? (tu/invoke {:Fnc/CallF2 {:X 10}})))
+    (is (r? (tu/invoke {:Fnc/CallF3 {:X 10}})))
+    (tu/is-error "check for :X failed" #(tu/invoke {:Fnc/CallF3 {:X 11}}))))
+
+(deftest queries
+  (defcomponent :Qs
+    (entity :Qs/E {:Name {:type :String :id true} :X :Int})
+    (dataflow
+     :Qs/FindE
+     {:Qs/E {:Name? [:in :Qs/FindE.Names]}}))
+  (let [es (mapv (fn [n x]
+                   (tu/invoke
+                    {:Qs/Create_E
+                     {:Instance
+                      {:Qs/E {:Name n :X x}}}}))
+                 ["a" "b" "c" "d" "e"]
+                 [1 2 3 4 5])
+        e? (partial cn/instance-of? :Qs/E)
+        chkes (fn [n sum-x es]
+                (is (= n (count es)))
+                (is (every? e? es))
+                (is (= sum-x (apply + (mapv :X es)))))]
+    (chkes 5 15 es)
+    (chkes 3 8 (tu/invoke {:Qs/FindE {:Names ["a" "c" "d"]}})))
+  ;; TODO: more query tests here
+  )
+
+(deftest filter-test
+  (defcomponent :Ft
+    (entity :Ft/E {:Id {:type :Int :id true} :X :Int})
+    (dataflow
+     :Ft/FindOddEs
+     {:Ft/E? {} :as :Es}
+     [:filter [:match :%.X
+               odd? true
+               false]
+      :Es]))
+  (let [mke (fn [id x]
+              (tu/invoke
+               {:Ft/Create_E
+                {:Instance
+                 {:Ft/E {:Id id :X x}}}}))
+        es (mapv mke [1 2 3 4 5] [11 12 13 14 15])
+        e? (partial cn/instance-of? :Ft/E)
+        chkes (fn [es n]
+                (is (= n (count es)))
+                (is (every? e? es)))]
+    (chkes es 5)
+    (let [es (tu/invoke {:Ft/FindOddEs {}})]
+      (chkes es 3)
+      (is (every? #(odd? (:X %)) es)))))
+
+(deftest dataflow-suspension
+  (defcomponent :DfSusp
+    (entity :DfSusp/A {:Id {:type :Int :id true} :X :Int :Flag {:type :Boolean :default false}})
+    (entity :DfSusp/B {:Id {:type :Int :id true} :Y :Int})
+    (dataflow
+     :DfSusp/MakeB
+     {:DfSusp/A {:Id :DfSusp/MakeB.Id :X :DfSusp/MakeB.X} :as :A}
+     [:match :A.Flag
+      true {:DfSusp/B {:Id 1 :Y 100}}
+      false {:DfSusp/B {:Id 2 :Y 200}}]))
+  (resolver
+   :DfSusp/R
+   {:with-methods
+    {:create #(sp/as-suspended (assoc % :Flag (odd? (:X %))))}
+    :paths [:DfSusp/A]})
+  (u/run-init-fns)
+  (let [chkb (fn [id inst]
+               (is (cn/instance-of? :DfSusp/B inst))
+               (is (= (:Id inst) id))
+               (is (= (:Y inst) (* 100 id))))
+        susp? (partial cn/instance-of? :Agentlang.Kernel.Eval/Suspension)
+        parse-susp-result (fn [r]
+                            (is (cn/instance-of? :DfSusp/A (:suspended-with r)))
+                            (is (string? (:suspension-id r)))
+                            [(:suspended-with r) (:suspension-id r)])
+        [a1 s1] (parse-susp-result (tu/invoke {:DfSusp/MakeB {:Id 101 :X 1}}))
+        [a2 s2] (parse-susp-result (tu/invoke {:DfSusp/MakeB {:Id 102 :X 2}}))]
+    (is susp? (tu/invoke {:Agentlang.Kernel.Eval/LoadSuspension {:Id s1}}))
+    (is susp? (tu/invoke {:Agentlang.Kernel.Eval/LoadSuspension {:Id s2}}))
+    (chkb 1 (tu/invoke {:Agentlang.Kernel.Eval/RestartSuspension
+                        {:Id s1 :Value (assoc a1 :Flag true)}}))
+    (chkb 2 (tu/invoke {:Agentlang.Kernel.Eval/RestartSuspension
+                        {:Id s2 :Value (assoc a2 :Flag false)}}))
+    (is (nil? (tu/invoke {:Agentlang.Kernel.Eval/RestartSuspension
+                          {:Id s1 :Value (assoc a1 :Flag false)}})))))
 
 (deftest s3-test
   (defcomponent :AWS
@@ -366,16 +638,16 @@
               :CreateBucketConfiguration :AWS/CreateBucketConfig}})
     (event {:AWS/CreateBucket
             {:Bucket :String
-             :Region :String}}))
-  (dataflow :AWS/CreateBucket
-            {:AWS/CreateBucketConfig {:LocationConstraint :AWS/CreateBucket.Region}}
-            {:AWS/S3Bucket {:Bucket :AWS/CreateBucket.Bucket
-                            :CreateBucketConfiguration :AWS/CreateBucketConfig}})
+             :Region :String}})
+    (dataflow :AWS/CreateBucket
+              {:AWS/CreateBucketConfig {:LocationConstraint :AWS/CreateBucket.Region}}
+              {:AWS/S3Bucket {:Bucket :AWS/CreateBucket.Bucket
+                              :CreateBucketConfiguration :AWS/CreateBucketConfig}}))
   ;(override-test-resolver :AWSS3Resolver :AWS/S3Bucket)
   (let [bucket "ftltestbucket11"
         region "us-east-1"
         evt {:AWS/CreateBucket {:Bucket bucket :Region region}}
-        e1 (first (tu/fresult (e/eval-all-dataflows evt)))]
+        e1 (tu/invoke evt)]
     (is (cn/instance-of? :AWS/S3Bucket e1))
     (is (= bucket (:Bucket e1)))
     (is (cn/instance-of? :AWS/CreateBucketConfig (:CreateBucketConfiguration e1)))
@@ -388,11 +660,11 @@
                            :R :RecordEnt/R}})
     (event {:RecordEnt/PostE {:RA :Int}}))
   (dataflow :RecordEnt/PostE
-            {:RecordEnt/R {:A :RecordEnt/PostE.RA}}
+            {:RecordEnt/R {:A :RecordEnt/PostE.RA} :as :R}
             {:RecordEnt/E {:Q 100
-                           :R :RecordEnt/R}})
+                           :R :R}})
   (let [evt {:RecordEnt/PostE {:RA 10}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (is (cn/instance-of? :RecordEnt/E result))
     (is (u/uuid-from-string (cn/id-attr result)))
     (is (= 100 (:Q result)))
@@ -407,7 +679,7 @@
   (let [x "this is a secret"
         e (cn/make-instance :H/E {:A 10 :X x})
         evt {:H/Create_E {:Instance e}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))
+        result (tu/invoke evt)
         r2 (cn/dissoc-write-only result)]
     (is (cn/instance-of? :H/E result))
     (is (sh/crypto-hash-eq? (:X result) x))
@@ -427,7 +699,7 @@
               {:Alias/R {:F :G}}))
   (let [e (cn/make-instance :Alias/E {:X 100})
         evt (cn/make-instance :Alias/Evt {:Instance e})
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (is (cn/instance-of? :Alias/R result))
     (is (cn/instance-of? :Alias/F (:F result)))
     (is (= 100 (get-in result [:F :Y])))))
@@ -435,138 +707,113 @@
 (deftest multi-alias
   (defcomponent :MultiAlias
     (entity {:MultiAlias/E {:X :Int}})
-    (entity {:MultiAlias/F {:A :Int
-                            :B :Int}})
-    (event {:MultiAlias/Evt {:EX1 :Int
-                             :EX2 :Int}})
-    (dataflow :MultiAlias/Evt
-              {:MultiAlias/E {:X :MultiAlias/Evt.EX1} :as :E1}
-              {:MultiAlias/E {:X :MultiAlias/Evt.EX2} :as :E2}
-              {:MultiAlias/F {:A :E1.X :B :E2.X}}))
+    (entity {:MultiAlias/F {:A :Int :B :Int}})
+    (event {:MultiAlias/Evt {:EX1 :Int :EX2 :Int}})
+    (dataflow
+     :MultiAlias/Evt
+     {:MultiAlias/E {:X :MultiAlias/Evt.EX1} :as :E1}
+     {:MultiAlias/E {:X :MultiAlias/Evt.EX2} :as :E2}
+     {:MultiAlias/F {:A :E1.X :B :E2.X}}))
   (let [evt {:MultiAlias/Evt {:EX1 100 :EX2 10}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (is (cn/instance-of? :MultiAlias/F result))
     (is (= 100 (:A result)))
     (is (= 10 (:B result)))))
-
-(defn- conditional-event-01 [i x]
-  (let [evt {:Cond/Evt {:I i}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
-    (is (cn/instance-of? :Cond/R result))
-    (is (= x (:X result)))))
-
-(defn- conditional-event-02 [r predic]
-  (let [evt {:Cond/EvtWithInst {:R r}}
-        result (tu/fresult (e/eval-all-dataflows evt))]
-    (is (predic result))))
 
 (deftest conditional
   (defcomponent :Cond
     (record {:Cond/R {:X :Int}})
     (event {:Cond/Evt {:I :Int}})
-    (dataflow :Cond/Evt
-              [:match :Cond/Evt.I
-               0 {:Cond/R {:X 100}}
-               1 {:Cond/R {:X 200}}
-               {:Cond/R {:X 300}}])
+    (dataflow
+     :Cond/Evt
+     [:match :Cond/Evt.I
+      0 {:Cond/R {:X 100}}
+      1 {:Cond/R {:X 200}}
+      {:Cond/R {:X 300}}
+      :as :Result]
+     :Result)
     (event {:Cond/EvtWithInst {:R :Cond/R}})
-    (dataflow :Cond/EvtWithInst
-              {:Cond/R {:X 100} :as :R1}
-              [:match :Cond/EvtWithInst.R.X
-               :R1.X true]))
-  (conditional-event-01 0 100)
-  (conditional-event-01 1 200)
-  (conditional-event-01 3 300)
-  (conditional-event-02 (cn/make-instance :Cond/R {:X 200}) false?)
-  (conditional-event-02 (cn/make-instance :Cond/R {:X 100}) true?))
+    (dataflow
+     :Cond/EvtWithInst
+     {:Cond/R {:X 100} :as :R1}
+     [:match :Cond/EvtWithInst.R.X
+      :R1.X true])
+    (dataflow
+     :Cond/Evt2
+     [:match
+      [:= :Cond/Evt2.X 10] {:Cond/R {:X 100}}
+      [:>= :Cond/Evt2.X 5] {:Cond/R {:X 50}}
+      {:Cond/R {:X 0}}]))
+  (let [conditional-event-01
+        (fn [i x]
+          (let [evt {:Cond/Evt {:I i}}
+                result (tu/invoke evt)]
+            (is (cn/instance-of? :Cond/R result))
+            (is (= x (:X result)))))
+        conditional-event-02
+        (fn [r predic]
+          (let [evt {:Cond/EvtWithInst {:R r}}
+                result (tu/invoke evt)]
+            (is (predic result))))
+        conditional-event-03
+        (fn [x]
+          (let [r (tu/invoke {:Cond/Evt2 {:X x}})]
+            (is (cn/instance-of? :Cond/R r))
+            (is (= (* x 10) (:X r)))))]
+    (conditional-event-01 0 100)
+    (conditional-event-01 1 200)
+    (conditional-event-01 3 300)
+    (conditional-event-02 (cn/make-instance :Cond/R {:X 200}) nil?)
+    (conditional-event-02 (cn/make-instance :Cond/R {:X 100}) true?)
+    (conditional-event-03 10)
+    (conditional-event-03 5)
+    (conditional-event-03 0)))
 
 (deftest conditional-boolean
   (defcomponent :CondBool
     (record {:CondBool/R {:X :Int}})
-    (event {:CondBool/Evt {:I :Boolean}})
+    (event {:CondBool/Evt {:I :Any}})
     (dataflow :CondBool/Evt
               [:match :CondBool/Evt.I
                true {:CondBool/R {:X 100}}
                false {:CondBool/R {:X 200}}
-               {:CondBool/R {:X 300}}]))
-  (let [evt {:CondBool/Evt {:I true}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
-    (is (cn/instance-of? :CondBool/R result))
-    (is (= 100 (:X result))))
-  (let [evt {:CondBool/Evt {:I false}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
-    (is (cn/instance-of? :CondBool/R result))
-    (is (= 200 (:X result)))))
+               {:CondBool/R {:X 300}} :as :R]
+              :R))
+  (let [chk (fn [i x]
+              (let [evt {:CondBool/Evt {:I i}}
+                    result (tu/invoke evt)]
+                (is (cn/instance-of? :CondBool/R result))
+                (is (= x (:X result)))))]
+    (chk true 100)
+    (chk false 200)
+    (chk 1 300)))
 
 (deftest conditional-pattern-list
   (defcomponent :CondPatList
+    (entity {:CondPatList/E {:Id {:type :Int :id true} :Y :Int}})
     (record {:CondPatList/R {:X :Int}})
     (event {:CondPatList/Evt {:I :Int}})
     (dataflow :CondPatList/Evt
               [:match :CondPatList/Evt.I
-               0 [{:CondPatList/R {:X 100}}
+               0 [{:CondPatList/E {:Id 1 :Y 100}}
                   {:CondPatList/R {:X 101}}]
                1 {:CondPatList/R {:X 200}}
                {:CondPatList/R {:X 300}}]))
   (let [evt {:CondPatList/Evt {:I 0}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)
+        chkes (fn []
+                (let [es (tu/invoke {:CondPatList/LookupAll_E {}})]
+                  (is (= 1 (count es)))
+                  (is (cn/instance-of? :CondPatList/E (first es)))
+                  (is (= 100 (:Y (first es))))))]
     (is (cn/instance-of? :CondPatList/R result))
-    (is (= 101 (:X result))))
-  (let [evt {:CondPatList/Evt {:I 1}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
-    (is (cn/instance-of? :CondPatList/R result))
-    (is (= 200 (:X result)))))
-
-(deftest match-with-alias
-  (defcomponent :MA
-    (record {:MA/R {:X :Int}})
-    (event {:MA/Evt {:I :Int}})
-    (dataflow :MA/Evt
-              [:match :MA/Evt.I
-               0 {:MA/R {:X 100}}
-               1 {:MA/R {:X 200}}
-               {:MA/R {:X 300}} :as :K]
-              :K))
-  (let [r01 (first (tu/fresult (e/eval-all-dataflows {:MA/Evt {:I 1}})))
-        r02 (first (tu/fresult (e/eval-all-dataflows {:MA/Evt {:I 0}})))
-        r03 (first (tu/fresult (e/eval-all-dataflows {:MA/Evt {:I 3}})))]
-    (is (cn/instance-of? :MA/R r01))
-    (is (= 200 (:X r01)))
-    (is (cn/instance-of? :MA/R r02))
-    (is (= 100 (:X r02)))
-    (is (cn/instance-of? :MA/R r03))
-    (is (= 300 (:X r03)))))
-
-(deftest match-with-alias-no-alternative-case
-  (defcomponent :MA2
-    (record {:MA2/R {:X :Int}})
-    (event {:MA2/Evt {:I :Int}})
-    (dataflow :MA2/Evt
-              [:match :MA2/Evt.I
-               0 {:MA2/R {:X 100}}
-               1 {:MA2/R {:X 200}} :as :K]
-              :K))
-  (let [r01 (first (tu/fresult (e/eval-all-dataflows {:MA2/Evt {:I 1}})))
-        r02 (first (tu/fresult (e/eval-all-dataflows {:MA2/Evt {:I 0}})))
-        r03 (first (tu/fresult (e/eval-all-dataflows {:MA2/Evt {:I 2}})))]
-    (is (cn/instance-of? :MA2/R r01))
-    (is (= 200 (:X r01)))
-    (is (cn/instance-of? :MA2/R r02))
-    (is (= 100 (:X r02)))))
-
-(deftest alias-scope
-  (defcomponent :AScope
-    (entity {:AScope/E {:X :Int}})
-    (record {:AScope/R {:A :Int :B :Int}})
-    (event {:AScope/Evt {:I :Int}})
-    (dataflow :AScope/Evt
-              {:AScope/E {:X :AScope/Evt.I} :as :E1}
-              {:AScope/E {:X '(+ :E1.X 1)} :as :E2}
-              {:AScope/R {:A :E1.X :B :E2.X}}))
-  (let [result (first (tu/fresult (e/eval-all-dataflows {:AScope/Evt {:I 10}})))]
-    (is (cn/instance-of? :AScope/R result))
-    (is (= 10 (:A result)))
-    (is (= 11 (:B result)))))
+    (is (= 101 (:X result)))
+    (chkes)
+    (let [evt {:CondPatList/Evt {:I 1}}
+          result (tu/invoke evt)]
+      (is (cn/instance-of? :CondPatList/R result))
+      (is (= 200 (:X result))))
+    (chkes)))
 
 (deftest for-each
   (defcomponent :ForEach
@@ -575,10 +822,10 @@
     (event {:ForEach/Evt {:I :Int}})
     (dataflow :ForEach/Evt
               {:ForEach/E {:X :ForEach/Evt.I} :as :E1}
-              {:ForEach/E {:X '(+ :E1.X 1)} :as :E2}
-              [:for-each :ForEach/E?
-               {:ForEach/R {:A :ForEach/E.X}}]))
-  (let [result (tu/fresult (e/eval-all-dataflows {:ForEach/Evt {:I 10}}))
+              {:ForEach/E {:X '(+ :E1.X 1)}}
+              [:for-each {:ForEach/E? {}}
+               {:ForEach/R {:A :%.X}}]))
+  (let [result (tu/invoke {:ForEach/Evt {:I 10}})
         firstE (first result)
         secondE (second result)]
     (is (= 2 (count result)))
@@ -598,7 +845,7 @@
               [:for-each :ForEachLR/E?
                {:ForEachLR/R {:A :ForEachLR/E.X}}
                :ForEachLR/R.A]))
-  (let [result (tu/fresult (e/eval-all-dataflows {:ForEachLR/Evt {:I 10}}))]
+  (let [result (tu/invoke {:ForEachLR/Evt {:I 10}})]
     (is (= 2 (count result)))
     (is (= 10 (first result)))
     (is (= 11 (second result)))))
@@ -614,7 +861,7 @@
               {:ForEachBQ/E {:X '(+ :E1.X 1)} :as :E2}
               [:for-each {:ForEachBQ/E {:X? 10}}
                {:ForEachBQ/R {:A :ForEachBQ/E.X}}]))
-  (let [result (tu/fresult (e/eval-all-dataflows {:ForEachBQ/Evt {:I 10}}))
+  (let [result (tu/invoke {:ForEachBQ/Evt {:I 10}})
         firstE (first result)]
     (is (= 1 (count result)))
     (is (cn/instance-of? :ForEachBQ/R firstE))
@@ -631,7 +878,7 @@
               [:for-each :ForEachAlias/E?
                {:ForEachAlias/R {:A :ForEachAlias/E.X}} :as :L]
               :L))
-  (let [result (tu/fresult (e/eval-all-dataflows {:ForEachAlias/Evt {:I 10}}))
+  (let [result (tu/invoke {:ForEachAlias/Evt {:I 10}})
         firstE (first result)
         secondE (second result)]
     (is (= 2 (count result)))
@@ -642,7 +889,7 @@
 
 (deftest destructuring-alias
   (defcomponent :DestructuringAlias
-    (entity {:DestructuringAlias/E {:X {:type    :Int
+    (entity {:DestructuringAlias/E {:X {:type :Int
                                         :indexed true}
                                     :N :String}})
     (record {:Result {:Values :Any}})
@@ -651,18 +898,16 @@
     (dataflow :DestructuringAlias/Evt
               {:DestructuringAlias/E {:X? :DestructuringAlias/Evt.X} :as [:R1 :R2 :_ :R4 :& :RS]}
               {:DestructuringAlias/Result {:Values [:R1 :R2 :R4 :RS]}}))
-  (let [es [(cn/make-instance :DestructuringAlias/E {:X 1 :N "e01"})
-            (cn/make-instance :DestructuringAlias/E {:X 2 :N "e02"})
-            (cn/make-instance :DestructuringAlias/E {:X 1 :N "e03"})
-            (cn/make-instance :DestructuringAlias/E {:X 1 :N "e04"})
-            (cn/make-instance :DestructuringAlias/E {:X 1 :N "e05"})
-            (cn/make-instance :DestructuringAlias/E {:X 1 :N "e06"})
-            (cn/make-instance :DestructuringAlias/E {:X 1 :N "e07"})]
-        evts (map #(cn/make-instance :DestructuringAlias/Create_E {:Instance %}) es)
-        _    (doall (map (comp (comp first tu/fresult)
-                               #(e/eval-all-dataflows %))
-                         evts))
-        result (:Values (first (tu/fresult (e/eval-all-dataflows {:DestructuringAlias/Evt {:X 1}}))))]
+  (let [cres [(cn/make-instance :DestructuringAlias/E {:X 1 :N "e01"})
+              (cn/make-instance :DestructuringAlias/E {:X 2 :N "e02"})
+              (cn/make-instance :DestructuringAlias/E {:X 1 :N "e03"})
+              (cn/make-instance :DestructuringAlias/E {:X 1 :N "e04"})
+              (cn/make-instance :DestructuringAlias/E {:X 1 :N "e05"})
+              (cn/make-instance :DestructuringAlias/E {:X 1 :N "e06"})
+              (cn/make-instance :DestructuringAlias/E {:X 1 :N "e07"})]
+        es (mapv #(tu/invoke {:DestructuringAlias/Create_E {:Instance %}}) cres)
+        _ (is (every? (partial cn/instance-of? :DestructuringAlias/E) es))
+        result (:Values (tu/invoke {:DestructuringAlias/Evt {:X 1}}))]
     (is (and (= "e01" (:N (first result)))
              (= 1 (:X (first result)))))
     (is (= "e03" (:N (nth result 1))))
@@ -671,22 +916,6 @@
     (is (= 1 (:X (nth result 2))))
     (is (= ["e06" "e07"] (map :N (last result))))
     (is (= [1 1] (map :X (last result))))))
-
-(deftest delete-insts
-  (defcomponent :Del
-    (entity {:Del/E {:X :Int}}))
-  (let [e (cn/make-instance :Del/E {:X 100})
-        e01 (first (tu/fresult (e/eval-all-dataflows {:Del/Create_E {:Instance e}})))
-        id (cn/id-attr e01)
-        lookup-evt (cn/make-instance :Del/Lookup_E {cn/id-attr id})
-        e02 (first (tu/fresult (e/eval-all-dataflows lookup-evt)))
-        del-result (e/eval-all-dataflows {:Del/Delete_E {cn/id-attr id}})
-        r01 (str (cn/id-attr (first (tu/fresult del-result))))
-        r02 (e/eval-all-dataflows lookup-evt)]
-    (is (cn/instance-of? :Del/E e01))
-    (is (cn/same-instance? e01 e02))
-    (is (= id r01))
-    (is (= :not-found (:status (first r02))))))
 
 (defn- assert-le
   ([n obj xs y]
@@ -713,27 +942,140 @@
                    :Y :Int}}))
   (let [e (cn/make-instance :L/E {:Xs [1 2 3] :Y 100})
         evt {:L/Create_E {:Instance e}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (assert-le result [1 2 3] 100))
   (let [evt {:L/MakeE0 {:Xs [10 20 30 40] :Y 1}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (assert-le result [10 20 30 40] 1))
   (try
     (let [evt {:L/MakeE0 {:Xs [10 "hi"] :Y 1}}
-          result (tu/fresult (e/eval-all-dataflows evt))]
+          result (tu/invoke evt)]
       (is (nil? result)))
     (catch #?(:clj Exception :cljs :default) ex
       (is ex)))
   (let [evt {:L/MakeE1 {:X1 10 :X2 20 :Y 1}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (assert-le result [10 20] 1))
   (let [evt {:L/MakeE2 {:X 10 :Y 90}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (assert-le result [200 780 10] 90))
   (let [e (cn/make-instance :L/F {:Xs [10 "hi"] :Y 1})
         evt {:L/Create_F {:Instance e}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (assert-le :L/F result [10 "hi"] 1)))
+
+(deftest embedded-record
+  (defcomponent :ER
+    (record :ER/R {:X :Int})
+    (entity
+     :ER/E
+     {:Id {:type :Int :id true}
+      :R :ER/R})
+    (dataflow
+     :ER/MakeE
+     {:ER/E
+      {:Id :ER/MakeE.Id
+       :R {:ER/R {:X :ER/MakeE.X}}}}))
+  (let [e (tu/invoke {:ER/MakeE {:Id 1 :X 100}})]
+    (is (cn/instance-of? :ER/E e))
+    (is (cn/instance-of? :ER/R (:R e)))))
+
+(deftest try_
+  (defcomponent :Try
+    (entity
+     :Try/E
+     {:Id {:type :Int :id true}
+      :X {:type :Int :indexed true}})
+    (record
+     :Try/R
+     {:Y :Int})
+    (dataflow
+     :Try/Find
+     [:try
+      {:Try/E {:X? :Try/Find.X}}
+      :error {:Try/R {:Y 1}}
+      :not-found {:Try/R {:Y 0}}
+      :as :Result]
+     :Result))
+  (let [r1 (tu/invoke {:Try/Find {:X 100}})
+        e0 (cn/make-instance {:Try/E {:Id 1 :X 100}})
+        e1 (tu/invoke {:Try/Create_E {:Instance e0}})
+        e? (partial cn/instance-of? :Try/E)
+        _ (is e? e1)
+        e2 (first (tu/invoke {:Try/Find {:X 100}}))
+        r? (partial cn/instance-of? :Try/R)]
+    (is (and (r? r1) (= 0 (:Y r1))))
+    (is (e? e2))))
+
+(deftest compound-path-attributes
+  (defcomponent :Cpa
+    (entity
+     :Cpa/A
+     {:Id {:type :Int :id true}
+      :B :Path
+      :C :Path
+      :BZ {:type :Int :expr :B.Z}
+      :X {:type :Int :expr '(+ :Y 5 :B.Z)}
+      :Y :Int
+      :Z {:type :Int :expr '(* :X :C.B.Z)}})
+    (entity
+     :Cpa/B
+     {:Id {:type :Int :id true}
+      :Z :Int})
+     (entity
+      :Cpa/C
+      {:Id {:type :Int :id true}
+       :B :Path})
+    (dataflow
+     :Cpa/UpdateY
+     {:Cpa/A
+      {:Id? :Cpa/UpdateY.A
+       :Y :Cpa/UpdateY.Y}})
+    (dataflow
+     :Cpa/UpdateZ
+     {:Cpa/B
+      {:Id? :Cpa/UpdateZ.B
+       :Z :Cpa/UpdateZ.Z}}))
+  (let [a? (partial cn/instance-of? :Cpa/A)
+        b? (partial cn/instance-of? :Cpa/B)
+        c? (partial cn/instance-of? :Cpa/C)
+        crb (fn [id z]
+              (let [b (tu/invoke
+                       {:Cpa/Create_B
+                        {:Instance
+                         {:Cpa/B {:Id id :Z z}}}})]
+                (is (b? b))
+                b))
+        cra (fn [id bpath cpath y]
+              (let [a
+                    (tu/invoke
+                     {:Cpa/Create_A
+                      {:Instance
+                       {:Cpa/A {:Id id :B bpath :C cpath :Y y}}}})]
+                (is (a? a))
+                a))
+        crc (fn [id bpath]
+              (let [c
+                    (tu/invoke
+                     {:Cpa/Create_C
+                      {:Instance
+                       {:Cpa/C {:Id id :B bpath}}}})]
+                (is (c? c))
+                c))
+        [b1 b2] (mapv crb [10 20] [90 91])
+        c (crc 100 (li/path-attr b2))
+        a (cra 1 (li/path-attr b1) (li/path-attr c) 10)
+        chka (fn [a bz cbz]
+               (is (= bz (:BZ a)))
+               (is (= (+ (:Y a) bz 5) (:X a)))
+               (is (= (* (:X a) cbz))))]
+    (let [a (first (tu/invoke {:Cpa/UpdateY {:A (:Id a) :Y 20}}))
+          _ (chka a 90 91)
+          a1 (first (tu/invoke {:Cpa/Lookup_A {:path (li/path-attr a)}}))
+          _ (is (= a a1))
+          _ (is (b? (first (tu/invoke {:Cpa/UpdateZ {:B (:Id b1) :Z 100}}))))
+          a2 (first (tu/invoke {:Cpa/Lookup_A {:path (li/path-attr a)}}))]
+      (chka a2 100 91))))
 
 (deftest optional-attributes
   (defcomponent :OptAttr
@@ -768,7 +1110,7 @@
   (dataflow :OptRecAttr/PostE
             {:OptRecAttr/E {:Q :OptRecAttr/PostE.Q}})
   (let [evt {:OptRecAttr/PostE {:Q 10}}
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
+        result (tu/invoke evt)]
     (is (cn/instance-of? :OptRecAttr/E result))
     (is (u/uuid-from-string (cn/id-attr result)))
     (is (= 10 (:Q result)))))
@@ -866,11 +1208,9 @@
                          [:password [:size 40]]]
                         [:div
                          [:submit [:text "Login"]]]]]}}))
-  (let [result (first
-                (tu/fresult
-                 (e/eval-all-dataflows
-                  {:EdnAttr/RenderLoginForm
-                   {:Title "Login" :X 150 :Y 12}})))]
+  (let [result (tu/invoke
+                {:EdnAttr/RenderLoginForm
+                 {:Title "Login" :X 150 :Y 12}})]
     (is (cn/instance-of? :EdnAttr/Form result))
     (is (= 160 (:Y result)))
     (is (= [:div [:p [:b "Login"]]]
@@ -885,7 +1225,7 @@
     (record {:PA/OnClickEvent {:Source {:type :Int :optional true}}})
     (record {:PA/Position {:X :Int :Y :Int
                            :W :Int :H :Int}})
-    (entity {:PA/Button {:Id {:type :Int tu/guid true}
+    (entity {:PA/Button {:Id {:type :Int :id true}
                          :Title :String
                          :Position :PA/Position
                          :OnClick :PA/OnClickEvent}})
@@ -898,97 +1238,9 @@
                            {:PA/OnClickEvent {:Source :PA/AddButton.Id}}}}))
   (let [pos (cn/make-instance {:PA/Position {:X 10 :Y 10 :W 100 :H 50}})
         add-btn (cn/make-instance {:PA/AddButton {:Title "OK" :Position pos :Id 1}})
-        result (tu/first-result add-btn)]
+        result (tu/invoke add-btn)]
     (is (cn/instance-of? :PA/Button result))
     (is (cn/instance-of? :PA/OnClickEvent (:OnClick result)))))
-
-(deftest edn-ui
-  (defcomponent :EdnUI
-    (entity {:EdnUI/UserLogin
-             {:UserNameLabel {:type :String
-                              :default "Username: "}
-              :PasswordLabel {:type :String
-                              :default "Password: "}
-              :ButtonTitle {:type :String
-                            :default "Login"}
-              :HandlerEvent {:type :Keyword
-                             :optional true}
-              :View {:type :Edn
-                     :default
-                     [:div
-                      [:div
-                       [:label :UserNameLabel]
-                       [:input [:type "text"]]]
-                      [:div
-                       [:label :PasswordLabel]
-                       [:input [:type "password"]]]
-                      [:div
-                       [:button [:title :ButtonTitle]
-                        :on-click :HandlerEvent]]]}}})
-    (entity {:EdnUI/LoginForm
-             {:UserLogin {:type :EdnUI/UserLogin
-                          :optional true}
-              :Title {:type :String
-                      :default "Login"}
-              :DOMTarget :String
-              :View {:type :Edn
-                     :default
-                     [:div
-                      [:h2 :Title]
-                      [:div :UserLogin.View]]}}})
-
-    (event {:EdnUI/LoginEvent
-            {:Data :Any}})
-
-    (dataflow :EdnUI/MakeLoginForm
-              {:EdnUI/UserLogin
-               {:UserNameLabel :EdnUI/MakeLoginForm.UserNameLabel
-                :PasswordLabel :EdnUI/MakeLoginForm.PasswordLabel
-                :ButtonTitle :EdnUI/MakeLoginForm.ButtonTitle
-                :HandlerEvent :EdnUI/MakeLoginForm.HandlerEvent}}
-              {:EdnUI/LoginForm
-               {:Title :EdnUI/MakeLoginForm.FormTitle
-                :DOMTarget "app"
-                :UserLogin :EdnUI/UserLogin}}))
-  (let [evt (cn/make-instance {:EdnUI/MakeLoginForm
-                               {:FormTitle "Login to the V8 Platform"
-                                :UserNameLabel "Your V8 userId or email: "
-                                :PasswordLabel "Password: "
-                                :ButtonTitle "Login"
-                                :HandlerEvent :EdnUI/LoginEvent}})
-        result (first (tu/fresult (e/eval-all-dataflows evt)))]
-    (is (cn/instance-of? :EdnUI/LoginForm result))))
-
-(deftest async-event
-  (#?(:clj do
-      :cljs cljs.core.async/go)
-   (defcomponent :AE
-     (record {:AE/R01 {:X :Int}})
-     (event {:AE/Evt01 {:A :Int}})
-     (event {:AE/Evt02 {:B :Int}})
-     (dataflow :AE/Evt01
-               {:AE/Evt02 {:B :AE/Evt01.A}})
-     (dataflow :AE/Evt02
-               {:AE/R01 {:X :AE/Evt02.B}}))
-   (let [evt01 (cn/make-instance {:AE/Evt01 {:A 100}})
-         result (first (tu/fresult (e/eval-all-dataflows evt01)))]
-     (is (cn/instance-of? :AE/R01 result))
-     (is (= 100 (:X result))))))
-
-(deftest path-type
-  (#?(:clj do
-      :cljs cljs.core.async/go)
-   (defcomponent :PathType
-     (entity {:PathType/E
-              {:X :Path}}))
-   (let [e1 (cn/make-instance {:PathType/E {:X :A/B.R}})
-         e2 (cn/make-instance {:PathType/E {:X "A/B.R"}})]
-     (is (cn/instance-of? :PathType/E e1))
-     (is (= :A/B.R (:X e1)))
-     (is (cn/instance-of? :PathType/E e2))
-     (is (= :A/B.R (keyword (:X e2))))
-     (is (= "k/j" (:X (cn/make-instance {:PathType/E {:X "k/j"}}))))
-     (is (= :k (:X (cn/make-instance {:PathType/E {:X :k}})))))))
 
 (deftest format-test
   (#?(:clj do
@@ -1044,45 +1296,6 @@
        (is (= bi (:Z e)))
        (is (= dt (:D e)))))))
 
-(deftest match-cond
-  (#?(:clj do
-      :cljs cljs.core.async/go)
-   (defcomponent :MC
-     (record
-      {:MC/R
-       {:X :Int}})
-     (dataflow
-      :MC/E
-      [:match
-       [:like :MC/E.Y "xyz%"] {:MC/R {:X 0}}
-       [:< :MC/E.X 10] {:MC/R {:X 1}}
-       [:= :MC/E.X 100] {:MC/R {:X 2}}
-       [:between 1000 5000 :MC/E.X] {:MC/R {:X 100}}
-       [:in [11 20 30] :MC/E.X] {:MC/R {:X 5}}
-       [:or [:= 10 :MC/E.X] [:= 21 :MC/E.X]] {:MC/R {:X 12}}
-       {:MC/R {:X 3}}
-       :as :Result]
-      :Result))
-   (defn run [x result]
-     (let [r (first
-              (tu/fresult
-               (e/eval-all-dataflows
-                (cn/make-instance
-                 {:MC/E
-                  {:X x
-                   :Y
-                   (if (neg? x)
-                     "xyz@eee.com"
-                     "abc@ddsd.com")}}))))]
-       (is (= (:X r) result))))
-   (run 3000 100)
-   (run 20 5)
-   (run 21 12)
-   (run -1 0)
-   (run 100 2)
-   (run 9 1)
-   (run 22 3)))
-
 (deftest inheritance-type-check
   (defcomponent :Itc
     (record
@@ -1108,129 +1321,16 @@
         v3 (cn/make-instance {:Itc/Child3 {:X 9 :Y 8 :A 7}})
         e (cn/make-instance {:Itc/E
                              {:Vals [v1 v2 v3]}})
-        result (first
-                (tu/fresult
-                 (e/eval-all-dataflows
-                  (cn/make-instance
-                   {:Itc/Create_E
-                    {:Instance e}}))))]
+        result (tu/invoke
+                (cn/make-instance
+                 {:Itc/Create_E
+                  {:Instance e}}))]
     (is (cn/instance-of? :Itc/E result))
     (every? #(or (cn/instance-of? :Itc/Child1 %)
                  (cn/instance-of? :Itc/Child2 %)
                  (cn/instance-of? :Itc/Child3 %))
             (:Vals result))
     (every? (partial cn/instance-of? :Itc/Base) (:Vals result))))
-
-#?(:clj
-   (deftest check-wrong-reference-attribute-use
-     (defcomponent :UserAccount
-       (entity {:UserAccount/Estimate
-                {:Balance :Float
-                 :Loan    :Float}})
-       (record {:UserAccount/Total {:Total :Float}})
-       (event {:UserAccount/IncreaseLoan {:Balance :UserAccount/Total}}))
-     (dataflow :UserAccount/IncreaseLoan
-               {:UserAccount/Estimate {:Balance :UserAccount/IncreaseLoan.Total
-                                       :Loan    '(+ :Balance 10000)}})
-     (let [r (cn/make-instance :UserAccount/Total {:Total 100000})
-           evt (cn/make-instance :UserAccount/IncreaseLoan {:Balance r})]
-       (is (thrown-with-msg? Exception #"Error in: Event "
-                             (cn/instance-of? :UserAccount/Estimate
-                                              (first (tu/fresult (e/eval-all-dataflows evt)))))))))
-
-#?(:clj
-   (deftest access-wrong-event-entity
-     (defcomponent :UserAccount
-       (entity {:UserAccount/Estimate
-                {:Balance :Float
-                 :Loan    :Float}})
-       (record {:UserAccount/Total {:Total :Float}})
-       (event {:UserAccount/IncreaseLoan {:Balance :UserAccount/Total}}))
-     (dataflow :UserAccount/IncreaseLoan
-               ;Intentional
-               {:UserAccount/Estimate {:Balance :UserAccount/Increase.Balance.Total
-                                       :Loan    '(+ :Balance 10000)}})
-     (let [r (cn/make-instance :UserAccount/Total {:Total 100000})
-           evt (cn/make-instance :UserAccount/IncreaseLoan {:Balance r})]
-       (is (thrown-with-msg? Exception #"Reference cannot be found for"
-                             (cn/instance-of? :UserAccount/Estimate
-                                              (first (tu/fresult (e/eval-all-dataflows evt)))))))))
-
-#?(:clj
-   (deftest ref-id-of-record
-     (defcomponent :UserAccount
-       (record {:UserAccount/Estimate
-                {:Balance :Float
-                 :Loan    :Float}})
-       (record {:UserAccount/Total {:Total :Float}})
-       (event {:UserAccount/IncreaseLoan {cn/id-attr
-                                          {:type :UUID
-                                           :default "167d0b04-fa75-11eb-9a03-0242ac130003"}
-                                          :Balance :UserAccount/Total}}))
-     (dataflow :UserAccount/IncreaseLoan
-               {:UserAccount/Estimate {tu/q-id-attr (tu/append-id :UserAccount/IncreaseLoan)}}
-               {:UserAccount/Estimate {:Balance :UserAccount/IncreaseLoan.Balance.Total
-                                       :Loan    '(+ :Balance 10000)}})
-     (let [r (cn/make-instance :UserAccount/Total {:Total 100000})
-           evt (cn/make-instance :UserAccount/IncreaseLoan {:Balance r})]
-       (is (thrown? Exception (cn/instance-of? :UserAccount/Estimate (first (tu/fresult (e/eval-all-dataflows evt)))))))))
-
-(deftest try_
-  (defcomponent :Try
-    (entity
-     :Try/E
-     {:X {:type :Int
-          :indexed true}})
-    (record
-     :Try/R
-     {:Y :Boolean})
-    (dataflow
-     :Try/Find
-     [:try
-      {:Try/E {:X? :Try/Find.X}}
-      :ok {:Try/R {:Y true}}
-      [:error :not-found] {:Try/R {:Y false}}]))
-  (let [r1 (tu/first-result {:Try/Find {:X 100}})
-        e (cn/make-instance {:Try/E {:X 100}})
-        _ (tu/first-result {:Try/Create_E
-                            {:Instance e}})
-        r2 (tu/first-result {:Try/Find {:X 100}})]
-    (is (not (:Y r1)))
-    (is (:Y r2))))
-
-(deftest password-match
-  (defcomponent :PM
-    (entity
-     :PM/User
-     {:UserName {:type :String
-                 :indexed true}
-      :Password :Password})
-    (event
-     :PM/UserLogin
-     {:UserName :String
-      :Password :Password})
-    (dataflow
-     :PM/UserLogin
-     {:PM/User
-      {:UserName? :PM/UserLogin.UserName}}
-     [:match :PM/UserLogin.Password
-      :PM/User.Password :PM/User]))
-  (let [u (tu/first-result
-           {:PM/Create_User
-            {:Instance
-             {:PM/User
-              {:UserName "admin"
-               :Password "admin"}}}})
-        r1 (e/eval-all-dataflows
-            {:PM/UserLogin
-             {:UserName "admin"
-              :Password "admin"}})
-        r2 (e/eval-all-dataflows
-            {:PM/UserLogin
-             {:UserName "admin"
-              :Password "kkkk"}})]
-    (is (cn/same-instance? u (:result (first r1))))
-    (is (not (:result (first r2))))))
 
 #?(:clj
    (deftest data-generation-and-validation-for-listof []
@@ -1549,13 +1649,16 @@
      (defcomponent :Mtt01
        (entity
         :Mtt01/E
-        {:Id {:type :Int tu/guid true}
+        {:Id {:type :Int :id true}
          :X :Int
-         :Y :String}))
+         :Y :String})
+       (dataflow
+        :Mtt01/DeleteE
+        [:delete {:Mtt01/E {:Id? :Mtt01/DeleteE.Id}}]))
      (let [create-e (fn [id]
                       (let [x (* id 10)]
                         (loop [attempts 0]
-                          (let [res (tu/first-result
+                          (let [res (tu/invoke
                                      {:Mtt01/Create_E
                                       {:Instance
                                        {:Mtt01/E {:Id id :X x
@@ -1564,15 +1667,14 @@
                                 (when (< attempts 4) (recur (inc attempts))))))))
            e? (partial cn/instance-of? :Mtt01/E)
            create-es #(mapv create-e %)
-           lookup-all (fn [] (tu/result
+           lookup-all (fn [] (tu/invoke
                               {:Mtt01/LookupAll_E {}}))
            delete-e (fn [id]
                       (loop [attempts 0]
-                        (let [res (tu/first-result
-                                   {:Mtt01/Delete_E
-                                    {:Id id}})]
-                          (if (seq res) res
-                              (when (< attempts 4) (recur (inc attempts)))))))
+                        (let [res (tu/invoke {:Mtt01/DeleteE {:Id id}})]
+                          (if (seq res)
+                            (first res)
+                            (when (< attempts 4) (recur (inc attempts)))))))
            delete-es #(mapv delete-e %)
            trtest (fn [opr ids]
                     (let [res (atom nil)
@@ -1631,17 +1733,18 @@
    {:Api.Test/F
     {:Name :Api.Test/MakeF.Name
      :Y :Api.Test/MakeF.Y}
-    :-> [[:Api.Test/Rel :E]]})
+    :Api.Test/Rel :E})
   (tu/finalize-component :Api.Test)
-  (let [f (tu/first-result
+  (let [f (tu/invoke
            {:Api.Test/MakeF
             {:Name "abc" :Y 100}})]
     (is (cn/instance-of? :Api.Test/F f))
     (is (cn/same-instance?
          f
-         (tu/first-result
-          {:Api.Test/Lookup_F
-           {li/path-attr (li/path-attr f)}})))))
+         (first
+          (tu/invoke
+           {:Api.Test/Lookup_F
+            {:path (li/path-attr f)}}))))))
 
 (deftest password-encryption-bug
   (defcomponent :PswdEnc
@@ -1652,7 +1755,7 @@
           :check #(or (agentlang.util.hash/crypto-hash? %)
                       (let [c (count %)]
                         (< 2 c 10)))}}))
-  (let [e (tu/first-result
+  (let [e (tu/invoke
            {:PswdEnc/Create_E
             {:Instance
              {:PswdEnc/E {:X "hello" :Y "jjj3223"}}}})]
@@ -1672,3 +1775,65 @@
   (cn/set-current-component :Dc01)
   (is (= :Dc01/A (entity :A {:Id :Identity :X :Int})))
   (is (= :Dc01/B (record :B {:Name :String}))))
+
+(deftest fetch-from-raw
+  (defcomponent :Ffr
+    (entity
+     :Ffr/E
+     {:Id :Identity
+      :rbac [{:roles ["user"] :allow [:create]}]})
+    (entity
+     :Ffr/F
+     {:X {:type :Int :id true}})
+    (relationship
+     :Ffr/R
+     {:meta {:between [:Ffr/E :Ffr/F]}
+      :Y :Int}))
+  (is (= {:Id :Identity
+          :rbac [{:roles ["user"] :allow [:create]}]}
+         (cn/fetch-user-schema :Ffr/E)))
+  (is (= {:X {:type :Int :id true}}
+         (cn/fetch-user-schema :Ffr/F)))
+  (is (= {:meta {:between [:Ffr/E :Ffr/F], :cascade-on-delete true}, :Y :Int}
+         (cn/fetch-user-schema :Ffr/R))))
+
+(defn one-to-one-helper [cn uq-tag]
+  (let [mkn (partial li/make-path cn)
+        A (mkn :A)
+        B (mkn :B)
+        AB (mkn :AB)]
+    (defcomponent cn
+      (entity A {:Id {:type :Int :id true} :X :Int})
+      (entity B {:Id {:type :Int :id true} :Y :Int})
+      (relationship AB {:meta (merge {:between [A B]} (when uq-tag {uq-tag true}))}))
+    (let [cra (fn [id x] (tu/invoke {(mkn :Create_A) {:Instance {A {:Id id :X x}}}}))
+          crb (fn [id y] (tu/invoke {(mkn :Create_B) {:Instance {B {:Id id :Y y}}}}))
+          crab (fn [a b] (tu/invoke {(mkn :Create_AB) {:Instance {AB {:A a :B b}}}}))
+          a? (partial cn/instance-of? A)
+          b? (partial cn/instance-of? B)
+          ab? (partial cn/instance-of? AB)
+          as (mapv cra [1 2 3] [10 20 30])
+          bs (mapv crb [90 91 92] [101 102 103])
+          _ (is (and (= 3 (count as)) (every? a? as)))
+          _ (is (and (= 3 (count bs)) (every? b? bs)))]
+      (let [f #(crab (li/path-attr (first as)) (li/path-attr (first bs)))]
+        (is (ab? (f)))
+        (if (= uq-tag :one-one)
+          (tu/is-error "duplicate between relationship" f)
+          (is (ab? (f)))))
+      (is (ab? (crab (li/path-attr (second as)) (li/path-attr (nth bs 2))))))))
+
+(deftest one-to-one
+  (one-to-one-helper :Oto1 nil)
+  (one-to-one-helper :Oto2 :one-one))
+
+;; TODO: add more HTTP-apis test, move to separate test-file.
+(deftest basic-http-api
+  (defcomponent :Bha
+    (entity :Bha/A {:Id {:type :Int :id true} :X :Int}))
+  #?(:clj
+     (let [r (tu/api-post "Bha/A" {:Bha/A {:Id 1 :X 100}})]
+       (is (= 200 (:status r)))
+       (let [body (:body r)]
+         (is (= :Bha/A (:type body)))
+         (is (= 1 (:Id (:result body))))))))

@@ -14,17 +14,15 @@
    [agentlang.store.db-common :as dbc]
    [agentlang.resolver.timer :as timer]
    [agentlang.resolver.registry :as rr]
-   [agentlang.compiler :as c]
    [agentlang.component :as cn]
-   [agentlang.evaluator :as e]
-   [agentlang.evaluator.intercept :as ei]
+   [agentlang.interpreter :as ev]
+   [agentlang.exec-graph :as exg]
    [agentlang.global-state :as gs]
    [agentlang.lang :as ln]
    [agentlang.lang.rbac :as lr]
    [agentlang.lang.tools.loader :as loader]
    [agentlang.lang.tools.build :as build]
    [agentlang.auth :as auth]
-   [agentlang.rbac.core :as rbac]
    [agentlang.connections.client :as cc]
    [agentlang.inference.embeddings.core :as ec]
    [agentlang.inference.service.core :as isc]
@@ -47,23 +45,24 @@
         mp
         [mp])))))
 
-(defn store-from-config [config]
-  (or (:store-handle config)
-      (e/store-from-config (:store config))))
+(defn store-from-config [store-or-store-config]
+  (cond
+    (or (nil? store-or-store-config)
+        (map? store-or-store-config))
+    (or (:store-handle store-or-store-config)
+        (store/open-default-store store-or-store-config))
 
-(defn set-aot-dataflow-compiler! [config]
-  (when-let [store (store-from-config config)]
-    (cn/set-aot-dataflow-compiler!
-     (partial
-      c/maybe-compile-dataflow
-      (partial store/compile-query store)))))
+    (and (keyword? store-or-store-config)
+         (= store-or-store-config :none))
+    nil
+
+    :else
+    store-or-store-config))
 
 (defn load-components [components model-root config]
-  (set-aot-dataflow-compiler! config)
   (loader/load-components components model-root))
 
 (defn load-components-from-model [model model-root config]
-  (set-aot-dataflow-compiler! config)
   (loader/load-components-from-model
    model model-root
    (:load-model-from-resource config)))
@@ -103,17 +102,7 @@
     (loader/read-model n)))
 
 (defn log-app-init-result! [result]
-  (cond
-    (map? result)
-    (let [f (if (= :ok (:status result))
-              #(log/info %)
-              #(log/error %))]
-      (f (str "app-init: " result)))
-
-    (seqable? result)
-    (doseq [r result] (log-app-init-result! r))
-
-    :else (log/error (str "app-init: " result))))
+  (log/info (str "app-init: " (u/pretty-str result))))
 
 (defn- run-standalone-patterns! [evaluator]
   (when-let [pats (seq @gs/standalone-patterns)]
@@ -122,28 +111,38 @@
                  (cn/register-dataflow event-name pats))
         (try
           (evaluator {event-name {}})
+          (catch Exception ex
+            (log/error ex))
           (finally
             (gs/uninstall-standalone-patterns!)
             (cn/remove-event event-name)))))))
 
 (defn trigger-appinit-event! [evaluator data]
-  (let [result (evaluator
-                (cn/make-instance
-                 {:Agentlang.Kernel.Lang/AppInit
-                  {:Data (or data {})}}))]
-    (log-app-init-result! result)))
+  (try
+    (let [result
+          (:result
+           (evaluator
+            (cn/make-instance
+             {:Agentlang.Kernel.Lang/AppInit
+              {:Data (or data {})}})))]
+      (log-app-init-result! result))
+    (catch Exception ex
+      (log/error ex))))
 
 (defn- run-configuration-patterns! [evaluator config]
-  (doseq [[llm-name llm-attrs] (:llms config)]
-    (let [r (first (evaluator
-                    (cn/make-instance
-                     {:Agentlang.Core/Create_LLM
-                      {:Instance
-                       (ln/preprocess-standalone-pattern
-                        {:Agentlang.Core/LLM
-                         (merge {:Name llm-name} llm-attrs)})}})))]
-      (when (not= :ok (:status r))
-        (log/error (str "failed to initialize LLM - " llm-name))))))
+  (try
+    (doseq [[llm-name llm-attrs] (:llms config)]
+      (let [r (first (evaluator
+                      (cn/make-instance
+                       {:Agentlang.Core/Create_LLM
+                        {:Instance
+                         (ln/preprocess-standalone-pattern
+                          {:Agentlang.Core/LLM
+                           (merge {:Name llm-name} llm-attrs)})}})))]
+        (when (not= :ok (:status r))
+          (log/error (str "failed to initialize LLM - " llm-name)))))
+    (catch Exception ex
+      (log/error ex))))
 
 (defn- run-pending-timers! []
   (when (:timer-manager (gs/get-app-config))
@@ -157,8 +156,23 @@
           (catch InterruptedException _ nil))
         (recur)))))
 
+(defn- maybe-delete-model-config-instance [entity-name]
+  (let [evt-name (cn/crud-event-name entity-name :Delete)]
+    (gs/evaluate-dataflow-internal {evt-name {:Id 1}})))
+
+(defn save-model-config-instance [app-config model-name]
+  (when-let [ent (cn/model-config-entity model-name)]
+    (when-let [attrs (ent app-config)]
+      (maybe-delete-model-config-instance ent)
+      (let [evt-name (cn/crud-event-name ent :Create)]
+        (gs/evaluate-dataflow-internal {evt-name {:Instance {ent attrs}}})))))
+
+(defn save-model-config-instances []
+  (when-let [app-config (gs/get-app-config)]
+    (mapv (partial save-model-config-instance app-config) (cn/model-names))))
+
 (defn run-appinit-tasks! [evaluator init-data]
-  (e/save-model-config-instances)
+  (save-model-config-instances)
   (run-configuration-patterns! evaluator (gs/get-app-config))
   (run-standalone-patterns! evaluator)
   (trigger-appinit-event! evaluator init-data)
@@ -210,33 +224,27 @@
 (defn get-runtime-init-result [] @runtime-inited)
 
 (defn init-runtime [model config]
-  (let [store (store-from-config config)
-        ev ((if (repl-mode? config)
-              e/internal-evaluator
-              e/public-evaluator)
-            store)
-        ins (:interceptors config)
-        embeddings-config (:embeddings config)]
-    (when embeddings-config (ec/init embeddings-config))
-    (when (or (not (init-schema? config)) (store/init-all-schema store))
-      (let [resolved-config (run-initconfig config ev)
-            has-rbac (some #{:rbac} (keys ins))]
-        (if has-rbac
-          (lr/finalize-events ev)
-          (lr/reset-events!))
-        (u/run-init-fns)
-        (register-resolvers! config ev)
-        (when (seq (:resolvers resolved-config))
-          (register-resolvers! resolved-config ev))
-        (isc/init)
-        (run-appinit-tasks! ev (or (:init-data model)
-                                   (:init-data config)))
-        (when embeddings-config (isc/setup-agent-documents))
-        (when has-rbac
-          (when-not (rbac/init (merge (:rbac ins) (:authentication config)))
-            (log/error "failed to initialize rbac")))
-        (ei/init-interceptors ins)
-        [ev store]))))
+  (gs/kernel-call
+   (fn []
+     (let [store (store-from-config config)
+           ev (partial ev/evaluate-dataflow store)
+           ins (:interceptors config)
+           embeddings-config (:embeddings config)]
+       (when embeddings-config (ec/init embeddings-config))
+       (when (or (not (init-schema? config)) (store/init-all-schema store))
+         (let [resolved-config (run-initconfig config ev)]
+           (if (:rbac-enabled config)
+             (lr/finalize-events)
+             (lr/reset-events!))
+           (u/run-init-fns)
+           (register-resolvers! config ev)
+           (when (seq (:resolvers resolved-config))
+             (register-resolvers! resolved-config ev))
+           (isc/init)
+           (run-appinit-tasks! ev (or (:init-data model)
+                                      (:init-data config)))
+           (when embeddings-config (isc/setup-agent-documents))
+           [ev store]))))))
 
 (defn finalize-config [model config]
   (let [final-config (merge (:config model) config)]
@@ -251,7 +259,7 @@
   ([args [[model model-root] config :as abc]]
    (or @runtime-inited
        (let [config (finalize-config model config)
-             store (e/store-from-config (:store config))
+             store (store-from-config (:store config))
              config (assoc config :store-handle store)
              components (or
                          (if model
@@ -280,15 +288,10 @@
           auth (or (:authentication config)
                    {:service :cognito
                     :superuser-email (u/getenv "AGENTLANG_SUPERUSER_EMAIL" "superuser@superuser.com")
-                    :whitelist? false})
-          opt (:interceptors config)
-          inter (if-not (:rbac opt)
-                  (assoc opt :rbac {:enabled true})
-                  opt)]
-      (assoc (dissoc config :rbac-enabled)
+                    :whitelist? false})]
+      (assoc config
              :service serv
-             :authentication auth
-             :interceptors inter))
+             :authentication auth))
     config))
 
 (defn load-config [options]
@@ -386,12 +389,11 @@
 
 (defn invoke-migrations-event []
   (try
-    (let
-     [r (e/eval-all-dataflows
-         (cn/make-instance
-          {:Agentlang.Kernel.Lang/Migrations {}}))]
+    (let [r (ev/evaluate-dataflow
+             (cn/make-instance
+              {:Agentlang.Kernel.Lang/Migrations {}}))]
       (log/info (str "migrations result: " r))
-      r)
+      (:result r))
     (catch Exception ex
       (log/error (str "migrations event failed: " (.getMessage ex)))
       (throw ex))))

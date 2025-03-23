@@ -15,7 +15,6 @@
     view
     pattern
     attribute
-    rule
     relationship
     component
     resolver
@@ -33,33 +32,55 @@
      [agentlang.lang.internal :as li])]})
 (entity
  :Agentlang.Kernel.Rbac/Role
- {:Name {:type :String, li/guid true}})
+ {:Name {:type :String, :unique true, li/path-identity true}})
+(dataflow
+ :Agentlang.Kernel.Rbac/LookupRole
+ {:Agentlang.Kernel.Rbac/Role
+  {:Name? :Agentlang.Kernel.Rbac/LookupRole.Name},
+  :as [:R]}
+ :R)
 (def oprs li/rbac-oprs)
 (defn-
  crud-list?
  [xs]
  (let
   [xs (mapv u/string-as-keyword xs)]
-  (every? (fn* [p1__400#] (some #{p1__400#} oprs)) (set xs))))
+  (every? (fn* [p1__1295#] (some #{p1__1295#} oprs)) (set xs))))
 (entity
  :Agentlang.Kernel.Rbac/Privilege
- {:Name {:type :String, :default u/uuid-string, li/guid true},
+ {:Name
+  {:type :String,
+   :default u/uuid-string,
+   :unique true,
+   li/path-identity true},
   :Actions {:check agentlang.kernel.rbac/crud-list?},
   :Resource :Edn})
 (entity
  :Agentlang.Kernel.Rbac/PrivilegeAssignment
- {:Name {:type :String, :default u/uuid-string, li/guid true},
+ {:Name
+  {:type :String,
+   :unique true,
+   :default u/uuid-string,
+   li/path-identity true},
   :Role {:ref :Agentlang.Kernel.Rbac/Role.Name, :indexed true},
   :Privilege {:ref :Agentlang.Kernel.Rbac/Privilege.Name},
-  :meta
-  {:unique
-   [:Agentlang.Kernel.Rbac/Role :Agentlang.Kernel.Rbac/Privilege]}})
+  :meta {:unique [:Role :Privilege]}})
 (entity
  :Agentlang.Kernel.Rbac/RoleAssignment
- {:Name {:type :String, :default u/uuid-string, li/guid true},
+ {:Name
+  {:type :String,
+   :unique true,
+   :default u/uuid-string,
+   li/path-identity true},
   :Role {:ref :Agentlang.Kernel.Rbac/Role.Name, :indexed true},
   :Assignee {:type :String, :indexed true},
-  :meta {:unique [:Agentlang.Kernel.Rbac/Role :Assignee]}})
+  :meta {:unique [:Role :Assignee]}})
+(dataflow
+ :Agentlang.Kernel.Rbac/LookupRoleAssignment
+ {:Agentlang.Kernel.Rbac/RoleAssignment
+  {:Name? :Agentlang.Kernel.Rbac/LookupRoleAssignment.Name},
+  :as [:R]}
+ :R)
 (dataflow
  :Agentlang.Kernel.Rbac/FindRoleAssignments
  #:Agentlang.Kernel.Rbac{:RoleAssignment
@@ -68,70 +89,77 @@
 (dataflow
  :Agentlang.Kernel.Rbac/DeleteRoleAssignments
  [:delete
-  :Agentlang.Kernel.Rbac/RoleAssignment
-  {:Assignee :Agentlang.Kernel.Rbac/DeleteRoleAssignments.Assignee}])
-(defn-
- priv-assigns-query
- [env]
- (let
-  [role-names
-   (env :Agentlang.Kernel.Rbac/FindPrivilegeAssignments.RoleNames)]
-  (str
-   "SELECT * FROM "
-   (stu/entity-table-name :Agentlang.Kernel.Rbac/PrivilegeAssignment)
-   " WHERE ("
-   (stu/attribute-column-name :Role)
-   " in ("
-   (s/join
-    ","
-    (map (fn* [p1__401#] (str "'" (str p1__401#) "'")) role-names))
-   "))")))
+  #:Agentlang.Kernel.Rbac{:RoleAssignment
+                          {:Assignee?
+                           :Agentlang.Kernel.Rbac/DeleteRoleAssignments.Assignee}}])
 (dataflow
  :Agentlang.Kernel.Rbac/FindPrivilegeAssignments
- [:query
-  #:Agentlang.Kernel.Rbac{:PrivilegeAssignment?
-                          agentlang.kernel.rbac/priv-assigns-query}])
-(defn-
- privileges-query
- [env]
- (let
-  [names (env :Agentlang.Kernel.Rbac/FindPrivileges.Names)]
-  (str
-   "SELECT * FROM "
-   (stu/entity-table-name :Agentlang.Kernel.Rbac/Privilege)
-   " WHERE ("
-   (stu/attribute-column-name :Name)
-   " in ("
-   (s/join
-    ","
-    (map (fn* [p1__402#] (str "'" (str p1__402#) "'")) names))
-   "))")))
+ #:Agentlang.Kernel.Rbac{:PrivilegeAssignment
+                         {:Role?
+                          [:in
+                           :Agentlang.Kernel.Rbac/FindPrivilegeAssignments.RoleNames]}})
 (dataflow
  :Agentlang.Kernel.Rbac/FindPrivileges
- [:query
-  #:Agentlang.Kernel.Rbac{:Privilege?
-                          agentlang.kernel.rbac/privileges-query}])
-(entity
+ #:Agentlang.Kernel.Rbac{:Privilege
+                         {:Name?
+                          [:in
+                           :Agentlang.Kernel.Rbac/FindPrivileges.Names]}})
+(record
  #:Agentlang.Kernel.Rbac{:InstancePrivilegeAssignment
                          {:Name
                           {:type :String,
                            :default u/uuid-string,
-                           li/guid true},
-                          :Actions
-                          {:check agentlang.kernel.rbac/crud-list?,
-                           :optional true},
-                          :Resource :Path,
-                          :ResourceId :Any,
+                           li/path-identity true},
+                          :IsOwner {:type :Boolean, :default true},
+                          :CanRead {:type :Boolean, :default false},
+                          :CanUpdate {:type :Boolean, :default false},
+                          :CanDelete {:type :Boolean, :default false},
+                          :ResourcePath {:type :String, :indexed true},
                           :Assignee {:type :String, :indexed true}}})
-(entity
- #:Agentlang.Kernel.Rbac{:OwnershipAssignment
+(event
+ #:Agentlang.Kernel.Rbac{:AssignInstancePrivilege
                          {:Name
-                          {:type :String,
-                           :default u/uuid-string,
-                           li/guid true},
-                          :Resource :Path,
-                          :ResourceId :Any,
-                          :Assignee {:type :String, :indexed true}}})
+                          {:type :String, :default u/uuid-string},
+                          :CanRead {:type :Boolean, :default false},
+                          :CanUpdate {:type :Boolean, :default false},
+                          :CanDelete {:type :Boolean, :default false},
+                          :ResourcePath :String,
+                          :Assignee :String}})
+(dataflow
+ :Agentlang.Kernel.Rbac/AssignInstancePrivilege
+ #:Agentlang.Kernel.Rbac{:InstancePrivilegeAssignment
+                         {:Name
+                          :Agentlang.Kernel.Rbac/AssignInstancePrivilege.Name,
+                          :IsOwner false,
+                          :CanRead
+                          :Agentlang.Kernel.Rbac/AssignInstancePrivilege.CanRead,
+                          :CanUpdate
+                          :Agentlang.Kernel.Rbac/AssignInstancePrivilege.CanUpdate,
+                          :CanDelete
+                          :Agentlang.Kernel.Rbac/AssignInstancePrivilege.CanDelete,
+                          :ResourcePath
+                          :Agentlang.Kernel.Rbac/AssignInstancePrivilege.ResourcePath,
+                          :Assignee
+                          :Agentlang.Kernel.Rbac/AssignInstancePrivilege.Assignee}})
+(event
+ :Agentlang.Kernel.Rbac/DeleteInstancePrivilegeAssignment
+ {:ResourcePath :String, :Assignee :String})
+(event
+ #:Agentlang.Kernel.Rbac{:AssignOwnership
+                         {:Name
+                          {:type :String, :default u/uuid-string},
+                          :ResourcePath :String,
+                          :Assignee :String}})
+(dataflow
+ :Agentlang.Kernel.Rbac/AssignOwnership
+ #:Agentlang.Kernel.Rbac{:InstancePrivilegeAssignment
+                         {:Name
+                          :Agentlang.Kernel.Rbac/AssignOwnership.Name,
+                          :IsOwner true,
+                          :ResourcePath
+                          :Agentlang.Kernel.Rbac/AssignOwnership.ResourcePath,
+                          :Assignee
+                          :Agentlang.Kernel.Rbac/AssignOwnership.Assignee}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "5e1d56e1-a386-4bea-bf3e-40b06076eef4")
+ "dc02a601-bc9f-407d-b26d-e65c9d608462")

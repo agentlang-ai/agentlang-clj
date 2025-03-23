@@ -7,7 +7,7 @@
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
             [agentlang.component :as cn]
-            [agentlang.paths.internal :as pi]
+            [agentlang.lang.internal :as li]
             [agentlang.datafmt.json :as json]
             [agentlang.datafmt.transit :as t]
             [agentlang.global-state :as gs]
@@ -198,35 +198,20 @@
       (keyword (str c "/" en))
       (keyword (str base-component "/" n)))))
 
-(defn- parse-uri-parts [orig-uri fqn parts]
-  (let [ps (reverse (partition-all 3 parts))
-        f (first ps)
-        c (count f)]
-    (cond
-      (= 1 c) {:entity (fqn (first f))}
-      (= 2 c) {:entity (fqn (first f)) :id (second f)}
-      :else {:entity (fqn (second ps)) :id (nth 2 f)})))
-
-(defn- normalize-path [uri]
-  (let [uri-parts (s/split uri #"/")
-        child-path (rest uri-parts)]
-    (when (> (count child-path) 2)
-      (pi/as-fully-qualified-path (keyword (first uri-parts)) (str "/" (s/join "/" child-path))))))
+(defn- normalize-path [uri] (s/split uri #"/"))
 
 (defn parse-rest-uri [uri]
   (let [parts (s/split uri #"/")
-        c (count parts)]
-    (when (>= c 2)
-      (let [f (first parts) r (rest parts)
-            fqn (partial fully-qualified-name f)]
-        (merge
-         {:component (keyword f)}
-         (if (<= c 3)
-           {:entity (fqn (first r))
-            :id (when (seq (rest r)) (last r))}
-           (assoc
-            (parse-uri-parts uri fqn r)
-            :path (normalize-path uri))))))))
+        base-component (first parts)
+        fqn (partial fully-qualified-name base-component)]
+    (loop [ss (rest parts), n 2, result []]
+      (if-let [s (first ss)]
+        (if (= n 3)
+          (recur (rest ss) 1 (conj result s))
+          (recur (rest ss) (inc n) (conj result (fqn s))))
+        {:component (keyword base-component)
+         :entity (if (= 3 n) (last result) (last (drop-last result)))
+         :path (vec result)}))))
 
 (defn- add-path-vars [path]
   (mapcat #(vector % (str "{" (s/lower-case (name %)) "}")) path))
@@ -259,3 +244,25 @@
           (for [cookie (.split cookie-string ";")]
             (let [keyval (map #(.trim %) (.split cookie "=" 2))]
               [(first keyval) (second keyval)])))))
+
+(defn create-pattern-from-path [entity-name obj path parent]
+  (let [attrs (li/record-attributes obj)
+        idn (cn/identity-attribute-name entity-name)
+        has-parent (map? parent)
+        relname (when has-parent (last (drop-last path)))]
+    (when-not (= (last path) entity-name)
+      (u/throw-ex (str "Invalid path " path)))
+    (when (and relname (not (cn/contains-relationship? relname)))
+      (u/throw-ex (str relname " is not a contains relationship")))
+    (let [id-val (or (idn attrs) li/id-attr-s)
+          path (concat path [id-val])
+          pat {entity-name
+               (merge
+                (assoc attrs li/path-attr (li/vec-to-path path))
+                (when has-parent
+                  {li/parent-attr (li/path-attr parent)}))}
+          create-event (cn/entity-create-action entity-name)]
+      (if create-event
+        {create-event
+         {:Instance (cn/make-instance pat)}}
+        pat))))

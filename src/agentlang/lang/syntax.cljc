@@ -1,54 +1,606 @@
 (ns agentlang.lang.syntax
-  (:require [clojure.walk :as w]
-            [clojure.string :as s]
+  (:require [clojure.string :as s]
+            [clojure.set :as set]
             [agentlang.util :as u]
+            [agentlang.component :as cn]
             [agentlang.lang.internal :as li]
-            [agentlang.paths.internal :as pi]
             [agentlang.datafmt.json :as json]
-            [agentlang.datafmt.transit :as t]))
+            [agentlang.datafmt.transit :as t]
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])))
 
-(defn- get-spec-val [k spec]
-  (let [v (get spec k :not-found)]
-    (if (= v :not-found)
-      (u/throw-ex (str "required key " k " not found"))
-      v)))
+(defn format-error [pattern msg] (str msg " -- " (u/pretty-str pattern)))
+(defn raise-syntax-error [pattern msg] (log/warn (format-error pattern msg)))
+(defn throw-ex [pattern msg] (u/throw-ex (format-error pattern msg)))
 
-(def syntax-object-tag :-*-syntax-*-)
-(def type-tag :type)
-(def exp-fn-tag :fn)
-(def exp-args-tag :args)
-(def exp-tag :exp)
-(def record-tag :record)
-(def attrs-tag :attrs)
-(def query-tag :query)
+(defn- not-kw [kw x] (not= kw x))
+(def ^:private not-as (partial not-kw :as))
+(def ^:private not-not-found (partial not-kw :not-found))
+(def ^:private not-error (partial not-kw :error))
+(def ^:private not-case (partial not-kw li/except-tag))
+(def ^:private not-check (partial not-kw :check))
+
+(def syntax-type :type)
+(def record-name-tag :record)
+(def attributes :attributes)
+(def relationships :rels)
+(def query-pattern :query)
+
+(defn record-name [r]
+  (li/normalize-name (record-name-tag r)))
+
+(defn empty-pattern
+  ([of-type]
+   {syntax-type of-type :empty-pattern? true})
+  ([] (empty-pattern nil)))
+
+(defn empty-pattern? [x] (and (map? x) (:empty-pattern? x)))
+
+(defn conditional? [pat]
+  (and (seqable? pat) (li/match-operator? (first pat))))
+
+(defn- maybe-lang-def-name? [n]
+  (= 2 (count (li/split-path n))))
+
+(declare literal?)
+
+(defn- normal-map? [x]
+  (and (map? x)
+       (and (nil? (seq (select-keys x li/instance-meta-keys)))
+            (some #(or (literal? %)
+                       (if-let [n (and (keyword? %) (li/normalize-name %))]
+                         (not (maybe-lang-def-name? n))
+                         true))
+                  (keys x)))))
+
+(defn literal? [x]
+  (or (number? x) (string? x) (boolean? x)
+      (normal-map? x) (nil? x) (li/sealed? x)
+      (and (vector? x) (literal? (first x)))))
+
+(defn- validate-attributes [pat recname attrs]
+  (if-let [all (cn/all-attribute-names recname)]
+    (doseq [n (keys attrs)]
+      (when-not (some #{(li/normalize-name n)} all)
+        (raise-syntax-error pat (str n " is not a valid attribute of " recname))))
+    (log/warn (str "Schema not found, failed to validate attributes for " recname)))
+  attrs)
+
+(defn maybe-extract-condition-handlers [pat]
+  (or
+   (cond
+     (map? pat)
+     (when-let [cases (li/except-tag pat)]
+       [cases (dissoc pat li/except-tag)])
+
+     (and (seqable? pat) (= (first pat) :delete))
+     (when-let [cases (first (rest (drop-while not-case pat)))]
+       [cases (let [p0 (take-while not-case pat)]
+                (vec (concat p0 (rest (drop-while not-case (rest p0))))))]))
+   [nil pat]))
+
+(defn extract-alias-from-expression [pat]
+  (let [[h t] (split-with not-as pat)]
+    (if (seq t)
+      (let [t (rest t)]
+        (when-not (seq t)
+          (u/throw-ex (str "Alias not specified after `:as` in " pat)))
+        (when (> (count t) 1)
+          (u/throw-ex (str "Alias must appear last in " pat)))
+        [(vec h) (first t)])
+      [(vec h) nil])))
+
+(defn extract-body-patterns [sentries pat]
+  (take-while #(not (some #{%} sentries)) pat))
+
+(defn parse-try [pat]
+  (let [body (extract-body-patterns #{:as :not-found :error} pat)]
+    [body
+     (second (drop-while not-as pat))
+     {:not-found (second (drop-while not-not-found pat))
+      :error (second (drop-while not-error pat))}]))
+
 (def alias-tag :as)
-(def value-tag :value)
-(def cases-tag :cases)
-(def body-tag :body)
 (def check-tag :check)
-(def path-tag :path)
-(def name-tag :name)
-(def meta-tag :meta)
-(def throws-tag :throws)
-(def error-tag :error)
+(def into-tag :into)
+(def case-tag li/except-tag)
 (def not-found-tag :not-found)
+(def error-tag :error)
 
-(def rel-tag li/rel-tag)
-(def timeout-ms-tag li/timeout-ms-tag)
+(defn alias-from-pattern [pat]
+  (cond
+    (map? pat) (:as pat)
+    (seqable? pat) (second (drop-while not-as pat))
+    :else nil))
 
-(def attributes attrs-tag)
-(def query-pattern query-tag)
+(defn check-from-pattern [pat]
+  (when-let [chk (when (seqable? pat)
+                   (second (drop-while not-check pat)))]
+    (when-not (or (keyword? chk) (fn? chk))
+      (raise-syntax-error pat "Invalid check specification, must be a keyword or a function"))
+    chk))
 
-(def ^:private $fn (partial get-spec-val exp-fn-tag))
-(def ^:private $args (partial get-spec-val exp-args-tag))
-(def ^:private $exp (partial get-spec-val exp-tag))
-(def ^:private $type (partial get-spec-val type-tag))
-(def ^:private $record (partial get-spec-val record-tag))
-(def ^:private $attrs (partial get-spec-val attrs-tag))
-(def ^:private $value (partial get-spec-val value-tag))
-(def ^:private $cases (partial get-spec-val cases-tag))
-(def ^:private $body (partial get-spec-val body-tag))
-(def ^:private $query (partial get-spec-val query-tag))
+(defn case-from-pattern [pat]
+  (cond
+    (map? pat) (li/except-tag pat)
+    (seqable? pat) (second (drop-while not-case pat))
+    :else nil))
+
+(def ^:private query-attribute? (fn [[k _]] (li/query-pattern? k)))
+(def ^:private update-attribute? (complement query-attribute?))
+
+(declare introspect raw)
+
+(def case-keys #{:not-found :error})
+(def reserved-words (set (concat case-keys [:as])))
+
+(defn- as-reserved-word [a]
+  (if (keyword? a)
+    (some #{a} reserved-words)
+    (first (map as-reserved-word a))))
+
+(defn- introspect-alias [a]
+  (when a
+    (when-not (or (keyword? a) (and (vector? a) (every? keyword? a)))
+      (raise-syntax-error a "Not a valid alias"))
+    (when-let [a (as-reserved-word a)] (throw-ex a "Invalid alias"))
+    a))
+
+(def reference? keyword?)
+
+(defn reference [x]
+  (if (keyword? x)
+    x
+    (u/throw-ex (str "Reference " x " must be a keyword"))))
+
+(def raw-alias identity)
+
+(defn- introspect-into [into]
+  (when-not (map? into)
+    (raise-syntax-error into "Not a valid into-specification, must be a map"))
+  into)
+
+(def raw-into identity)
+
+(defn- call-on-map-values [f m] (into  {} (mapv (fn [[k v]] [k (f v)]) m)))
+
+(defn- extract-main-record-name [pat]
+  (let [ks (keys (li/normalize-instance-pattern pat))]
+    (first (filter #(let [n (cn/canonical-type-name (li/normalize-name %))]
+                      (or (cn/entity? n)
+                          (cn/event? n)
+                          (cn/rec? n)))
+                   ks))))
+
+(defn- extract-possible-record-name [pat]
+  (let [ks (keys (li/normalize-instance-pattern pat))] (first (filter maybe-lang-def-name? ks))))
+
+(defn- extract-relationship-names [recname pat]
+  (let [ks (keys (li/normalize-instance-pattern pat))
+        rn (cn/canonical-type-name (li/normalize-name recname))]
+    (filter #(let [n (cn/canonical-type-name (li/normalize-name %))]
+               (when (not= rn n)
+                 (or (cn/relationship? n)
+                     (and (maybe-lang-def-name? n) (not= n rn)))))
+            ks)))
+
+(defn- introspect-map-values [m] (call-on-map-values introspect m))
+(defn- raw-map-values [m] (call-on-map-values raw m))
+
+(defn- introspect-case [c]
+  (when c
+    (when-not (map? c)
+      (throw-ex c "Not a valid case-specification, must be a map"))
+    (when-not (= case-keys (set (set/union (keys c) case-keys)))
+      (throw-ex c (str "Allowed keys are - " case-keys)))
+    (introspect-map-values c)))
+
+(def raw-case raw-map-values)
+
+(defn with-alias [alias r]
+  (assoc r :as alias))
+
+(defn with-into [into r]
+  (assoc r :into into))
+
+(defn with-case [case r]
+  (assoc r li/except-tag case))
+
+(defn _with-meta [meta r]
+  (assoc r :meta meta))
+
+(def distinct-tag :distinct)
+
+(defn with-distinct [d r]
+  (assoc r distinct-tag d))
+
+(defn- introspect-meta [obj]
+  (when obj
+    (when-not (map? obj)
+      (u/throw-ex (str ":meta must be a map, instead found " obj)))
+    obj))
+
+(def raw-meta introspect-meta)
+
+(defn- introspect-optional-keys [pat]
+  {:as (introspect-alias (:as pat))
+   :into (when-let [into (:into pat)] (introspect-into into))
+   :meta (introspect-meta (:meta pat))
+   li/except-tag (when-let [c (li/except-tag pat)] (introspect-case c))})
+
+(defn- raw-optional-keys [r]
+  (merge
+   (when-let [a (:as r)] {:as (raw-alias a)})
+   (when-let [into (:into r)] {:into (raw-into into)})
+   (when-let [meta (:meta r)] {:meta (raw-meta meta)})
+   (when-let [c (li/except-tag r)] {li/except-tag (raw-case c)})))
+
+(def except-tag li/except-tag)
+(def meta-tag :meta)
+
+(defn- introspect-query-upsert [recname pat]
+  (let [attrs (validate-attributes pat (li/normalize-name recname) (get pat recname))
+        upsattrs (filter update-attribute? attrs)
+        rels (extract-relationship-names recname pat)
+        rels-spec (mapv (fn [r] [r (introspect (get pat r))]) rels)]
+    (merge
+     {syntax-type (if (seq upsattrs)
+                    (if (seq (filter query-attribute? attrs))
+                      :query-upsert
+                      :upsert)
+                    :query)
+      record-name-tag recname
+      attributes attrs
+      distinct-tag (distinct-tag pat)
+      relationships rels-spec}
+     (introspect-optional-keys pat))))
+
+(defn- maybe-recname-as-query [recname attrs]
+  (cond
+    (li/query-pattern? recname) recname
+    (not (seq attrs)) (li/name-as-query-pattern recname)
+    :else recname))
+
+(defn- query-upsert-helper
+  ([tag recname attrs rels]
+   (let [recname (if (= tag :upsert) recname (maybe-recname-as-query recname attrs))]
+     {syntax-type tag
+      record-name-tag recname
+      attributes attrs
+      relationships rels}))
+  ([tag recname attrs] (query-upsert-helper tag recname attrs nil))
+  ([tag] (empty-pattern tag)))
+
+(def upsert (partial query-upsert-helper :upsert))
+(def query (partial query-upsert-helper :query))
+(def query-upsert (partial query-upsert-helper :query-upsert))
+
+(def raw-relationships raw-map-values)
+
+(defn- raw-query [r]
+  (merge
+   {(record-name-tag r) (attributes r)}
+   (when-let [rels (relationships r)] (raw-relationships rels))
+   (when-let [d (distinct-tag r)] {distinct-tag d})
+   (raw-optional-keys r)))
+
+(def ^:private raw-upsert raw-query)
+
+(def ^:private introspect-create introspect-query-upsert)
+
+(defn- introspect-query-pattern [pat]
+  (when-not (map? pat)
+    (raise-syntax-error pat "Query must be a map"))
+  (when-not (:where pat)
+    (raise-syntax-error pat "No :where clause in query"))
+  pat)
+
+(def ^:private raw-query-pattern identity)
+
+(defn- introspect-query-object [recname pat]
+  (merge
+   {syntax-type :query-object
+    record-name-tag recname
+    query-pattern (introspect-query-pattern (:? (li/record-attributes pat)))}
+   (introspect-optional-keys pat)))
+
+(defn query-object
+  ([recname qpat]
+   {syntax-type :query-object
+    record-name-tag recname
+    query-pattern (introspect-query-pattern qpat)})
+  ([] (empty-pattern :query-object)))
+
+(defn- raw-query-object [r]
+  (merge {(record-name-tag r) {:? (raw-query-pattern (query-pattern r))}}
+         (raw-optional-keys r)))
+
+(def function-expression :fn)
+
+(defn- introspect-call [pat]
+  {syntax-type :call
+   function-expression (let [exp (first pat)]
+                         (if (list? exp)
+                           exp
+                           (raise-syntax-error pat "Not a valid fn-call expression")))
+   :as (introspect-alias (alias-from-pattern pat))
+   li/except-tag (introspect-case (case-from-pattern pat))
+   :check (check-from-pattern pat)})
+
+(defn call
+  ([fnexpr check]
+   (merge
+    {syntax-type :call
+     function-expression fnexpr}
+    (when check
+      {:check check})))
+  ([fnexpr] (call fnexpr nil))
+  ([] (empty-pattern :call)))
+
+(defn- maybe-add-optional-raw-tags [r pat]
+  (let [a (when-let [a (:as r)] (raw-alias a))
+        c (when-let [c (li/except-tag r)]
+            (raw-case c))
+        p0 (if a (concat pat [:as a]) pat)
+        p1 (if c (concat p0 [li/except-tag c]) p0)]
+    (vec p1)))
+
+(defn- raw-call [r]
+  (let [pat [:call (function-expression r)]]
+    (maybe-add-optional-raw-tags
+     r
+     (if-let [c (:check r)]
+       (concat pat [:check c])
+       pat))))
+
+(defn- introspect-delete [pat]
+  (let [q (first pat)]
+    {syntax-type :delete
+     query-pattern (if (keyword? q)
+                     (do (when-not (cn/entity? q)
+                           (raise-syntax-error pat (str q " is not an entity")))
+                         q)
+                     (introspect q))
+     :as (introspect-alias (alias-from-pattern pat))
+     :purge? (some #{:purge} pat)
+     li/except-tag (introspect-case (case-from-pattern pat))}))
+
+(defn- raw-delete [r]
+  (let [pat [:delete (raw (query-pattern r))]]
+    (maybe-add-optional-raw-tags
+     r
+     (if (:purge? r)
+       (concat pat [:purge])
+       pat))))
+
+(defn delete
+  ([q purge?]
+   {syntax-type :delete
+    query-pattern q
+    :purge? purge?})
+  ([q] (delete q false))
+  ([] (empty-pattern :delete)))
+
+(def quote-value :value)
+
+(defn- introspect-quote [pat]
+  {syntax-type :quote
+   quote-value (second pat)})
+
+(defn- raw-quote [r]
+  [:q# (quote-value r)])
+
+(def sealed-value :value)
+
+(defn- introspect-sealed [pat]
+  {syntax-type :sealed
+   sealed-value (second pat)})
+
+(defn- raw-sealed [r]
+  [:s# (sealed-value r)])
+
+(def try-body :body)
+
+(defn- introspect-try [pat]
+  (let [[body alias handlers] (parse-try pat)]
+    {syntax-type :try
+     try-body (mapv introspect body)
+     :as (introspect-alias alias)
+     li/except-tag (when handlers (introspect-case handlers))}))
+
+(defn- with-raw-try-cases [pat cases]
+  (loop [cs cases, pat pat]
+    (if-let [[k v] (first cs)]
+      (recur (rest cs) (conj pat k (raw v)))
+      pat)))
+
+(defn- raw-try [r]
+  (let [pat0 `[:try ~@(mapv raw (try-body r))]
+        pat (if-let [c (li/except-tag r)]
+              (vec (with-raw-try-cases pat0 c))
+              pat0)]
+    (maybe-add-optional-raw-tags (dissoc r li/except-tag) pat)))
+
+(defn _try
+  ([body cases]
+   (when-not (vector? body)
+     (u/throw-ex "Try body must be a vector"))
+   {syntax-type :try
+    try-body body
+    li/except-tag cases})
+  ([] (empty-pattern :try)))
+
+(def for-each-value :src)
+(def for-each-body :body)
+
+(defn- introspect-for-each [pat]
+  (let [src (introspect (first pat))
+        body (extract-body-patterns #{:as} (rest pat))
+        alias (alias-from-pattern pat)]
+    {syntax-type :for-each
+     for-each-value src
+     for-each-body (mapv introspect body)
+     :as (introspect-alias alias)
+     li/except-tag (introspect-case (case-from-pattern pat))}))
+
+(defn- raw-for-each [r]
+  (let [pat `[:for-each ~(raw (for-each-value r)) ~@(mapv raw (for-each-body r))]]
+    (maybe-add-optional-raw-tags r pat)))
+
+(defn for-each
+  ([src body]
+   {syntax-type :for-each
+    for-each-value src
+    for-each-body body})
+  ([] (empty-pattern :for-each)))
+
+(def match-value :value)
+(def match-body :body)
+
+(defn- introspect-match [pat]
+  (let [fpat (first pat)
+        has-value? (not (conditional? fpat))
+        body (extract-body-patterns #{:as} (if has-value? (rest pat) pat))
+        alias (alias-from-pattern pat)]
+    {syntax-type :match
+     match-value (when has-value?
+                   (if (keyword? fpat)
+                     fpat
+                     (introspect (first pat))))
+     match-body (loop [body body, result []]
+                  (if (seq body)
+                    (let [condition (first body)
+                          c (second body)
+                          conseq (if (nil? c) condition c)]
+                      (if-not c
+                        (conj result (introspect conseq))
+                        (recur (rest (rest body)) (conj result [condition (introspect conseq)]))))
+                    (vec result)))
+     :as (introspect-alias alias)
+     li/except-tag (introspect-case (case-from-pattern pat))}))
+
+(defn- collect-match-clauses [clauses]
+  (loop [cls clauses, result []]
+    (if-let [c (first cls)]
+      (recur
+       (rest cls)
+       (if (vector? c)
+         (conj result (first c) (second c))
+         (conj result c)))
+      result)))
+
+(defn raw-match-body [body]
+  (collect-match-clauses
+   (mapv (fn [v] (if (vector? v)
+                   [(first v) (raw (second v))]
+                   (raw v)))
+         body)))
+
+(defn- raw-match [r]
+  (let [body (raw-match-body (match-body r))
+        pat (if-let [v (match-value r)]
+              `[:match ~(raw v) ~@body]
+              `[:match ~@body])]
+    (maybe-add-optional-raw-tags r pat)))
+
+(defn match
+  ([value body]
+   {syntax-type :match
+    match-value value
+    match-body body})
+  ([body] (match nil body))
+  ([] (empty-pattern :match)))
+
+(defn- introspect-filter [pat]
+  )
+
+(def block-body :body)
+
+(defn- introspect-block [pat]
+  {syntax-type :block
+   block-body (mapv introspect pat)})
+
+(defn- raw-block [r]
+  (mapv raw (block-body r)))
+
+(def literal-value :value)
+
+(defn- introspect-literal [pat]
+  {syntax-type :literal
+   literal-value pat})
+
+(def ^:private raw-literal literal-value)
+
+(defn- introspect-command [pat]
+  (if-let [f (case (first pat)
+               :call introspect-call
+               :delete introspect-delete
+               :q# introspect-quote
+               :s# introspect-sealed
+               :try introspect-try
+               :for-each introspect-for-each
+               :match introspect-match
+               :filter introspect-filter
+               nil)]
+    (f (rest pat))
+    (introspect-block pat)))
+
+(defn- introspect-map [pat]
+  (let [main-recname (or (extract-main-record-name pat)
+                         (extract-possible-record-name pat))]
+    (if main-recname
+      (let [attrs (get pat main-recname)]
+        (cond
+          (:? attrs) (introspect-query-object main-recname pat)
+
+          (or (li/query-pattern? main-recname)
+              (some li/query-pattern? (keys attrs)))
+          (introspect-query-upsert main-recname pat)
+
+          :else (introspect-create main-recname pat)))
+      (raise-syntax-error pat (str "No schema definition found for " main-recname)))))
+
+(defn introspect [pat]
+  (when-let [f (cond
+                 (map? pat) (if (seq pat) introspect-map identity)
+                 (vector? pat) introspect-command
+                 (or (literal? pat) (keyword? pat)) introspect-literal
+                 :else (raise-syntax-error pat "Invalid object"))]
+    (f pat)))
+
+(defn raw [r]
+  (when-let [f (case (syntax-type r)
+                 :query raw-query
+                 :upsert raw-upsert
+                 :query-upsert raw-upsert
+                 :query-object raw-query-object
+                 :for-each raw-for-each
+                 :match raw-match
+                 :delete raw-delete
+                 :try raw-try
+                 :call raw-call
+                 :quote raw-quote
+                 :sealed raw-sealed
+                 :literal raw-literal
+                 :block raw-block
+                 identity)]
+    (f r)))
+
+(defn syntax-type? [t r] (= t (syntax-type r)))
+
+(def query? (partial syntax-type? :query))
+(def upsert? (partial syntax-type? :upsert))
+(def query-upsert? (partial syntax-type? :query-upsert))
+(def query-object? (partial syntax-type? :query-object))
+(def for-each? (partial syntax-type? :for-each))
+(def match? (partial syntax-type? :match))
+(def delete? (partial syntax-type? :delete))
+(def try? (partial syntax-type? :try))
+(def quote? (partial syntax-type? :quote))
+(def sealed? (partial syntax-type? :sealed))
+(def literal-object? (partial syntax-type? :literal))
+(def call? (partial syntax-type? :call))
+(def block? (partial syntax-type? :block))
 
 (defn- skip-root-component [n]
   (let [parts (s/split (name n) #"\.")]
@@ -65,717 +617,6 @@
     (li/parsed-path? x)
     (second x)))
 
-(defn as-syntax-object [t obj]
-  (assoc obj type-tag t syntax-object-tag true))
-
-(defn syntax-object? [obj]
-  (when (map? obj)
-    (syntax-object-tag obj)))
-
-(defn has-type? [t obj]
-  (and (syntax-object? obj)
-       (= t (type-tag obj))))
-
-(defn- valid-arg? [x]
-  (or (li/name? x) (li/literal? x)))
-
-(defn- invalid-arg [x]
-  (when-not (valid-arg? x)
-    x))
-
-(defn- maybe-alias? [x]
-  (if-not x
-    true
-    (or (li/name? x) (every? li/name? x))))
-
-(defn- validate-alias! [x]
-  (when-not (maybe-alias? x)
-    (u/throw-ex (str "invalid alias - " x))))
-
-(defn- mark [x]
-  ['--> x '<--])
-
-(defn- mark-exp-error [fnname args mark-at]
-  (loop [exp `(~fnname ~@args), result []]
-    (if-let [x (first exp)]
-      (if (= x mark-at)
-        (concat result [(mark x)] (rest exp))
-        (recur (rest exp) (conj result x)))
-      (seq result))))
-
-(defn fn-name? [x]
-  (or (symbol? x)
-      (some #{x} li/oprs)))
-
-(defn exp
-  "Return the intermediate representation (ir)
-  for a compound expression - required keys are -
-   :fn - function name, a symbol like '+
-   :args - function arguments, a vector of attribute names,
-           constant values etc"  
-  ([spec]
-   (when (not= 2 (count spec))
-     (u/throw-ex (str "invalid compound-expression spec " spec)))
-   (exp ($fn spec) ($args spec)))
-  ([fnname args]
-   (when-not (fn-name? fnname)
-     (u/throw-ex
-      (str
-       "fn-name must be a symbol - "
-       (mark-exp-error fnname args fnname))))
-   (when-let [invarg (some invalid-arg args)]
-     (u/throw-ex
-      (str
-       "invalid argument in "
-       (mark-exp-error fnname args fnname))))
-   (as-syntax-object
-    :exp
-    {exp-fn-tag fnname
-     exp-args-tag args})))
-
-(def exp? (partial has-type? :exp))
-
-(defn- raw-exp [ir]
-  `'(~(exp-fn-tag ir) ~@(exp-args-tag ir)))
-
-(declare raw)
-
-(defn- raw-walk [obj]
-  (w/postwalk raw obj))
-
-(defn- introspect-exp [pattern]
-  (let [p (if (= 'quote (first pattern))
-            (second pattern)
-            pattern)]
-    (exp (first p) (vec (rest p)))))
-
-(defn- valid-attr-spec? [[k v]]
-  (and (li/name? k)
-       (or (li/name? v)
-           (li/literal? v)
-           (exp? v))))
-
-(defn- query-attr-name [n]
-  (when (li/query-pattern? n)
-    n))
-
-(defn- mark-attr-name [attrs name-to-mark]
-  (let [rs (mapv (fn [[k v]]
-                   [(if (= k name-to-mark)
-                      (mark k)
-                      k)
-                    v])
-                 attrs)]
-    (into {} rs)))
-
-(declare introspect introspect-attrs)
-
-(defn- introspect-rels [r]
-  (mapv introspect r))
-
-(defn- introspect-relationship [r]
-  (if (vector? (first r))
-    (mapv introspect-rels r)
-    (u/throw-ex (str "invalid relationship object, expected vector - " (first r)))))
-
-(defn- introspect-throws [throws]
-  (when throws
-    (when-not (map? throws)
-      (u/throw-ex (str "Invalid throws, must be a map - " throws)))
-    (into {} (mapv (fn [[k v]]
-                     [k (introspect v)])
-                   throws))))
-
-(defn upsert [spec]
-  (let [recname ($record spec)
-        rec-attrs ($attrs spec)
-        rec-alias (alias-tag spec)
-        meta (meta-tag spec)
-        rel (rel-tag spec)
-        throws (throws-tag spec)]
-    (when-not (li/name? recname)
-      (u/throw-ex (str "A valid record name is required - " spec)))
-    (when (li/query-pattern? recname)
-      (u/throw-ex (str "looks like a query-only pattern - " recname)))
-    (when-not (and (map? rec-attrs) (every? valid-attr-spec? rec-attrs))
-      (u/throw-ex (str "invalid attribute spec - " rec-attrs)))
-    (when (and meta (not (map? meta)))
-      (u/throw-ex (str "meta must be a map - " meta)))
-    (when-let [aname (some query-attr-name (keys rec-attrs))]
-      (u/throw-ex
-       (str "query attributes cannot be specified in upsert - "
-            (mark-attr-name rec-attrs aname))))
-    (validate-alias! rec-alias)
-    (as-syntax-object
-     :upsert
-     (merge
-      {record-tag recname
-       attrs-tag (introspect-attrs rec-attrs)}
-      (when meta {meta-tag meta})
-      (when rel {rel-tag (introspect-relationship rel)})
-      (when rec-alias {alias-tag rec-alias})
-      (when throws {throws-tag (introspect-throws throws)})))))
-
-(def upsert? (partial has-type? :upsert))
-
-(declare raw-relationship)
-
-(defn- raw-throws [ir]
-  (into {} (mapv (fn [[k v]]
-                   [k (raw-walk v)])
-                 ir)))
-
-(defn- raw-upsert [ir]
-  (merge
-   {($record ir)
-    (raw-walk ($attrs ir))}
-   (when-let [meta (meta-tag ir)] {meta-tag meta})
-   (when-let [rel (rel-tag ir)] {rel-tag (raw-relationship rel)})
-   (when-let [als (alias-tag ir)] {alias-tag als})
-   (when-let [throws (throws-tag ir)] {throws-tag (raw-throws throws)})))
-
-(defn- query-attrs? [attrs]
-  (or (pi/proper-path? attrs) (some li/query-pattern? (keys attrs))))
-
-(defn- query-record-name [recname]
-  (if (li/query-pattern? recname)
-    recname
-    (li/name-as-query-pattern recname)))
-
-(defn query-upsert [spec]
-  (let [recname ($record spec)
-        attrs (attributes spec)
-        meta (meta-tag spec)
-        rec-alias (alias-tag spec)
-        throws (throws-tag spec)
-        rel (rel-tag spec)]
-    (when-not ($record spec)
-      (u/throw-ex (str "Record name in required: " spec)))
-    (when-not (attributes spec)
-      (u/throw-ex (str "Attributes are required: " spec)))
-    (when-not (or (li/query-pattern? recname)
-                  (query-attrs? attrs))
-      (u/throw-ex
-       (str "not a valid query-upsert pattern - " {recname attrs})))
-   (when (and meta (not (map? meta)))
-     (u/throw-ex (str "meta must be a map - " meta)))
-   (validate-alias! rec-alias)
-   (as-syntax-object
-    :query-upsert
-    (merge
-     {record-tag recname}
-     (if (map? attrs)
-       {attrs-tag (introspect-attrs attrs)}
-       {path-tag attrs})
-     (when meta {meta-tag meta})
-     (when rel {rel-tag (introspect-relationship rel)})
-     (when rec-alias {alias-tag rec-alias})
-     (when throws {throws-tag (introspect-throws throws)})))))
-
-(def query-upsert? (partial has-type? :query-upsert))
-
-(defn- raw-query-upsert [ir]
-  (let [path (path-tag ir)
-        obj (when-not path (attributes ir))]
-    (when-not (or obj path)
-      (u/throw-ex (str "expected query-upsert attributes or path not found - " ir)))
-    (merge
-     {($record ir)
-      (or path (raw-walk obj))}
-     (when-let [meta (meta-tag ir)] {meta-tag meta})
-     (when-let [rel (rel-tag ir)] {rel-tag (raw-relationship rel)})
-     (when-let [als (alias-tag ir)] {alias-tag als})
-     (when-let [t (throws-tag ir)] {throws-tag (raw-throws t)}))))
-
-(def raw-relationship raw-walk)
-
-(defn- maybe-assoc-relationship [obj pattern]
-  (if-let [r (rel-tag pattern)]
-    (assoc obj rel-tag (introspect-relationship r))
-    obj))
-
-(defn- dissoc-tags [pat]
-  (dissoc pat meta-tag throws-tag alias-tag))
-
-(defn- recname-from-map [pat]
-  (first (keys (dissoc-tags pat))))
-
-(defn- introspect-query-upsert [pattern]
-  (let [pat (li/normalize-upsert-pattern pattern)
-        recname (recname-from-map pat)
-        attrs (recname pat)]
-    (when-not (li/name? recname)
-      (u/throw-ex (str "invalid record name - " recname)))
-    (when-not (or (map? attrs) (pi/proper-path? attrs))
-      (u/throw-ex (str "expected a map or a path query - " attrs)))
-    (let [attr-names (and (map? attrs ) (seq (keys attrs)))
-          qpat (if attr-names
-                 (some li/query-pattern? attr-names)
-                 (li/query-pattern? recname))]
-      (maybe-assoc-relationship
-       ((if qpat query-upsert upsert)
-        {record-tag recname
-         attrs-tag attrs
-         alias-tag (alias-tag pattern)
-         meta-tag (meta-tag pattern)
-         throws-tag (introspect-throws (throws-tag pattern))})
-       pattern))))
-
-(defn query-object [spec]
-  (let [recname (record-tag spec)
-        query-pat (query-pattern spec)
-        rec-alias (alias-tag spec)
-        meta (meta-tag spec)
-        throws (throws-tag spec)]
-    (when-not recname
-      (u/throw-ex (str "Name is required - " spec)))
-    (when (and query-pat (not (:where query-pat)))
-      (u/throw-ex
-       (str "not a valid query pattern - " {recname query-pat})))
-    (validate-alias! rec-alias)
-    (as-syntax-object
-     :query-object
-     (merge
-      {record-tag recname}
-      (when meta {meta-tag meta})
-      (when query-pat {query-tag query-pat})
-      (when rec-alias {alias-tag rec-alias})
-      (when throws {throws-tag (introspect-throws throws)})))))
-
-(def query-object? (partial has-type? :query-object))
-
-(defn- raw-query-object [ir]
-  (if-let [obj (query-pattern ir)]
-    (merge
-     {($record ir)
-      (raw-walk obj)}
-     (when-let [meta (meta-tag ir)] {meta-tag meta})
-     (when-let [als (alias-tag ir)] {alias-tag als})
-     (when-let [throws (throws-tag ir)] {throws-tag (raw-throws throws)}))
-    (let [n ($record ir)]
-      (if (li/query-pattern? n)
-        n
-        (li/name-as-query-pattern n)))))
-
-(defn- introspect-query-object [pattern]
-  (let [pat (li/normalize-upsert-pattern pattern)
-        recname (recname-from-map pat)
-        qpat (recname pat)]
-    (when-not (li/name? recname)
-      (u/throw-ex (str "invalid record name - " recname)))
-    (when-not (:where qpat)
-      (u/throw-ex (str "invalid query pattern - " qpat)))
-    (query-object
-     {record-tag recname
-      query-tag qpat
-      alias-tag (alias-tag pattern)
-      meta-tag (meta-tag pattern)
-      throws-tag (throws-tag pattern)})))
-
-(def relationship-object rel-tag)
-
-(defn- verify-cases! [cs]
-  (loop [cs cs]
-    (when-let [[k v :as c] (first cs)]
-      (when (and (nil? v) (seq (rest cs)))
-        (u/throw-ex (str "default case must be the last entry - " k)))
-      (when (and v (not (or (li/name? k) (li/literal? k))))
-        (u/throw-ex (str "invalid key " k " in " c)))
-      (recur (rest cs)))))
-
-(defn- introspect-case-vals [cs]
-  (mapv (fn [[k v]]
-          (if (nil? v)
-            [(introspect k)]
-            [k (introspect v)]))
-        cs))
-
-(defn match
-  ([spec]
-   (match ($value spec) ($cases spec) (alias-tag spec)))
-  ([valpat cases match-alias]
-   (when-not (or (li/name? valpat)
-                 (li/literal? valpat))
-     (u/throw-ex (str "invalid match value - " valpat)))
-   (validate-alias! match-alias)
-   (verify-cases! cases)
-   (as-syntax-object
-    :match
-    {value-tag (introspect valpat)
-     cases-tag (introspect-case-vals cases)
-     alias-tag match-alias})))
-
-(def match? (partial has-type? :match))
-
-(def ^:private not-as #(not= alias-tag %))
-(def ^:private not-throws #(not= throws-tag %))
-
-(defn- upto-alias [exps]
-  (take-while not-as exps))
-
-(defn- special-form-alias [obj]
-  (second (drop-while not-as obj)))
-
-(defn- special-form-throws [obj]
-  (second (drop-while not-throws obj)))
-
-(defn- raw-special-form [ir cmd-vec]
-  (vec
-   (concat
-    cmd-vec
-    (when-let [a (alias-tag ir)]
-      [alias-tag a])
-    (when-let [t (throws-tag ir)]
-      [throws-tag (raw-throws t)]))))
-
-(defn- extract-match-cases [obj]
-  (let [cs (take-while not-as obj)]
-    (partition-all 2 cs)))
-
-(defn- introspect-match [obj]
-  (let [body (nthrest obj 2)]
-    (match (second obj)
-           (extract-match-cases body)
-           (special-form-alias body))))
-
-(defn- raw-case [[k v]]
-  (if v
-    [(raw k) (raw-walk v)]
-    [(raw-walk k)]))
-
-(defn- raw-match [ir]
-  (raw-special-form
-   ir
-   `[:match ~(raw ($value ir))
-     ~@(vec (flatten (mapv raw-case ($cases ir))))]))
-
-(defn- name-or-map? [x]
-  (or (map? x) (li/name? x)))
-
-(defn- macro-call? [x]
-  (and (vector? x)
-       (li/registered-macro? (first x))))
-
-(defn- dataflow-pattern? [x]
-  (or (name-or-map? x)
-      (macro-call? x)))
-
-(defn for-each
-  ([spec]
-   (for-each ($value spec) ($body spec) (alias-tag spec)))
-  ([valpat body val-alias]
-   (validate-alias! val-alias)
-   (when-not (name-or-map? valpat)
-     (u/throw-ex (str "invalid value pattern in for-each - " valpat)))
-   (when-not (every? dataflow-pattern? body)
-     (u/throw-ex (str "invalid for-each body - " body)))
-   (as-syntax-object
-    :for-each
-    {value-tag (introspect valpat)
-     body-tag (mapv introspect body)
-     alias-tag val-alias})))
-
-(def for-each? (partial has-type? :for-each))
-
-(def ^:private for-each-body upto-alias)
-(def ^:private for-each-alias special-form-alias)
-
-(defn- introspect-for-each [obj]
-  (let [valpat (second obj)
-        exps (rest (rest obj))
-        body (for-each-body exps)
-        als (for-each-alias exps)]
-    (for-each valpat body als)))
-
-(defn- raw-for-each [ir]
-  (raw-special-form
-   ir
-   `[:for-each
-     ~(raw-walk ($value ir))
-     ~@(mapv raw-walk ($body ir))]))
-
-(defn- introspect-try-cases [cases]
-  (mapv (fn [[k v]]
-          (when-not (or (keyword? k)
-                        (every? keyword? k))
-            (u/throw-ex (str "invalid case in try - " k)))
-          [k (introspect v)])
-        cases))
-
-(defn _try
-  ([spec]
-   (_try ($body spec) ($cases spec) (alias-tag spec)))
-  ([body cases val-alias]
-   (when-not (dataflow-pattern? body)
-     (u/throw-ex (str "invalid body for try - " body)))
-   (validate-alias! val-alias)
-   (as-syntax-object
-    :try
-    {body-tag (introspect body)
-     cases-tag (introspect-try-cases cases)
-     alias-tag val-alias})))
-
-(def try? (partial has-type? :try))
-
-(defn- introspect-try [obj]
-  (let [exps (rest obj)]
-    (_try (first exps)
-          (partition-all 2 (upto-alias (rest exps)))
-          (special-form-alias (rest exps)))))
-
-(defn- raw-try [ir]
-  (raw-special-form
-   ir
-   `[:try
-     ~(raw-walk ($body ir))
-     ~@(apply concat (mapv (fn [[k v]] [k (raw-walk v)]) ($cases ir)))]))
-
-(defn- relspec-for-delete? [obj]
-  (and (vector? obj) (= rel-tag (first obj))))
-
-(defn delete
-  ([spec]
-   (delete
-    ($record spec)
-    (attrs-tag spec)
-    (alias-tag spec)
-    (throws-tag spec)))
-  ([recname attrs result-alias throws]
-   (let [amap (map? attrs)]
-     (when-not (li/name? recname)
-       (u/throw-ex (str "invalid record-name in delete - " recname)))
-     (if amap
-       (when-not (every? valid-attr-spec? attrs)
-         (u/throw-ex (str "invalid attribute spec in delete - " attrs)))
-       (when-not (or (= :purge attrs) (= :* attrs))
-         (u/throw-ex (str "invalid delete option - " attrs))))
-     (validate-alias! result-alias)
-     (as-syntax-object
-      :delete
-      (merge
-       {record-tag recname}
-       {attrs-tag (if amap (introspect-attrs attrs) attrs)}
-       (when result-alias {alias-tag result-alias})
-       (when throws {throws-tag (introspect-throws throws)}))))))
-
-(def delete? (partial has-type? :delete))
-
-(defn- introspect-delete [obj]
-  (delete (second obj)
-          (nth obj 2)
-          (special-form-alias obj)
-          (special-form-throws obj)))
-
-(defn- raw-delete [ir]
-  (raw-special-form
-   ir
-   [:delete ($record ir)
-    (let [attrs (attrs-tag ir)]
-      (if (or (= :purge attrs) (= :* attrs))
-        attrs
-        (raw-walk attrs)))]))
-
-(defn query
-  ([spec]
-   (if (attrs-tag spec)
-     (assoc (query-upsert spec) type-tag query-tag)
-     (query ($query spec) (alias-tag spec) (throws-tag spec))))
-  ([query-pat result-alias throws]
-   (when-not (or (li/name? query-pat) (map? query-pat))
-     (u/throw-ex (str "invalid query - " query-pat)))
-   (validate-alias! result-alias)
-   (as-syntax-object
-    :query
-    (merge
-     {query-tag
-      (cond
-        (query-object? query-pat) query-pat
-        (query-upsert? query-pat) query-pat
-        (map? query-pat)
-        (let [recname (recname-from-map query-pat)]
-          (query-object {record-tag recname query-tag (recname query-pat)
-                         meta-tag (meta-tag query-pat) throws-tag (throws-tag query-pat)}))
-        :else query-pat)
-      alias-tag result-alias}
-     (when throws {throws-tag (introspect-throws throws)})))))
-
-(def query? (partial has-type? :query))
-
-(defn- introspect-query [obj]
-  (query (second obj) (special-form-alias obj) (special-form-throws obj)))
-
-(defn- raw-query [ir]
-  (if (query-tag ir)
-    (raw-special-form
-     ir
-     [:query
-      (raw-walk ($query ir))])
-    (raw-query-upsert ir)))
-
-(defn _eval
-  ([spec]
-   (_eval ($exp spec) (check-tag spec) (alias-tag spec) (throws-tag spec)))
-  ([exp check result-alias throws]
-   (when (and check (not (li/name? check)))
-     (u/throw-ex (str "invalid value for check - " check)))
-   (validate-alias! result-alias)
-   (as-syntax-object
-    :eval
-    (merge
-     {exp-tag (introspect exp)}
-     (when check {check-tag check})
-     (when result-alias {alias-tag result-alias})
-     (when throws {throws-tag (introspect-throws throws)})))))
-
-(def eval? (partial has-type? :eval))
-
-(def ^:private not-check #(not= :check %))
-
-(defn- introspect-eval [obj]
-  (_eval (second obj)
-         (second (drop-while not-check obj))
-         (special-form-alias obj)
-         (special-form-throws obj)))
-
-(defn- raw-eval [ir]
-  (raw-special-form
-   ir
-   (vec
-    (concat
-     [:eval (raw ($exp ir))]
-     (when-let [c (check-tag ir)]
-       [:check c])))))
-
-(defn _await [spec]
-  )
-
-(defn- introspect-await [obj]
-  )
-
-(defn entity [spec]
-  )
-
-(defn- introspect-entity [obj]
-  )
-
-(def special-form-introspectors
-  {:match introspect-match
-   :try introspect-try
-   :for-each introspect-for-each
-   :query introspect-query
-   :delete introspect-delete
-   :await introspect-await
-   :eval introspect-eval
-   :entity introspect-entity})
-
-(defn- introspect-attrs [attrs]
-  (let [rs (mapv (fn [[k v]]
-                   [k (introspect v true)])
-                 attrs)]
-    (into {} rs)))
-
-(defn- introspect-special-form [pat]
-  (if-let [h (special-form-introspectors (first pat))]
-    (h pat)
-    pat))
-
-(defn- pure-query-map? [obj]
-  (let [pat (li/normalize-upsert-pattern obj)
-        attrs ((recname-from-map pat) pat)]
-    (and (map? attrs) (:where attrs))))
-
-(defn- introspect-name [pattern]
-  (if (li/query-pattern? pattern)
-    (as-syntax-object :query-object {record-tag (li/normalize-name pattern)})
-    (as-syntax-object :reference {name-tag pattern})))
-
-(defn reference [n]
-  (if (keyword? n)
-    (as-syntax-object :reference {name-tag n})
-    (u/throw-ex (str "cannot make reference, not a name - " n))))
-
-(def ^:private raw-reference name-tag)
-
-(def reference? (partial has-type? :reference))
-
-(defn- maybe-query [obj]
-  (let [ks (seq (keys (attrs-tag obj)))]
-    (cond
-      (and ks (every? li/query-pattern? ks))
-      (assoc obj type-tag query-tag)
-
-      (and (not ks) (li/query-pattern? (record-tag obj)))
-      (assoc obj type-tag query-tag)
-
-      :else
-      obj)))
-
-(defn- maybe-map-literal? [obj]
-  ;; Do a best attempt to distinguish an attribute value
-  ;; that is a literal map vs an instance pattern.
-  (let [ks (keys obj)]
-    (or (some (complement keyword?) ks)
-        (not (some #(= 2 (count (li/split-path %))) ks)))))
-
-(defn introspect
-  ([pattern is-attr-val]
-   (cond
-     (syntax-object? pattern) pattern
-
-     (seqable? pattern)
-     (cond
-       (or (not (seq pattern)) (li/quoted? pattern))
-       pattern
-
-       (or (list? pattern) (= 'quote (first pattern)))
-       (introspect-exp pattern)
-
-       (map? pattern)
-       (cond
-         (and is-attr-val (maybe-map-literal? pattern)) pattern
-         (pure-query-map? pattern) (introspect-query-object pattern)
-         :else (maybe-query (introspect-query-upsert pattern)))
-
-       (vector? pattern)
-       (introspect-special-form pattern)
-
-       :else pattern)
-
-     (li/name? pattern)
-     (introspect-name pattern)
-
-     :else pattern))
-  ([pattern] (introspect pattern false)))
-
-(def introspect-json (comp introspect json/decode))
-(def introspect-transit (comp introspect t/decode))
-
-(def ^:private raw-handler
-  {:exp raw-exp
-   :upsert raw-upsert
-   :query-upsert raw-query-upsert
-   :query-object raw-query-object
-   :match raw-match
-   :for-each raw-for-each
-   :try raw-try
-   :query raw-query
-   :delete raw-delete
-   :reference raw-reference
-   :eval raw-eval})
-
-(defn raw
-  "Consume an intermediate representation object,
-  return raw agentlang syntax"
-  [ir]
-  (if (syntax-object? ir)
-    (if-let [h (raw-handler ($type ir))]
-      (h ir)
-      (u/throw-ex (str "invalid syntax-object tag - " (type-tag ir))))
-    ir))
-
-(def raw-json (comp json/encode raw))
-(def raw-transit (comp t/encode raw))
-
 (defn fully-qualified?
   ([n]
    (if (second (li/split-path n))
@@ -786,38 +627,3 @@
      (= model-name n) false
      (s/starts-with? (str n) (str model-name)) true
      :else false)))
-
-(defn- ref-path-name-info [model-name n]
-  (let [root-parts (li/split-ref n)
-        parts-count (count root-parts)
-        recname (when (= parts-count 1) (first root-parts))
-        model-name-parts (when model-name (li/split-ref model-name))
-        model-parts (when (> parts-count 1)
-                      (if model-name-parts
-                        (take (count model-name-parts) root-parts)
-                        [(first root-parts)]))
-        comp-parts (when (> parts-count 1)
-                     (if model-parts
-                       (drop (count model-parts) root-parts)
-                       root-parts))
-        cname (when comp-parts (li/make-ref comp-parts))
-        mname (when model-parts (li/make-ref model-parts))]
-    (if (and model-name (not= model-name mname))
-      nil
-      {:model mname :component cname :record recname})))
-
-(defn- full-path-name-info [model-name n]
-  (let [{c :component r :record} (li/path-parts n)]
-    (if (pi/ref-path-name? c)
-      (when-let [info (ref-path-name-info model-name c)]
-        (merge info {:record r}))
-      {:component c :record r})))
-
-(defn name-info
-  ([model-name n]
-   (cond
-     (pi/full-path-name? n) (full-path-name-info model-name n)
-     (pi/ref-path-name? n) (ref-path-name-info model-name n)
-     (li/name? n) {:record n}
-     :else nil))
-  ([n] (name-info nil n)))

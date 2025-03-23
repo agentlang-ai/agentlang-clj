@@ -1,1 +1,22 @@
-{:service {:port 8000}}
+{:service {:port 8000}
+ :store {:type :h2
+         :dbname "./db"}
+ ;; :exec-graph-enabled? true
+ ;; :embeddings {:vectordb :pgvector,
+ ;;              :config {:host (env POSTGRES_HOST),
+ ;;                       :port 5432,
+ ;;                       :dbname (env POSTGRES_DB),
+ ;;                       :user (env POSTGRES_USER),
+ ;;                       :password (env POSTGRES_PASSWORD)}}
+ ;; :rbac-enabled true
+ ;; :authentication {:service :cognito
+ ;;                  :is-identity-store true
+ ;;                  :superuser-email (env FRACTL_SUPERUSER_EMAIL)
+ ;;                  :region (env AWS_REGION)
+ ;;                  :access-key (env_ACCESS_KEY)
+ ;;                  :secret-key (env AWS_SECRET_KEY)
+ ;;                  :client-id (env AWS_COGNITO_CLIENT_ID)
+ ;;                  :user-pool-id (env AWS_COGNITO_USER_POOL_ID)
+ ;;                  :whitelist? false}
+ }
+ 

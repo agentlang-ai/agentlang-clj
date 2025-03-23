@@ -1,6 +1,6 @@
 (ns agentlang.inference.provider.core
   (:require [agentlang.util :as u]
-            [agentlang.evaluator :as ev]))
+            [agentlang.global-state :as gs]))
 
 (def ^:dynamic active-llm nil)
 
@@ -8,13 +8,14 @@
   (memoize
    (fn [provider-name]
      (when provider-name
-       (first (ev/safe-eval-internal
-               false {:Agentlang.Core/FindLLM
-                      {:Name provider-name}}))))))
+       (:result
+        (gs/evaluate-dataflow-internal
+         {:Agentlang.Core/FindLLM
+          {:Name provider-name}}))))))
 
 (defn find-first-provider []
-  (if-let [provider (first (ev/safe-eval-internal
-                            false {:Agentlang.Core/LookupAll_LLM {}}))]
+  (if-let [provider (first (:result (gs/evaluate-dataflow-internal
+                                     {:Agentlang.Core/LookupAll_LLM {}})))]
     provider
     (u/throw-ex "No default LLM provider found")))
 

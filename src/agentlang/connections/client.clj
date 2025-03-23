@@ -67,9 +67,9 @@
    (try
      (let [response (http/do-post (http/url-encode api-url) (with-auth-token) inst :json post-handler)]
        (case (:status response)
-         200 (let [r (first (:body response))]
-               (if (= "ok" (:status r))
-                 (callback (first (:result r)))
+         200 (let [r (:result (:body response))]
+               (if (seq r)
+                 (callback r)
                  (log/error (str "failed to create - " ident))))
          401 (do (log/error "authentication required")
                  (reset! auth-token nil))
@@ -119,11 +119,8 @@
                    "/ConnectionConfigGroup/ConnectionConfig")
           response (http/do-get (http/url-encode api-url) (with-auth-token) :json post-handler)]
       (case (:status response)
-        200 (let [r (first (:body response))]
-              (when (= "ok" (:status r))
-                (:result r)))
-        401 (do (log/error "authentication required")
-                (reset! auth-token nil))
+        200 (let [r (:body response)] (:result r))
+        401 (do (log/error "authentication required") (reset! auth-token nil))
         (log/error (str "failed to lookup connection-configs for " integ-name " with status " (:status response)))))
     (catch Exception ex
       (log/error ex))))

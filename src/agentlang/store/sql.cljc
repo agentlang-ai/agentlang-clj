@@ -2,7 +2,7 @@
   "Support for translating dataflow-query patterns to generic SQL."
   (:require [clojure.string :as str]
             [clojure.walk :as w]
-            [honeysql.core :as hsql]
+            [honey.sql :as hsql]
             [agentlang.util :as u]
             [agentlang.store.util :as su]
             [agentlang.lang.internal :as li]
@@ -103,6 +103,8 @@
 (defn- maybe-remove-where [qpat]
   (if (:where qpat) qpat (dissoc qpat :where)))
 
+(def raw-format-sql hsql/format)
+
 (defn format-sql [table-name is-view query]
   (let [qmap (map? query)]
     (if (and qmap (or (:join query) (:left-join query)))
@@ -181,6 +183,7 @@
         :Keyword :Email
         :Password :DateTime :Date :Time :List :Edn :Any
         :Map :Path) (str "VARCHAR(" max-varchar-length ")")
+       :Text "TEXT"
        (:UUID :Identity) "UUID"
        :Int "INT"
        (:Int64 :Integer :BigInteger) "BIGINT"

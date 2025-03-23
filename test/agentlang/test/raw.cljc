@@ -46,7 +46,6 @@
     (reset-state)
     (is (thrown? Exception (create-function test-component 'bad-fn 'not-a-vector nil)))))
 
-
 (deftest component-integration-test
   (testing "Multiple functions in component"
     (reset-state)
