@@ -883,12 +883,17 @@
     {pat {}}
     pat))
 
+(defn- follow-references-for-literal [env pat]
+  (if (or (map? pat) (vector? pat))
+    (realize-all-references env pat)
+    pat))
+
 (defn evaluate-pattern
   ([env pat]
    (gs/reset-error-code!)
    (cond
      (ls/literal? pat)
-     (make-result env pat)
+     (make-result env (follow-references-for-literal env pat))
 
      (fncall-expr? pat)
      (make-result env (evaluate-expr env pat))

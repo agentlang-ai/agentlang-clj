@@ -26,3 +26,19 @@
           {:I1691/Create_E
            {:Instance {:I1691/E {:Id 1 :X 10}}}})))
     (is (= "a" (g 1)))))
+
+(deftest map-pattern-bug
+  (defcomponent :Mpb
+    (event
+     :Mpb/E
+     {:X :Map})
+    (entity
+     :Mpb/A
+     {:Y :Map})
+    (dataflow
+     :Mpb/E
+     {:Mpb/A {:Y {:default :Mpb/E.X}}}))
+  (let [x {:a 1 :b "hello"}
+        r (tu/invoke {:Mpb/E {:X x}})]
+    (is (cn/instance-of? :Mpb/A r))
+    (is (= {:default x} (:Y r)))))
