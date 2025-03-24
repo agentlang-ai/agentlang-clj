@@ -894,8 +894,8 @@
                           (keyword? v)
                           (maybe-follow-reference env v)
 
-                          (vector? v)
-                          (mapv (partial follow-references-for-literal env) v)
+                          (or (map? v) (vector? v))
+                          (follow-references-for-literal env v)
 
                           :else v)])
                    pat))
