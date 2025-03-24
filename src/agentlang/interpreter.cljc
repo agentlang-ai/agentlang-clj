@@ -883,10 +883,26 @@
     {pat {}}
     pat))
 
+(defn- maybe-follow-reference [env k]
+  (or (follow-reference env k) k))
+
 (defn- follow-references-for-literal [env pat]
-  (if (or (map? pat) (vector? pat))
-    (realize-all-references env pat)
-    pat))
+  (cond
+    (map? pat)
+    (into {} (mapv (fn [[k v]]
+                     [k (cond
+                          (keyword? v)
+                          (maybe-follow-reference env v)
+
+                          (vector? v)
+                          (mapv (partial follow-references-for-literal env) v)
+
+                          :else v)])
+                   pat))
+    (vector? pat)
+    (mapv (partial follow-references-for-literal env) pat)
+
+    :else pat))
 
 (defn evaluate-pattern
   ([env pat]
