@@ -994,3 +994,16 @@
 
 (gs/set-evaluate-dataflow-fn! evaluate-dataflow)
 (gs/set-evaluate-pattern-fn! evaluate-pattern)
+
+(defn safe-eval [pat]
+  (let [pat (if (map? pat) [pat] pat)]
+    (try
+      (:result (evaluate-pattern pat))
+      (catch #?(:clj Exception :cljs js/Error) ex
+        (log/error ex)))))
+
+(defn safe-eval-dataflow [event]
+  (try
+    (:result (evaluate-dataflow event))
+    (catch #?(:clj Exception :cljs js/Error) ex
+      (log/error ex))))
