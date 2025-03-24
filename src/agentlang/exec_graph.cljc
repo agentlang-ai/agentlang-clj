@@ -259,11 +259,12 @@
    :cljs
    (defn load-graph
      ([host options graph-name]
-      (uh/POST
-       (str host "/api/Agentlang.Kernel.Eval/LoadExecutionGraph")
-       options
-       {:Agentlang.Kernel.Eval/LoadExecutionGraph
-        {:Name (u/keyword-as-string graph-name)}}))
+      (:result
+       (uh/POST
+        (str host "/api/Agentlang.Kernel.Eval/LoadExecutionGraph")
+        options
+        {:Agentlang.Kernel.Eval/LoadExecutionGraph
+         {:Name (u/keyword-as-string graph-name)}})))
      ([host graph-name] (load-graph host nil graph-name))))
 
 (defn saved-graph-names [] @saved-graphs)
