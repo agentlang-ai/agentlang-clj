@@ -231,17 +231,27 @@
       (reset-graph-stack!)))
   true)
 
-(defn load-graph
-  ([graph-name]
-   (when-let [g (call-disabled
-                 #(:result
-                   (gs/evaluate-dataflow
-                    {:Agentlang.Kernel.Eval/LoadExecutionGraph
-                     {:Name (u/keyword-as-string graph-name)}})))]
-     (:Graph g)))
-  ([]
-   (when-let [n (peek @saved-graphs)]
-     (load-graph n))))
+#?(:clj
+   (defn load-graph
+     ([graph-name]
+      (when-let [g (call-disabled
+                    #(:result
+                      (gs/evaluate-dataflow
+                       {:Agentlang.Kernel.Eval/LoadExecutionGraph
+                        {:Name (u/keyword-as-string graph-name)}})))]
+        (:Graph g)))
+     ([]
+      (when-let [n (peek @saved-graphs)]
+        (load-graph n))))
+   :cljs
+   (defn load-graph
+     ([host options graph-name]
+      (uh/POST
+       (str host "/api/Agentlang.Kernel.Eval/LoadExecutionGraph")
+       options
+       {:Agentlang.Kernel.Eval/LoadExecutionGraph
+        {:Name (u/keyword-as-string graph-name)}}))
+     ([host graph-name] (load-graph host nil graph-name))))
 
 (defn saved-graph-names [] @saved-graphs)
 
@@ -254,4 +264,3 @@
   (let [sgs @saved-graphs]
     (u/safe-set saved-graphs [])
     sgs))
-
