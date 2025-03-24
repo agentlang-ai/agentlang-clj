@@ -172,6 +172,13 @@
 
 (def ^:private saved-graphs (u/make-cell []))
 
+(defn graph-names [gs] (mapv :Name gs))
+
+(ln/dataflow
+ :Agentlang.Kernel.Eval/LookupEventsWithGraphs
+ {:Agentlang.Kernel.Eval/ExecutionGraph? {} :as :Graphs}
+ [:call '(agentlang.exec-graph/graph-names :Graphs)])
+
 (defn graph? [x] (and (map? x) (:graph x) (:patterns x)))
 (defn event-graph? [g] (and (graph? g) (= :event (:graph g))))
 (defn agent-graph? [g] (and (graph? g) (= :agent (:graph g))))
@@ -182,6 +189,12 @@
 (defn pattern? [x] (and (map? x) (:pattern x)))
 (def pattern :pattern)
 (def pattern-result :result)
+
+(defn graph-walk! [g on-sub-graph! on-pattern!]
+  (doseq [n (graph-nodes g)]
+    (if (graph? n)
+      (on-sub-graph! n)
+      (on-pattern! n))))
 
 (defn- call-inference-pattern? [p]
   (let [pat (pattern p)]
