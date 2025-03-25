@@ -89,7 +89,13 @@
     (set-current-graph! newg)))
 
 (defn- update-node-result [result]
-  (let [currg (assoc (get-current-graph) :result result :pop-ts (dt/unix-timestamp))]
+  (let [g0 (assoc (get-current-graph) :result result :pop-ts (dt/unix-timestamp))
+        currg (if (map? result)
+                (cond
+                  (:suspension-id result) (assoc g0 :suspended? true)
+                  (:error result) (assoc g0 :error? true)
+                  :else g0)
+                g0)]
     (if-let [oldg (pop-graph!)]
       (let [pats (:patterns oldg)]
         (set-current-graph! (assoc oldg :patterns (vec (conj (:patterns oldg) currg)))))
@@ -119,17 +125,29 @@
 
 (declare save-current-graph)
 
+(defn- exit-all-nodes []
+  (loop [empty-stack? (all-nodes-popped?)]
+    (if empty-stack?
+      (save-current-graph)
+      (do (update-node-result nil)
+          (recur (all-nodes-popped?))))))
+
+(defn- error-result? [result]
+  (and (map? result) (:error result)))
+
 (defn exit-node [result]
-  (when (exec-graph-enabled?)
+  (when (and (exec-graph-enabled?) (get-current-graph))
     (let [empty-stack? (all-nodes-popped?)]
       (update-node-result result)
-      (when empty-stack?
-        (save-current-graph))))
+      (cond
+        empty-stack? (save-current-graph)
+        (error-result? result) (exit-all-nodes))))
   result)
 
 (ln/entity
  :Agentlang.Kernel.Eval/ExecutionGraph
- {:Name {:type :String :id true}
+ {:Id {:type :UUID :default u/uuid-string :id true}
+  :Name {:type :String :indexed true}
   :Graph :Text
   :Created {:type :String :default dt/now}})
 
@@ -137,14 +155,11 @@
 
 (ln/dataflow
  :Agentlang.Kernel.Eval/CreateExecutionGraph
- [:delete {:Agentlang.Kernel.Eval/ExecutionGraph
-           {:Name? :Agentlang.Kernel.Eval/CreateExecutionGraph.Name}}]
- [:delete :Agentlang.Kernel.Eval/ExecutionGraph :purge]
  {:Agentlang.Kernel.Eval/ExecutionGraph
   {:Name :Agentlang.Kernel.Eval/CreateExecutionGraph.Name
    :Graph :Agentlang.Kernel.Eval/CreateExecutionGraph.Graph}})
 
-(ln/event :Agentlang.Kernel.Eval/LoadExecutionGraph {:Name :String})
+(ln/event :Agentlang.Kernel.Eval/LoadExecutionGraph {:Id :UUID})
 
 (defn parse-loaded-graph [g]
   (when g
@@ -153,7 +168,7 @@
 (ln/dataflow
  :Agentlang.Kernel.Eval/LoadExecutionGraph
  {:Agentlang.Kernel.Eval/ExecutionGraph
-  {:Name? :Agentlang.Kernel.Eval/LoadExecutionGraph.Name} :as [:Ex]}
+  {:Id? :Agentlang.Kernel.Eval/LoadExecutionGraph.Id} :as [:Ex]}
  [:call '(agentlang.exec-graph/parse-loaded-graph :Ex)])
 
 (defn user-graph? [g]
@@ -172,7 +187,8 @@
 
 (def ^:private saved-graphs (u/make-cell []))
 
-(defn graph-names [gs] (mapv :Name gs))
+(defn graph-names [gs]
+  (into {} (mapv (fn [g] [(:Id g) (:Name g)]) gs)))
 
 (ln/dataflow
  :Agentlang.Kernel.Eval/LookupEventsWithGraphs
@@ -187,6 +203,9 @@
 (def graph-nodes :patterns)
 (def graph-start-timestamp :push-ts)
 (def graph-end-timestamp :pop-ts)
+(def graph-suspended? :suspended?)
+(def graph-error? :error?)
+(def graph-error-message :error)
 
 (defn pattern? [x] (and (map? x) (:pattern x)))
 (def pattern :pattern)
@@ -235,47 +254,48 @@
           save? (user-graph? g)
           r (if save?
               (call-disabled
-               #(:result (gs/evaluate-dataflow
+               #(:result (gs/evaluate-dataflow-atomic
                           {:Agentlang.Kernel.Eval/CreateExecutionGraph
                            {:Name (u/keyword-as-string (:name g)) :Graph (pr-str g)}})))
               (make-empty-exec-graph g))]
       (when-not (cn/instance-of? :Agentlang.Kernel.Eval/ExecutionGraph r)
         (log/error (str "Failed to save graph for " (:name g))))
-      (when save? (u/safe-set saved-graphs (conj @saved-graphs (:name g))))
+      (when save? (u/safe-set saved-graphs (conj @saved-graphs {(:Id r) (:Name r)})))
       (reset-current-graph!)
       (reset-graph-stack!)))
   true)
 
 #?(:clj
    (defn load-graph
-     ([graph-name]
+     ([graph-id]
       (when-let [g (call-disabled
                     #(:result
                       (gs/evaluate-dataflow
                        {:Agentlang.Kernel.Eval/LoadExecutionGraph
-                        {:Name (u/keyword-as-string graph-name)}})))]
+                        {:Id graph-id}})))]
         (:Graph g)))
      ([]
-      (when-let [n (peek @saved-graphs)]
-        (load-graph n))))
+      (when-let [id (ffirst (peek @saved-graphs))]
+        (load-graph id))))
    :cljs
    (defn load-graph
-     ([host options graph-name]
+     ([host options graph-id]
       (:Graph
        (:result
         (uh/POST
          (str host "/api/Agentlang.Kernel.Eval/LoadExecutionGraph")
          options
          {:Agentlang.Kernel.Eval/LoadExecutionGraph
-          {:Name (u/keyword-as-string graph-name)}}))))
-     ([host graph-name] (load-graph host nil graph-name))))
+          {:Id graph-id}}))))
+     ([host graph-id] (load-graph host nil graph-id))))
 
 (defn saved-graph-names [] @saved-graphs)
 
 (defn pop-saved-graph-name []
   (let [sgs @saved-graphs]
     (when-let [n (peek sgs)]
-      (u/safe-set saved-graphs (pop sgs)))))
+      (u/safe-set saved-graphs (pop sgs))
+      n)))
 
 (defn reset-saved-graph-names []
   (let [sgs @saved-graphs]

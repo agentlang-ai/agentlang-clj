@@ -74,7 +74,7 @@
    (fn []
      (let [b (tu/invoke {:Exg01/Create {:Id 1 :X 10 :Y 100}})]
        (is (cn/instance-of? :Exg01/B b))
-       (let [g (exg/load-graph :Exg01/Create)]
+       (let [g (exg/load-graph)]
          (is (and (exg/graph? g) (exg/event-graph? g)))
          (is (= (exg/graph-name g) :Exg01/Create))
          (let [[n1 n2] (exg/graph-nodes g)]
