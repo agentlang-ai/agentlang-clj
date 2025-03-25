@@ -157,8 +157,9 @@
         (recur)))))
 
 (defn- maybe-delete-model-config-instance [entity-name]
-  (let [evt-name (cn/crud-event-name entity-name :Delete)]
-    (gs/evaluate-dataflow-internal {evt-name {:Id 1}})))
+  (gs/evaluate-dataflow-internal
+   [[:delete entity-name :*]
+    [:delete entity-name :purge]]))
 
 (defn save-model-config-instance [app-config model-name]
   (when-let [ent (cn/model-config-entity model-name)]

@@ -146,10 +146,15 @@
 
 (ln/event :Agentlang.Kernel.Eval/LoadExecutionGraph {:Name :String})
 
+(defn parse-loaded-graph [g]
+  (when g
+    (assoc g :Graph (u/parse-string (:Graph g)))))
+
 (ln/dataflow
  :Agentlang.Kernel.Eval/LoadExecutionGraph
  {:Agentlang.Kernel.Eval/ExecutionGraph
-  {:Name? :Agentlang.Kernel.Eval/LoadExecutionGraph.Name}})
+  {:Name? :Agentlang.Kernel.Eval/LoadExecutionGraph.Name} :as [:Ex]}
+ [:call '(agentlang.exec-graph/parse-loaded-graph :Ex)])
 
 (defn user-graph? [g]
   (let [gn (:name g)]
@@ -163,9 +168,16 @@
 (defn- make-empty-exec-graph [g]
   (cn/make-instance
    :Agentlang.Kernel.Eval/ExecutionGraph
-   {:Name (pr-str (:name g)) :Graph "--"}))
+   {:Name (u/keyword-as-string (:name g)) :Graph "--"}))
 
 (def ^:private saved-graphs (u/make-cell []))
+
+(defn graph-names [gs] (mapv :Name gs))
+
+(ln/dataflow
+ :Agentlang.Kernel.Eval/LookupEventsWithGraphs
+ {:Agentlang.Kernel.Eval/ExecutionGraph? {} :as :Graphs}
+ [:call '(agentlang.exec-graph/graph-names :Graphs)])
 
 (defn graph? [x] (and (map? x) (:graph x) (:patterns x)))
 (defn event-graph? [g] (and (graph? g) (= :event (:graph g))))
@@ -177,6 +189,12 @@
 (defn pattern? [x] (and (map? x) (:pattern x)))
 (def pattern :pattern)
 (def pattern-result :result)
+
+(defn graph-walk! [g on-sub-graph! on-pattern!]
+  (doseq [n (graph-nodes g)]
+    (if (graph? n)
+      (on-sub-graph! n)
+      (on-pattern! n))))
 
 (defn- call-inference-pattern? [p]
   (let [pat (pattern p)]
@@ -217,7 +235,7 @@
               (call-disabled
                #(:result (gs/evaluate-dataflow
                           {:Agentlang.Kernel.Eval/CreateExecutionGraph
-                           {:Name (pr-str (:name g)) :Graph (pr-str g)}})))
+                           {:Name (u/keyword-as-string (:name g)) :Graph (pr-str g)}})))
               (make-empty-exec-graph g))]
       (when-not (cn/instance-of? :Agentlang.Kernel.Eval/ExecutionGraph r)
         (log/error (str "Failed to save graph for " (:name g))))
@@ -226,18 +244,29 @@
       (reset-graph-stack!)))
   true)
 
-(defn load-graph
-  ([graph-name]
-   (when-let [g (call-disabled
-                 #(first
-                   (:result
-                    (gs/evaluate-dataflow
-                     {:Agentlang.Kernel.Eval/LoadExecutionGraph
-                      {:Name (pr-str graph-name)}}))))]
-     (u/parse-string (:Graph g))))
-  ([]
-   (when-let [n (peek @saved-graphs)]
-     (load-graph n))))
+#?(:clj
+   (defn load-graph
+     ([graph-name]
+      (when-let [g (call-disabled
+                    #(:result
+                      (gs/evaluate-dataflow
+                       {:Agentlang.Kernel.Eval/LoadExecutionGraph
+                        {:Name (u/keyword-as-string graph-name)}})))]
+        (:Graph g)))
+     ([]
+      (when-let [n (peek @saved-graphs)]
+        (load-graph n))))
+   :cljs
+   (defn load-graph
+     ([host options graph-name]
+      (:Graph
+       (:result
+        (uh/POST
+         (str host "/api/Agentlang.Kernel.Eval/LoadExecutionGraph")
+         options
+         {:Agentlang.Kernel.Eval/LoadExecutionGraph
+          {:Name (u/keyword-as-string graph-name)}}))))
+     ([host graph-name] (load-graph host nil graph-name))))
 
 (defn saved-graph-names [] @saved-graphs)
 
@@ -250,4 +279,3 @@
   (let [sgs @saved-graphs]
     (u/safe-set saved-graphs [])
     sgs))
-
