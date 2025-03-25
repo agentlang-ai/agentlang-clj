@@ -85,7 +85,7 @@
 (defn- push-node [tag n event-instance]
   (let [oldg (get-current-graph)
         newg (merge {:graph tag :name n :patterns [] :push-ts (dt/unix-timestamp)}
-                    (when event-instance {:event event-instance}))]
+                    (when event-instance {:trigger event-instance}))]
     (when oldg (push-graph! oldg))
     (set-current-graph! newg)))
 
@@ -191,7 +191,7 @@
 (def ^:private saved-graphs (u/make-cell []))
 
 (defn graph-names [gs]
-  (into {} (mapv (fn [g] [(:Id g) (:Name g)]) gs)))
+  (into {} (mapv (fn [g] [(:Id g) {:name (:Name g) :event (:trigger (u/parse-string (:Graph g)))}]) gs)))
 
 (ln/dataflow
  :Agentlang.Kernel.Eval/LookupEventsWithGraphs
@@ -209,7 +209,7 @@
 (def graph-suspended? :suspended?)
 (def graph-error? :error?)
 (def graph-error-message :error)
-(def graph-event :event)
+(def graph-event :trigger)
 
 (defn pattern? [x] (and (map? x) (:pattern x)))
 (def pattern :pattern)
@@ -238,8 +238,9 @@
 (defn- extract-core-agent-graph [g]
   (let [n (graph-name-as-kw g)
         nodes (graph-nodes g)
-        ag (find-real-agent-graph n nodes)]
-    (or ag g)))
+        ag (find-real-agent-graph n nodes)
+        evt (graph-event g)]
+    (merge (or ag g) (when evt {graph-event evt}))))
 
 (defn- maybe-trim-agent-graph [g]
   (if (agent-graph? g)
