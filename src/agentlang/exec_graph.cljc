@@ -84,12 +84,12 @@
 
 (defn- push-node [tag n]
   (let [oldg (get-current-graph)
-        newg {:graph tag :name n :patterns []}]
+        newg {:graph tag :name n :patterns [] :push-ts (dt/unix-timestamp)}]
     (when oldg (push-graph! oldg))
     (set-current-graph! newg)))
 
 (defn- update-node-result [result]
-  (let [currg (assoc (get-current-graph) :result result)]
+  (let [currg (assoc (get-current-graph) :result result :pop-ts (dt/unix-timestamp))]
     (if-let [oldg (pop-graph!)]
       (let [pats (:patterns oldg)]
         (set-current-graph! (assoc oldg :patterns (vec (conj (:patterns oldg) currg)))))
@@ -185,6 +185,8 @@
 (def graph-name :name)
 (def graph-result :result)
 (def graph-nodes :patterns)
+(def graph-start-timestamp :push-ts)
+(def graph-end-timestamp :pop-ts)
 
 (defn pattern? [x] (and (map? x) (:pattern x)))
 (def pattern :pattern)
