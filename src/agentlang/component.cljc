@@ -99,11 +99,6 @@
      :cljs (atom [])))
 
 (defn set-current-component [n]
-  (when (= n :Project)
-    (try
-      (u/throw-ex "blla")
-      (catch Exception ex
-        (.printStackTrace ex))))
   #?(:clj (dosync (.set current-component n)
                   (ref-set components-inited (conj @components-inited n)))
      :cljs (do (reset! current-component n)

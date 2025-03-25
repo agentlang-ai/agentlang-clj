@@ -883,12 +883,33 @@
     {pat {}}
     pat))
 
+(defn- maybe-follow-reference [env k]
+  (or (follow-reference env k) k))
+
+(defn- follow-references-for-literal [env pat]
+  (cond
+    (map? pat)
+    (into {} (mapv (fn [[k v]]
+                     [k (cond
+                          (keyword? v)
+                          (maybe-follow-reference env v)
+
+                          (or (map? v) (vector? v))
+                          (follow-references-for-literal env v)
+
+                          :else v)])
+                   pat))
+    (vector? pat)
+    (mapv (partial follow-references-for-literal env) pat)
+
+    :else pat))
+
 (defn evaluate-pattern
   ([env pat]
    (gs/reset-error-code!)
    (cond
      (ls/literal? pat)
-     (make-result env pat)
+     (make-result env (follow-references-for-literal env pat))
 
      (fncall-expr? pat)
      (make-result env (evaluate-expr env pat))
@@ -994,3 +1015,16 @@
 
 (gs/set-evaluate-dataflow-fn! evaluate-dataflow)
 (gs/set-evaluate-pattern-fn! evaluate-pattern)
+
+(defn safe-eval [pat]
+  (let [pat (if (map? pat) [pat] pat)]
+    (try
+      (:result (evaluate-pattern pat))
+      (catch #?(:clj Exception :cljs js/Error) ex
+        (log/error ex)))))
+
+(defn safe-eval-dataflow [event]
+  (try
+    (:result (evaluate-dataflow event))
+    (catch #?(:clj Exception :cljs js/Error) ex
+      (log/error ex))))

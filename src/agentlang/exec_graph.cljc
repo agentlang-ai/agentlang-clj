@@ -172,6 +172,13 @@
 
 (def ^:private saved-graphs (u/make-cell []))
 
+(defn graph-names [gs] (mapv :Name gs))
+
+(ln/dataflow
+ :Agentlang.Kernel.Eval/LookupEventsWithGraphs
+ {:Agentlang.Kernel.Eval/ExecutionGraph? {} :as :Graphs}
+ [:call '(agentlang.exec-graph/graph-names :Graphs)])
+
 (defn graph? [x] (and (map? x) (:graph x) (:patterns x)))
 (defn event-graph? [g] (and (graph? g) (= :event (:graph g))))
 (defn agent-graph? [g] (and (graph? g) (= :agent (:graph g))))
@@ -182,6 +189,12 @@
 (defn pattern? [x] (and (map? x) (:pattern x)))
 (def pattern :pattern)
 (def pattern-result :result)
+
+(defn graph-walk! [g on-sub-graph! on-pattern!]
+  (doseq [n (graph-nodes g)]
+    (if (graph? n)
+      (on-sub-graph! n)
+      (on-pattern! n))))
 
 (defn- call-inference-pattern? [p]
   (let [pat (pattern p)]
@@ -231,17 +244,29 @@
       (reset-graph-stack!)))
   true)
 
-(defn load-graph
-  ([graph-name]
-   (when-let [g (call-disabled
-                 #(:result
-                   (gs/evaluate-dataflow
-                    {:Agentlang.Kernel.Eval/LoadExecutionGraph
-                     {:Name (u/keyword-as-string graph-name)}})))]
-     (:Graph g)))
-  ([]
-   (when-let [n (peek @saved-graphs)]
-     (load-graph n))))
+#?(:clj
+   (defn load-graph
+     ([graph-name]
+      (when-let [g (call-disabled
+                    #(:result
+                      (gs/evaluate-dataflow
+                       {:Agentlang.Kernel.Eval/LoadExecutionGraph
+                        {:Name (u/keyword-as-string graph-name)}})))]
+        (:Graph g)))
+     ([]
+      (when-let [n (peek @saved-graphs)]
+        (load-graph n))))
+   :cljs
+   (defn load-graph
+     ([host options graph-name]
+      (:Graph
+       (:result
+        (uh/POST
+         (str host "/api/Agentlang.Kernel.Eval/LoadExecutionGraph")
+         options
+         {:Agentlang.Kernel.Eval/LoadExecutionGraph
+          {:Name (u/keyword-as-string graph-name)}}))))
+     ([host graph-name] (load-graph host nil graph-name))))
 
 (defn saved-graph-names [] @saved-graphs)
 
@@ -254,4 +279,3 @@
   (let [sgs @saved-graphs]
     (u/safe-set saved-graphs [])
     sgs))
-
