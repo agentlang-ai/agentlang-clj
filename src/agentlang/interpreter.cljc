@@ -952,7 +952,7 @@
            (when (exg/exec-graph-enabled?)
              (exg/disable!)
              (reset! exg-disabled? true))
-           ((if (cn/inference? n) exg/add-agent-node exg/add-event-node) n))))
+           ((if (cn/inference? n) exg/add-agent-node exg/add-event-node) n event-instance))))
      (gs/call-with-event-context
       (:EventContext event-instance)
       (fn []

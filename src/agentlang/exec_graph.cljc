@@ -82,9 +82,10 @@
 
 (defn- all-nodes-popped? [] (not (peek (get-graph-stack))))
 
-(defn- push-node [tag n]
+(defn- push-node [tag n event-instance]
   (let [oldg (get-current-graph)
-        newg {:graph tag :name n :patterns [] :push-ts (dt/unix-timestamp)}]
+        newg (merge {:graph tag :name n :patterns [] :push-ts (dt/unix-timestamp)}
+                    (when event-instance {:event event-instance}))]
     (when oldg (push-graph! oldg))
     (set-current-graph! newg)))
 
@@ -110,10 +111,12 @@
         (u/throw-ex "Cannot add patterns - no active execution graph."))))
   true)
 
-(defn- init-graph [tag n]
-  (if (exec-graph-enabled?)
-    (push-node tag n)
-    n))
+(defn- init-graph
+  ([tag n event-instance]
+   (if (exec-graph-enabled?)
+     (push-node tag n event-instance)
+     n))
+  ([tag n] (init-graph tag n nil)))
 
 (def init-event-graph (partial init-graph :event))
 (def init-agent-graph (partial init-graph :agent))
@@ -206,6 +209,7 @@
 (def graph-suspended? :suspended?)
 (def graph-error? :error?)
 (def graph-error-message :error)
+(def graph-event :event)
 
 (defn pattern? [x] (and (map? x) (:pattern x)))
 (def pattern :pattern)
