@@ -5,7 +5,8 @@
 {:Agentlang.Core/Agent
  {:Name :joke-agent
   :UserInstruction "I am an AI bot who tell jokes"
-  :Channels [{:channel-type :cmdline :name :joke-channel}]
+  :Channels [{:channel-type :cmdline :name :tell-me-a-joke}
+             {:channel-type :teams :name :team-jokes}]
   :Input :Joke.Core/TellAJoke}}
 
 ;; Usage:

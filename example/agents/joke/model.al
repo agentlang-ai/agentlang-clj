@@ -1,3 +1,3 @@
 {:name :Joke
  :agentlang-version "current"
- :components [:Joke.Core :Joke.Teams]}
+ :components [:Joke.Teams :Joke.Core]}

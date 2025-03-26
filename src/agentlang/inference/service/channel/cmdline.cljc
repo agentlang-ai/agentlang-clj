@@ -1,6 +1,6 @@
 (ns agentlang.inference.service.channel.cmdline
   (:require [agentlang.util :as u]
-            [agentlang.inference.service.channel.core :as cc]))
+            [agentlang.inference.service.channel.core :as ch]))
 
 (def ^:private tag :cmdline)
 
@@ -9,9 +9,9 @@
 (defn- can-run? [channel-name]
   (get @run-flags channel-name))
 
-(defmethod cc/channel-start tag [{channel-name :name agent-name :agent}]
+(defmethod ch/channel-start tag [{channel-name :name agent-name :agent}]
   (swap! run-flags assoc channel-name true)
-  (let [send (partial cc/send-instruction-to-agent channel-name agent-name (name channel-name))]
+  (let [send (partial ch/send-instruction-to-agent channel-name agent-name (name channel-name))]
     (u/parallel-call
      {:delay-ms 2000}
      (fn []
@@ -25,6 +25,6 @@
        (println "Bye."))))
   channel-name)
 
-(defmethod cc/channel-shutdown tag [{channel-name :name}]
+(defmethod ch/channel-shutdown tag [{channel-name :name}]
   (swap! run-flags dissoc channel-name)
   channel-name)
