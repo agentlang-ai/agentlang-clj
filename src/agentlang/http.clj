@@ -106,10 +106,33 @@
         (s/lower-case s))
       "application/json"))
 
+(defn- maybe-not-found-result [json-obj]
+  (let [r (cond
+            (map? json-obj)
+            (:result json-obj)
+
+            (vector? json-obj)
+            (let [f (first json-obj)]
+              (when (map? f)
+                (:result f)))
+
+            (string? json-obj) json-obj)]
+    (cond
+      (or (map? r) (string? r))
+      (and (seq r) r)
+
+      (vector? r)
+      (let [f (first r)]
+        (if (and (map? f) (seq f))
+          r
+          []))
+
+      :else [])))
+
 (defn- maybe-not-found-as-ok [status json-obj]
   (if (= 404 status)
-    (if (if (map? json-obj) (:result json-obj) (:result (first json-obj)))
-      [200 [{:status :ok :result []}]]
+    (if-let [r (maybe-not-found-result json-obj)]
+      [200 [{:status :ok :result r}]]
       [status json-obj])
     [status json-obj]))
 
