@@ -37,21 +37,31 @@
   (common/make-completion-fn
    {:default-completion-endpoint default-completion-endpoint
     :make-request
-    (fn [config {messages :messages
-                 tools :tools
-                 temperature :temperature
-                 max-tokens :max-tokens
-                 api-key :api-key
-                 version :version
-                 model-name :model-name}]
+    (fn [config {:keys [messages tools temperature max-tokens api-key version model-name cache]}]
       (let [anthropic-api-key (or api-key (:ApiKey config) (get-anthropic-api-key))
             model-name (or model-name (:CompletionModel config) default-completion-model)
             anthropic-version (or version (:Version config) default-anthropic-version)
+            cache? (or cache (:Cache config) true)
+            temperature (or temperature (:Temperature config) default-temperature)
+            max-tokens (or max-tokens (:MaxTokens config) default-max-tokens)
+
             system-message (first (filterv #(= (:role %) :system) messages))
-            messages (into [] (remove #(= % system-message) messages))
-            formatted-system-message (get system-message :content)
-            temperature (or temperature default-temperature)
-            max-tokens (or max-tokens default-max-tokens)
+            user-messages (into [] (remove #(= % system-message) messages))
+
+            formatted-messages (if cache?
+                                 [{:type "text"
+                                   :text (get (first user-messages) :content)
+                                   :cache_control {:type "ephemeral"}}]
+                                 [{:type "text"
+                                   :text (get (first user-messages) :content)}])
+            formatted-system-message (when system-message
+                                       (if cache?
+                                         [{:type "text"
+                                           :text (get system-message :content)
+                                           :cache_control {:type "ephemeral"}}]
+                                         [{:type "text"
+                                           :text (get system-message :content)}]))
+
             options {:headers {"content-type" "application/json"
                                "x-api-key" anthropic-api-key
                                "anthropic-version" anthropic-version}
@@ -62,13 +72,13 @@
                                        []
                                        formatted-system-message)
                              :temperature temperature
-                             :messages messages
+                             :messages formatted-messages
                              :max_tokens max-tokens})}]
         [options (partial chat-completion-response model-name)]))}))
 
-(defn- fetch-image-data [image-url]
+(defn- fetch-image-data [image-url])
   ;; TODO: fetch image mime-type and binary-data
-  )
+
 
 (def make-anthropic-ocr-completion
   (common/make-ocr-completion-fn
