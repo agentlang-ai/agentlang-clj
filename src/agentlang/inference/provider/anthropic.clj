@@ -49,11 +49,13 @@
             user-messages (into [] (remove #(= % system-message) messages))
 
             formatted-messages (if cache?
-                                 [{:type "text"
-                                   :text (get (first user-messages) :content)
-                                   :cache_control {:type "ephemeral"}}]
-                                 [{:type "text"
-                                   :text (get (first user-messages) :content)}])
+                                 [{:role "user"
+                                   :content [{:type "text"
+                                              :text (get (first user-messages) :content)
+                                              :cache_control {:type "ephemeral"}}]}]
+                                 [{:role "user"
+                                   :content [{:type "text"
+                                              :text (get (first user-messages) :content)}]}])
             formatted-system-message (when system-message
                                        (if cache?
                                          [{:type "text"
