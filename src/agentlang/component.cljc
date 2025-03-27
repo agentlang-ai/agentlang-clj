@@ -949,6 +949,10 @@
     (when (some #{recname} @external-schema-records)
       true)))
 
+(defn inferred-schema? [recname]
+  (when-let [schema (fetch-schema recname)]
+    (or (:inferred schema) (has-external-schema? recname))))
+
 (defn validate-record-attributes
   ([recname recversion recattrs schema]
    ;; The :inferred key will be added
