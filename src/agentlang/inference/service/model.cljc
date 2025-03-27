@@ -154,6 +154,7 @@
 
 (def ^:private has-planner? (partial has-feature? "planner"))
 (def ^:private has-ocr? (partial has-feature? "ocr"))
+(def ^:private has-interactive? (partial has-feature? "interactive"))
 
 (defn get-feature-prompt [ft] (get feature-set ft ""))
 
@@ -183,6 +184,7 @@
 
 (def ocr-agent? (partial agent-of-type? "ocr"))
 (def planner-agent? (partial agent-of-type? "planner"))
+(def interactive-planner-agent? (partial agent-of-type? "interactive-planner"))
 (def agent-gen-agent? (partial agent-of-type? "agent-gen"))
 
 (defn- eval-event
@@ -260,24 +262,32 @@
     (mapv u/keyword-as-string delegs)))
 
 (defn- maybe-cast-to-planner [attrs]
-  (cond
-    (= :planner (u/string-as-keyword (:Type attrs)))
-    attrs
+  (let [tp (u/string-as-keyword (:Type attrs))]
+    (cond
+      (or (= :planner tp) (= :interactive-planner tp))
+      attrs
 
-    (or (seq (:Tools attrs))
-        (seq (:Delegates attrs)))
-    (assoc attrs :Type :planner)
+      (seq (:Features attrs))
+      (let [fs (:Features attrs)]
+        (cond
+          (has-planner? fs)
+          (if (has-interactive? fs)
+            (assoc attrs :Type :interactive-planner)
+            (assoc attrs :Type :planner))
 
-    (seq (:Features attrs))
-    (let [fs (:Features attrs)]
-      (cond
-        (has-planner? fs)
-        (assoc attrs :Type :planner)
-        (has-ocr? fs)
-        (assoc attrs :Type :ocr)
-        :else attrs))
+          (has-ocr? fs)
+          (assoc attrs :Type :ocr)
 
-    :else attrs))
+          (has-interactive? fs)
+          (assoc attrs :Type :interactive-planner)
+
+          :else attrs))
+
+      (or (seq (:Tools attrs))
+          (seq (:Delegates attrs)))
+      (assoc attrs :Type :planner)
+
+      :else attrs)))
 
 (defn- maybe-start-channel [agent-name ch]
   (when (map? ch)
@@ -322,6 +332,7 @@
      (assoc pat :Agentlang.Core/Agent
             (cond
               (planner-agent? new-attrs) (planner/with-instructions new-attrs)
+              (interactive-planner-agent? new-attrs) (planner/with-interactive-instructions new-attrs)
               (agent-gen-agent? new-attrs) (agent-gen/with-instructions new-attrs)
               :else new-attrs)))))
 

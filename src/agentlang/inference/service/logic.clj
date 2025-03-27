@@ -38,9 +38,6 @@
   (let [[app-uuid tag type] (s/split (:Id instance) #"__")]
     {:app-uuid app-uuid :tag tag :type type}))
 
-(defn- log-trigger-agent! [instance]
-  (log/info (str "Triggering " (:Type instance) " agent - " (:Name instance))))
-
 (defn- format-as-agent-response [agent-instance result]
   ;; TODO: response parsing should also move to agent-registry,
   ;; one handler will be needed for each type of agent.
@@ -76,7 +73,6 @@
        agent-documents-limit))))
 
 (defn handle-chat-agent [instance]
-  (log-trigger-agent! instance)
   (p/call-with-provider
    (model/ensure-llm-for-agent instance)
    #(let [ins (:UserInstruction instance)
@@ -144,7 +140,6 @@
            (str "You can use these additional definitions:\n" tools "\n\n" ins))))
 
 (defn handle-planner-agent [instance]
-  (log-trigger-agent! instance)
   (let [deleg-events (su/nonils (mapv #(when-let [s (:Input %)] (keyword s)) (model/find-agent-delegates instance)))
         instance (if (seq deleg-events)
                    (add-delegates-as-tools instance deleg-events)
@@ -173,6 +168,10 @@
            model-name])
       :else
       [result model-name])))
+
+(defn handle-interactive-planner-agent [instance]
+  (u/pprint instance)
+  (handle-chat-agent instance))
 
 (defn handle-ocr-agent [instance]
   (p/call-with-provider

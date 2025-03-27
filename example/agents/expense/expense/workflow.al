@@ -6,6 +6,13 @@
   :Title :String
   :Amount :Double})
 
+{:Agentlang.Core/Agent
+ {:Name :Expense.Workflow/AnalyzeInstruction
+  :Type :interactive-planner
+  :ToolComponents [:Expense.Workflow]
+  :Input :Expense.Workflow/AnalyzeInstruction
+  :LLM :llm01}}
+
 {:Agentlang.Core/LLM {:Type :openai :Name :llm01}}
 
 (event

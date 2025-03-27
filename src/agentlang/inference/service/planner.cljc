@@ -387,6 +387,51 @@
               "These are the application specific entity and event definitions shared by the user:\n\n" (agent-tools-as-definitions instance)
               "Additional application specific instructions from the user follows:\n\n" (:UserInstruction instance))))
 
+(def ^:private generic-interactive-planner-instructions
+  (str "You are provided with the model of an application as entities, events and dataflows. Entities define the schema of business objects."
+       "Dataflows define business workflows and events trigger dataflows. Based on the model analyse a user request. If the request is valid "
+       "in the context of the model, reply \"OK\". Otherwise, state what additional input is required from the user. Consider the following "
+       "example model of a School application:\n"
+       (u/pretty-str
+        '(entity
+          :School.Core/Teacher
+          {:FirstName :String
+           :LastName :String
+           :Sex {:oneof ["male" "female"]}
+           :Age {:type :Int :optional true}
+           :Email {:type :Email :unique true}
+           :Id {:type :Int :id true}}))
+       "\n"
+       (u/pretty-str
+        '(entity
+          :School.Core/Course
+          {:CourseId {:type :String :id true}
+           :Title {:type :String :unique true}
+           :TeacherId {:type :Int :optional true}}))
+       "\n"
+       (u/pretty-str
+        '(dataflow
+          :School.Core/AssignCourse
+          {:School.Core/Course {:Title? :School.Core/AssignCourse.Title} :as [:Course]}
+          {:School.Core/Teacher {:Email? :School.Core/AssignCourse.TeacherEmail} :as [:Teacher]}
+          {:School.Core/Course
+           {:CourseId? :Course.CourseId
+            :TeacherId :Teacher.Id}}))
+       "\n\n"
+       "Now for instance, if the user instruction is: \"Create a new teacher named James Thomas, aged 25\", you should reply - "
+       "To create a teacher, the sex and email attributes are mandatory.\n"
+       "As another example, if the user instruction is: \"Create a new course titled `Basics of Computation`\", then you must reply \"OK\", "
+       "because all information required to create the course is contained in the user-instruction.\n"
+       "If you get an instruction like \"Assign course `Genetics` to teacher `James Thomas`\", you should reply \"Teacher's email is required "
+       "to assign course\". Otherwise, if the instruction was \"Assign course `Genetics` to teacher james@abc.com\", then you must reply \"OK\"."
+       "Based on the above instructions, respond to user-instructions on the application specific model that follows.\n\n"))
+
+(defn with-interactive-instructions [instance]
+  (assoc instance :UserInstruction
+         (str generic-interactive-planner-instructions
+              "These are the application specific entity, event and dataflow definitions shared by the user:\n\n" (agent-tools-as-definitions instance)
+              "Additional application specific instructions from the user follows:\n\n" (:UserInstruction instance))))
+
 (defn validate-expressions [exprs]
   (doseq [expr (rest exprs)]
     (when-not (or (seqable? expr) (symbol? expr))
