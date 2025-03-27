@@ -257,9 +257,12 @@
     (when (get-in (cn/fetch-model channel) [:channel :subscriptions])
       (register-subscription-event channel input))))
 
-(defn- preproc-agent-delegates [delegs]
+(defn- preproc-kws-vect [delegs]
   (when (seq delegs)
     (mapv u/keyword-as-string delegs)))
+
+(def ^:private preproc-agent-delegates preproc-kws-vect)
+(def ^:private preproc-agent-tool-components preproc-kws-vect)
 
 (defn- maybe-cast-to-planner [attrs]
   (let [tp (u/string-as-keyword (:Type attrs))]
@@ -306,6 +309,7 @@
          input (preproc-agent-input-spec nm (:Input attrs))
          tools (preproc-agent-tools-spec (:Tools attrs))
          delegates (preproc-agent-delegates (:Delegates attrs))
+         tool-components (preproc-agent-tool-components (:ToolComponents attrs))
          features (when-let [ftrs (:Features attrs)] (mapv u/keyword-as-string ftrs))
          tp (:Type attrs)
          llm (or (:LLM attrs) {:Type "openai"})
@@ -326,6 +330,7 @@
                  features (assoc :Features features)
                  integs (assoc :Integrations integs)
                  channels (assoc :Channels channels)
+                 tool-components (assoc :ToolComponents tool-components)
                  llm (assoc :LLM (u/keyword-as-string llm))))]
      (when (seq channels)
        (maybe-register-subscription-handlers! channels (keyword input)))

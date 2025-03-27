@@ -170,8 +170,13 @@
       [result model-name])))
 
 (defn handle-interactive-planner-agent [instance]
-  (u/pprint instance)
-  (handle-chat-agent instance))
+  (let [[resp model :as r] (handle-chat-agent instance)]
+    (if (= "OK" (s/upper-case resp))
+      (if-let [delegate (keyword (first (:Delegates instance)))]
+        (let [ins (or (get-in instance [:Context :UserInstruction]) (:UserInstruction instance))]
+          (:result (gs/evaluate-pattern {delegate {:UserInstruction ins}})))
+        r)
+      r)))
 
 (defn handle-ocr-agent [instance]
   (p/call-with-provider

@@ -1,35 +1,14 @@
-(component :Family.Core)
-
-(entity
- :Family
- {:Name {:type :String :id true}})
-
-(entity
- :Member
- {:Email {:type :Email :id true}
-  :Name :String})
-
-(relationship
- :FamilyMember
- {:meta {:contains [:Family :Member]}})
-
-(relationship
- :Siblings
- {:meta {:between [:Member :Member :as [:Sibling1 :Sibling2]]}})
-
-(dataflow
- :FindSiblings
- {:Family.Core/Member? {}
-  :Family.Core/Siblings? {:Family.Core/Member {:Email "joe@abc.com"} :as :Sibling1}
-  :as :siblings})
+(component
+ :Family.Core
+ {:refer [:Family.Schema]})
 
 {:Agentlang.Core/LLM {:Name :llm01}}
 
 {:Agentlang.Core/Agent
  {:Name :Family.Core/HelperAgent
   :LLM :llm01
-  :Tools [:Family.Core/Family :Family.Core/Member
-          :Family.Core/FamilyMember :Family.Core/ParentChild]
+  :Tools [:Family.Schema/Family :Family.Schema/Member
+          :Family.Schema/FamilyMember :Family.Schema/ParentChild]
   :UserInstruction (str "Based on the user request, either\n"
                         "1. Create a new Family.\n"
                         "2. Create a Member and add that Member to a Family.\n"
@@ -37,9 +16,17 @@
                         "4. Create a Member as a child of another Member.\n"
                         "5. Lookup all children of a Member.\n\n"
                         "As an example, the following expression adds a new member named \"sam\" to the \"scotts\" family:\n"
-                        "(make-child :Family.Core/Member {:Name \"sam\" :Email \"sam@family.org\"} :Family.Core/FamilyMember \"scotts\")\n"
+                        "(make-child :Family.Schema/Member {:Name \"sam\" :Email \"sam@family.org\"} :Family.Schema/FamilyMember \"scotts\")\n"
                         "Another example of creating a sibling relationship:\n"
-                        "(make :Family.Core/Siblings {:Sibling1 \"mary@family.org\" :Sibling2 \"sam@family.org\"})\n")}}
+                        "(make :Family.Schema/Siblings {:Sibling1 \"mary@family.org\" :Sibling2 \"sam@family.org\"})\n")}}
+
+{:Agentlang.Core/Agent
+ {:Name :Family.Core/FamilyAgent
+  :LLM :llm01
+  :Type :interactive-planner
+  :Delegates [:Family.Core/HelperAgent]
+  :UserInstruction "Analyse requests on the family schema."
+  :ToolComponents [:Family.Schema]}}
 
 ;; Usage:
 ;; POST api/Family.Core/HelperAgent
