@@ -374,7 +374,8 @@
                concat
                (mapv
                 (fn [inst]
-                  (let [is-queried (env/queried-id? env record-name (id-attr inst))]
+                  (let [is-queried (if gs/migration-mode nil
+                                       (env/queried-id? env record-name (id-attr inst)))]
                     ((if is-queried update-intercept create-intercept)
                      env inst
                      (fn [inst]

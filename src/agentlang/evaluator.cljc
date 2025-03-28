@@ -19,8 +19,6 @@
             [agentlang.lang.internal :as li]
             [agentlang.lang.opcode :as opc]
             [agentlang.lang.datetime :as dt]
-            ;; load kernel components
-            [agentlang.model]
             [agentlang.telemetry :as telemetry]
             [agentlang.global-state :as gs]
             [agentlang.evaluator.state :as es]

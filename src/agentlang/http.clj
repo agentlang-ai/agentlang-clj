@@ -132,7 +132,7 @@
 (defn- maybe-not-found-as-ok [status json-obj]
   (if (= 404 status)
     (if-let [r (maybe-not-found-result json-obj)]
-      [200 [{:status :ok :result r}]]
+      [404 [{:status :not-found :result r}]]
       [status json-obj])
     [status json-obj]))
 

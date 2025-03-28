@@ -1441,3 +1441,22 @@
                                          :Error [:q# ~(cleanup-standalone-pattern raw-pat)]))])]]
     (gs/install-init-pattern! final-pat)
     (raw/pattern raw-pat)))
+
+
+(defn load-kernel-model
+  ([version]
+   (model
+    {:name :Agentlang
+     :agentlang-version "current"
+     :version version
+     :components
+     [:Agentlang.Kernel.Lang
+      :Agentlang.Kernel.Identity
+      :Agentlang.Kernel.Rbac]})
+
+   (use '[agentlang.kernel.lang :as lang] :reload)
+   (use '[agentlang.kernel.identity :as identity] :reload)
+   (use '[agentlang.kernel.rbac :as rbac] :reload)
+)
+  ([]
+   (load-kernel-model nil)))

@@ -345,6 +345,7 @@
    (if (some #{model-name} @loaded-models)
      (f)
      (when (try
+             (ln/load-kernel-model)
              (when (build/load-model model-name)
                (u/safe-set loaded-models (conj @loaded-models model-name)))
              (catch Exception ex
@@ -398,12 +399,19 @@
 
 (defn call-after-load-model-migrate
   ([model-name type path options ignore-load-error] 
-   (binding [gs/migration-mode true]
+   (binding [gs/migration-mode true] 
      (gs/in-script-mode!)
      (try
+       (try
+         (build/load-model-migration "agentlang" "local" "./agentlang" nil)
+         (catch Exception _
+           (log/info "No agentlang found, loading default")
+           (ln/load-kernel-model)))
        (let [[_ config] (read-model-and-config options)
              [model old-entities] (build/load-model-migration model-name type path)]
          (cn/unregister-model (:name model))
+         (cn/unregister-model :Agentlang)
+         (ln/load-kernel-model)
          (let [[_ new-entities] (build/load-model-migration model-name nil nil)]
            (rename-db-entity-tables new-entities old-entities (:agentlang-version model) config))
          (init-runtime (:name model) config)
