@@ -24,7 +24,7 @@
 (def migration-insertcount (atom 0))
 
 (defn create-inst-statement [conn table-name id obj]
-  (when (gs/migration-mode)
+  (when gs/migration-mode
     (println "migration: upserting table count: " table-name @migration-insertcount)
     (reset! migration-insertcount (+ @migration-insertcount 1)))
   (let [[entity-name instance] obj
