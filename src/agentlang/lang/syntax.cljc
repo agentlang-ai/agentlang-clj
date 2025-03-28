@@ -59,11 +59,13 @@
       (and (vector? x) (literal? (first x)))))
 
 (defn- validate-attributes [pat recname attrs]
-  (if-let [all (cn/all-attribute-names recname)]
-    (doseq [n (keys attrs)]
-      (when-not (some #{(li/normalize-name n)} all)
-        (raise-syntax-error pat (str n " is not a valid attribute of " recname))))
-    (log/warn (str "Schema not found, failed to validate attributes for " recname)))
+  (when-not (or (cn/internal-component? (first (li/split-path recname)))
+                (cn/inferred-schema? recname))
+    (if-let [all (cn/all-attribute-names recname)]
+      (doseq [n (keys attrs)]
+        (when-not (some #{(li/normalize-name n)} all)
+          (raise-syntax-error pat (str n " is not a valid attribute of " recname))))
+      (log/warn (str "Schema not found, failed to validate attributes for " recname))))
   attrs)
 
 (defn maybe-extract-condition-handlers [pat]
@@ -358,7 +360,8 @@
     {syntax-type :delete
      query-pattern (if (keyword? q)
                      (do (when-not (cn/entity? q)
-                           (raise-syntax-error pat (str q " is not an entity")))
+                           (when-not (cn/internal-component? (first (li/split-path q)))
+                             (raise-syntax-error pat (str q " is not an entity"))))
                          q)
                      (introspect q))
      :as (introspect-alias (alias-from-pattern pat))
@@ -558,7 +561,7 @@
           (introspect-query-upsert main-recname pat)
 
           :else (introspect-create main-recname pat)))
-      (raise-syntax-error pat (str "No schema definition found for " main-recname)))))
+      pat)))
 
 (defn introspect [pat]
   (when-let [f (cond

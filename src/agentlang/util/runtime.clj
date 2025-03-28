@@ -132,14 +132,14 @@
 (defn- run-configuration-patterns! [evaluator config]
   (try
     (doseq [[llm-name llm-attrs] (:llms config)]
-      (let [r (first (evaluator
-                      (cn/make-instance
-                       {:Agentlang.Core/Create_LLM
-                        {:Instance
-                         (ln/preprocess-standalone-pattern
-                          {:Agentlang.Core/LLM
-                           (merge {:Name llm-name} llm-attrs)})}})))]
-        (when (not= :ok (:status r))
+      (let [event (cn/make-instance
+                   {:Agentlang.Core/Create_LLM
+                    {:Instance
+                     (ln/preprocess-standalone-pattern
+                      {:Agentlang.Core/LLM
+                       (merge {:Name llm-name} llm-attrs)})}})
+            r (:result (evaluator event))]
+        (when-not (cn/instance-of? :Agentlang.Core/LLM r)
           (log/error (str "failed to initialize LLM - " llm-name)))))
     (catch Exception ex
       (log/error ex))))
