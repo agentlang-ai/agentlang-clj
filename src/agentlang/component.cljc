@@ -563,8 +563,14 @@
 (defn user-attribute-names [schema]
   (set/difference (attribute-names schema) system-attribute-names))
 
+(declare identity-attribute-name)
+
 (defn query-attribute-names [entity-name]
-  (concat (user-attribute-names (find-entity-schema entity-name)) [li/path-attr li/parent-attr]))
+  (let [ident (identity-attribute-name entity-name)
+        anames (concat (user-attribute-names (find-entity-schema entity-name)) [li/path-attr li/parent-attr])]
+    (if (= ident li/id-attr)
+      (concat anames [ident])
+      anames)))
 
 (defn user-attributes [schema] (apply dissoc schema system-attribute-names))
 
