@@ -11,11 +11,13 @@
 (def ^:private exec-graph-enabled-flag #?(:clj (ThreadLocal.) :cljs (atom nil)))
 
 (defn- enabled? []
-  (let [r #?(:clj (.get exec-graph-enabled-flag)
-             :cljs @exec-graph-enabled-flag)]
-    (if (nil? r)
-      true
-      r)))
+  (if (gs/kernel-mode?)
+    false
+    (let [r #?(:clj (.get exec-graph-enabled-flag)
+               :cljs @exec-graph-enabled-flag)]
+      (if (nil? r)
+        true
+        r))))
 
 (defn enable! []
   #?(:clj (.set exec-graph-enabled-flag true)
@@ -108,7 +110,7 @@
     (let [g (get-current-graph)]
       (if-let [pats (:patterns g)]
         (set-current-graph! (assoc g :patterns (vec (conj pats {:pattern pat :result result}))))
-        (u/throw-ex "Cannot add patterns - no active execution graph."))))
+        (log/warn "Cannot add patterns - no active execution graph."))))
   true)
 
 (defn- init-graph
