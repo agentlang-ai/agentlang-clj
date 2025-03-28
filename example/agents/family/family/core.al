@@ -7,6 +7,7 @@
 {:Agentlang.Core/Agent
  {:Name :Family.Core/HelperAgent
   :LLM :llm01
+  :Channels [{:channel-type :default :via :Family.Core/FamilyAgent}]
   :Tools [:Family.Schema/Family :Family.Schema/Member
           :Family.Schema/FamilyMember :Family.Schema/ParentChild]
   :UserInstruction (str "Based on the user request, either\n"
@@ -19,14 +20,6 @@
                         "(make-child :Family.Schema/Member {:Name \"sam\" :Email \"sam@family.org\"} :Family.Schema/FamilyMember \"scotts\")\n"
                         "Another example of creating a sibling relationship:\n"
                         "(make :Family.Schema/Siblings {:Sibling1 \"mary@family.org\" :Sibling2 \"sam@family.org\"})\n")}}
-
-{:Agentlang.Core/Agent
- {:Name :Family.Core/FamilyAgent
-  :LLM :llm01
-  :Type :interactive-planner
-  :Delegates [:Family.Core/HelperAgent]
-  :UserInstruction "Analyse requests on the family schema."
-  :ToolComponents [:Family.Schema]}}
 
 ;; Usage:
 ;; POST api/Family.Core/HelperAgent

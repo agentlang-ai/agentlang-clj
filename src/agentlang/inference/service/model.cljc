@@ -22,7 +22,7 @@
             [agentlang.global-state :as gs]
             [agentlang.inference.service.planner :as planner]
             [agentlang.inference.service.agent-gen :as agent-gen]
-            [agentlang.inference.service.channel.core :as cc]
+            [agentlang.inference.service.channel.core :as ch]
             #?(:clj [agentlang.connections.client :as connections])
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
@@ -294,11 +294,17 @@
 
 (defn- maybe-start-channel [agent-name ch]
   (when (map? ch)
-    (cc/channel-start (assoc ch :agent agent-name)))
+    (when (not= :default (ch/channel-type-tag ch))
+      (ch/channel-start (assoc ch :agent agent-name))))
   ch)
 
 (defn- start-channels [agent-name channels]
   (mapv (partial maybe-start-channel agent-name) channels))
+
+(def ^:private agent-info-cache (atom {}))
+
+(defn- cache-agent-info [agent-name tools llm]
+  (swap! agent-info-cache assoc agent-name [tools llm]))
 
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
@@ -307,12 +313,14 @@
          nm (:Name attrs)
          agent-name (u/keyword-as-string nm)
          input (preproc-agent-input-spec nm (:Input attrs))
-         tools (preproc-agent-tools-spec (:Tools attrs))
+         tools0 (:Tools attrs)
+         tools (preproc-agent-tools-spec tools0)
          delegates (preproc-agent-delegates (:Delegates attrs))
          tool-components (preproc-agent-tool-components (:ToolComponents attrs))
          features (when-let [ftrs (:Features attrs)] (mapv u/keyword-as-string ftrs))
          tp (:Type attrs)
          llm (or (:LLM attrs) {:Type "openai"})
+         _ (cache-agent-info agent-name tools0 llm)
          docs (:Documents attrs)
          channels (:Channels attrs)
          _ (when (seq channels) (start-channels agent-name channels))
@@ -355,10 +363,39 @@
         (inference n {:agent (:Name agent)}))))
   agent)
 
+(defn maybe-create-channel-agents [agent]
+  (when (planner-agent? agent)
+    (doseq [ch (:Channels agent)]
+      (when-let [helper-agent-name (:via ch)]
+        (let [[tools llm] (get @agent-info-cache (:Name agent))
+              tool-components (set
+                               (concat (:ToolComponents agent)
+                                       (mapv #(first (li/split-path (u/keyword-as-string %)))
+                                             tools)))
+              ins (str "Analyse requests based on the definition(s) of " (s/join ", " tool-components) ".\n")
+              nm (u/keyword-as-string helper-agent-name)
+              _ (preproc-agent-input-spec nm nil)
+              result (:result (gs/evaluate-pattern
+                               {:Agentlang.Core/Agent
+                                (planner/with-interactive-instructions
+                                  {:Name nm
+                                   :LLM (u/keyword-as-string llm)
+                                   :Type "interactive-planner"
+                                   :Delegates [(:Name agent)]
+                                   :UserInstruction ins
+                                   :Input nm
+                                   :ToolComponents (mapv u/keyword-as-string tool-components)})}))]
+          (when-not (cn/instance-of? :Agentlang.Core/Agent result)
+            (u/throw-ex (str "Failed to create channel agent " helper-agent-name)))))))
+  agent)
+
 (dataflow
  [:before :create :Agentlang.Core/Agent]
- [:call '(agentlang.inference.service.model/maybe-input-as-inference :Instance)]
- :Instance)
+ [:call '(agentlang.inference.service.model/maybe-input-as-inference :Instance)])
+
+(dataflow
+ [:after :create :Agentlang.Core/Agent]
+ [:call '(agentlang.inference.service.model/maybe-create-channel-agents :Instance)])
 
 (def ^:private agent-callbacks (atom nil))
 
