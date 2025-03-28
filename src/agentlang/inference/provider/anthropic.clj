@@ -41,7 +41,10 @@
       (let [anthropic-api-key (or api-key (:ApiKey config) (get-anthropic-api-key))
             model-name (or model-name (:CompletionModel config) default-completion-model)
             anthropic-version (or version (:Version config) default-anthropic-version)
-            cache? (or cache (:Cache config) true)
+            cache? (if (and (nil? cache)
+                            (nil? (:Cache config)))
+                     true
+                     (or cache (:Cache config)))
             temperature (or temperature (:Temperature config) default-temperature)
             max-tokens (or max-tokens (:MaxTokens config) default-max-tokens)
 
