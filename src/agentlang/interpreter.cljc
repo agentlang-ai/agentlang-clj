@@ -952,7 +952,7 @@
            (when (exg/exec-graph-enabled?)
              (exg/disable!)
              (reset! exg-disabled? true))
-           ((if (cn/inference? n) exg/add-agent-node exg/add-event-node) n))))
+           ((if (cn/inference? n) exg/add-agent-node exg/add-event-node) n event-instance))))
      (gs/call-with-event-context
       (:EventContext event-instance)
       (fn []
@@ -983,6 +983,9 @@
                                   (assoc er :result result)))
                            (do (exg/add-pattern pat r) (recur (rest df-patterns) pat-count env1 r))))
                        (do (when with-event-inst? (exg/exit-node result)) (make-result env result))))
+                   (catch #?(:clj Exception :cljs :default) ex
+                     (when with-event-inst? (exg/exit-node {:error #?(:clj (.getMessage ex) :cljs ex)}))
+                     (throw ex))
                    (finally
                      (when @exg-disabled? (exg/enable!))
                      (when txn-set? (gs/set-active-txn! nil)))))))))))))

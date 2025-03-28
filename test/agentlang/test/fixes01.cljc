@@ -3,6 +3,8 @@
                :cljs [cljs.test :refer-macros [deftest is]])
             [agentlang.util :as u]
             [agentlang.component :as cn]
+            [agentlang.lang.datetime :as dt]
+            [agentlang.lang.internal :as li]
             [agentlang.lang
              :refer [component attribute event
                      entity record dataflow]]
@@ -42,3 +44,114 @@
         r (tu/invoke {:Mpb/E {:X x}})]
     (is (cn/instance-of? :Mpb/A r))
     (is (= {:default x} (:Y r)))))
+
+(deftest issue-195
+  (defcomponent :I195
+    (entity
+     :I195/E1
+     {:A :Int
+      :B :Int
+      :C :Int
+      :Y :DateTime})
+    (dataflow
+     :I195/K
+     {:I195/E1 {:A '(+ 5 :B)
+                :B 10
+                :C '(+ 10 :A)
+                :Y '(agentlang.lang.datetime/now)}})
+    (entity {:I195/E2 {:Y :DateTime}})
+    (dataflow :I195/KK {:I195/E2 {:Y '(agentlang.lang.datetime/now)}}))
+  (let [evt (cn/make-instance :I195/K {})
+        r (tu/invoke evt)]
+    (is (cn/instance-of? :I195/E1 r))
+    (is (dt/parse-default-date-time (:Y r)))
+    (is (= 10 (:B r)))
+    (is (= 15 (:A r)))
+    (is (= 25 (:C r))))
+  (let [evt (cn/make-instance :I195/KK {})
+        r (tu/invoke evt)]
+    (is (cn/instance-of? :I195/E2 r))
+    (is (dt/parse-default-date-time (:Y r)))))
+
+(deftest issue-352-datetime-index
+  (defcomponent :I352DtIndex
+    (entity
+     :I352DtIndex/E
+     {:A {:type :DateTime
+          :indexed true}
+      :B :Int})
+    (dataflow
+     :I352DtIndex/FindByDateTime
+     {:I352DtIndex/E
+      {:A? :I352DtIndex/FindByDateTime.Input}})
+    (dataflow
+     :I352DtIndex/FindBetween
+     {:I352DtIndex/E
+      {:? {:where [:and
+                   [:> :A :I352DtIndex/FindBetween.Start]
+                   [:< :A :I352DtIndex/FindBetween.End]]}}}))
+  (let [dt "2021-12-30T03:30:24"
+        r1 (tu/invoke
+            {:I352DtIndex/Create_E
+             {:Instance
+              {:I352DtIndex/E
+               {:A dt
+                :B 100}}}})
+        r2 (first
+            (tu/invoke
+             {:I352DtIndex/FindByDateTime
+              {:Input dt}}))
+        r3 (first
+            (tu/invoke
+             {:I352DtIndex/FindBetween
+              {:Start "2021-11-30T00:00:00"
+               :End "2022-01-30T00:00:00"}}))
+        r4 (first
+            (tu/invoke
+             {:I352DtIndex/FindBetween
+              {:Start "2022-11-30T00:00:00"
+               :End "2023-01-30T00:00:00"}}))]
+    (is (cn/instance-of? :I352DtIndex/E r1))
+    (is (cn/instance-of? :I352DtIndex/E r2))
+    (is (cn/instance-of? :I352DtIndex/E r3))
+    (is (cn/same-instance? r1 r2))
+    (is (cn/same-instance? r1 r3))
+    (is (nil? r4))))
+
+(deftest issue-352-date-time-formats
+  (let [dates [["MMMM d, yyyy" "January 8, 2021"]
+               ["yyyy-MMM-dd" "2021-Jan-08"]
+               ["MMM-dd-yyyy" "Jan-08-2021"]
+               ["dd-MMM-yyyy" "08-Jan-2021"]
+               ["yyyyMMdd" "20210108"]]
+        times [["HH:mm:ss.SSS" "04:05:06.789"]
+               ["HH:mm:ss" "04:05:06"]
+               ["HH:mm" "04:05"]
+               ["HHmmss" "040506"]
+               ["HH:mm:ss z" "04:05:06 America/New_York"]]
+        date-times [["yyyy-MM-dd HH:mm:ss" "2021-01-08 04:05:06"]
+                    ["yyyy-MM-dd HH:mm" "2021-01-08 04:05"]
+                    ["yyyy-MM-dd HH:mm:ss.SSS" "2021-01-08 04:05:06.789"]
+                    ["yyyyMMddHHmmss" "20210108040506"]
+                    ["yyyy-MM-dd HH:mm:ss z" "2021-01-08 04:05:06 America/New_York"]]]
+    (is (every? (fn [[f s]] ((dt/date-parser f) s)) dates))
+    (is (every? (fn [[f s]] ((dt/time-parser f) s)) times))
+    (is (every? (fn [[f s]] ((dt/date-time-parser f) s)) date-times))))
+
+(deftest issue-352-date-time-upserts
+  (defcomponent :I352Dtu
+    (entity
+     :I352Dtu/E
+     {:A :Date
+      :B :Time}))
+  (let [r1 (tu/invoke
+            {:I352Dtu/Create_E
+             {:Instance
+              {:I352Dtu/E
+               {:A "2021-08-26"
+                :B "14:24:30.000"}}}})
+        r2 (first
+            (tu/invoke
+             {:I352Dtu/Lookup_E
+              {:path (li/path-attr r1)}}))]
+    (is (cn/same-instance? r1 r2))))
