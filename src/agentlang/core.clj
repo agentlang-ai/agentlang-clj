@@ -35,7 +35,8 @@
             [agentlang.lang.tools.nrepl.core :as nrepl]
             [agentlang.evaluator :as ev]
             [agentlang.lang.tools.util :as tu]
-            [clojure.test :refer [run-tests]])
+            [clojure.test :refer [run-tests]]
+            [agentlang.lang :as lang])
   (:import [java.util Properties]
            [java.io File]
            [org.apache.commons.exec CommandLine Executor DefaultExecutor])
@@ -53,6 +54,7 @@
   ([model-info nrepl-handler] (run-service nil model-info nrepl-handler)))
 
 (defn generate-swagger-doc []
+  (lang/load-kernel-model)
   (let [components (remove (set (cn/internal-component-names))
                            (cn/component-names))]
     (.mkdir (File. "doc"))
@@ -79,6 +81,7 @@
     (ur/log-seq! "components" components)))
 
 (defn run-test-command [model-name]
+  (lang/load-kernel-model)
   (let [components (build/load-model model-name)]
     (doseq [c components]
       (clojure.core/refer (tu/component-name-as-ns c)))
@@ -92,6 +95,7 @@
         (System/exit 1)))))
 
 (defn generate-graphql-schema [model-name args]
+  (lang/load-kernel-model)
   (let [model-path (first args)]
     (if (build/compiled-model? model-path model-name)
       (let [components (remove (set (cn/internal-component-names))
