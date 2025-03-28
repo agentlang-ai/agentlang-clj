@@ -21,7 +21,12 @@
         ^PreparedStatement pstmt (jdbc/prepare conn [sql])]
     [pstmt [(u/uuid-from-string ref)]]))
 
+(def migration-insertcount (atom 0))
+
 (defn create-inst-statement [conn table-name id obj]
+  (when (gs/migration-mode)
+    (println "migration: upserting table count: " table-name @migration-insertcount)
+    (reset! migration-insertcount (+ @migration-insertcount 1)))
   (let [[entity-name instance] obj
         scm (cn/fetch-entity-schema entity-name)
         ks (keys (cn/instance-attributes instance true))
