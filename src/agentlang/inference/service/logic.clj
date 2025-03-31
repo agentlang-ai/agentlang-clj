@@ -170,11 +170,19 @@
       [result model-name])))
 
 (defn handle-interactive-planner-agent [instance]
-  (let [[resp model :as r] (handle-chat-agent instance)]
-    (if (= "OK" (s/upper-case resp))
+  (let [nm (:Name instance)
+        ins (or (get-in instance [:Context :UserInstruction]) (:UserInstruction instance))
+        [resp model :as r] (handle-chat-agent instance)]
+    (log/debug (str "Interactive agent " nm " input: " ins))
+    (log/debug (str "Interactive agent " nm " reply: " resp))
+    (if (s/starts-with? resp "OK")
       (if-let [delegate (keyword (first (:Delegates instance)))]
-        (let [ins (or (get-in instance [:Context :UserInstruction]) (:UserInstruction instance))]
-          (:result (gs/evaluate-pattern {delegate {:UserInstruction ins}})))
+        (let [ins (s/trim (subs resp 2))]
+          (try
+            (:result (gs/evaluate-pattern {delegate {:UserInstruction ins}}))
+            (catch Exception ex
+              (log/error ex)
+              (.getMessage ex))))
         r)
       r)))
 

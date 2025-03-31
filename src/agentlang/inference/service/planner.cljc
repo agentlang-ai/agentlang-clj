@@ -390,8 +390,8 @@
 (def ^:private generic-interactive-planner-instructions
   (str "You are provided with the model of an application as entities, events and dataflows. Entities define the schema of business objects."
        "Dataflows define business workflows and events trigger dataflows. Based on the model analyse a user request. If the request is valid "
-       "in the context of the model, reply \"OK\". Otherwise, state what additional input is required from the user. Consider the following "
-       "example model of a School application:\n"
+       "in the context of the model, reply \"OK <complete-valid-instruction>\". Otherwise, state what additional input is required from the user. "
+       "Consider the following example model of a School application:\n"
        (u/pretty-str
         '(entity
           :School.Core/Teacher
@@ -420,10 +420,14 @@
        "\n\n"
        "Now for instance, if the user instruction is: \"Create a new teacher named James Thomas, aged 25\", you should reply - "
        "To create a teacher, the sex and email attributes are mandatory.\n"
-       "As another example, if the user instruction is: \"Create a new course titled `Basics of Computation`\", then you must reply \"OK\", "
-       "because all information required to create the course is contained in the user-instruction.\n"
+       "As another example, if the user instruction is: \"Create a new course titled `Basics of Computation`\", then you must reply "
+       "\"OK Create a new course titled `Basics of Computation`\", because all information required to create the course is contained "
+       "in the user-instruction.\n"
        "If you get an instruction like \"Assign course `Genetics` to teacher `James Thomas`\", you should reply \"Teacher's email is required "
-       "to assign course\". Otherwise, if the instruction was \"Assign course `Genetics` to teacher james@abc.com\", then you must reply \"OK\"."
+       "to assign course\". The user might reply, \"The teacher's email is james@school.org\", for this you must reply \"OK Assign "
+       "course `Genetics` to teacher james@school.org\". Otherwise, if the instruction was "
+       "\"Assign course `Genetics` to teacher james@abc.com\", then you must reply \"OK Assign course `Genetics` to teacher james@abc.com\".\n"
+       "When user requests help with creating an entity-instance, please provide the complete schema in your response, including optional attributes.\n"
        "Based on the above instructions, respond to user-instructions on the application specific model that follows.\n\n"))
 
 (defn with-interactive-instructions [instance]

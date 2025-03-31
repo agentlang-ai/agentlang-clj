@@ -14,6 +14,7 @@
             [agentlang.suspension :as sp]
             [agentlang.lang.datetime :as dt]
             [agentlang.lang.relgraph :as rg]
+            [agentlang.datafmt.json :as json]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
 
@@ -1837,3 +1838,21 @@
        (let [body (:body r)]
          (is (= :Bha/A (:type body)))
          (is (= 1 (:Id (:result body))))))))
+
+(deftest labels
+  (defcomponent :Lbls
+    (entity
+     :Lbls/Place
+     {:Name :String
+      :Zip {:type :Int :id true}})
+    (entity
+     :Lbls/Person
+     {:meta {:labels [:Name :Email]}
+      :Id {:type :Int :id true}
+      :Name :String
+      :Email :Email
+      :Age :Int}))  
+  (is (= #:Lbls{:Person {:Name "Jake", :Email "jake@acme.com"}}
+         (json/decode (cn/instance-as-string (cn/make-instance :Lbls/Person {:Id 1 :Name "Jake" :Email "jake@acme.com" :Age 20})))))
+  (is (= #:Lbls{:Place {:Name "Blr", :Zip 101}}
+         (json/decode (cn/instance-as-string (cn/make-instance :Lbls/Place {:Zip 101 :Name "Blr"}))))))

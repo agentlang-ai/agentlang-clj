@@ -5,6 +5,7 @@
             [clojure.walk :as w]
             [agentlang.lang.datetime :as dt]
             [agentlang.lang.internal :as li]
+            [agentlang.datafmt.json :as json]
             [agentlang.lang.raw :as raw]
             [agentlang.global-state :as gs]
             [agentlang.meta :as mt]
@@ -2601,3 +2602,10 @@
 (def entity-create-action (partial entity-action :create))
 (def entity-update-action (partial entity-action :update))
 (def entity-delete-action (partial entity-action :delete))
+
+(defn instance-as-string [inst]
+  (json/encode
+   (or (when-let [typ (and (an-instance? inst) (instance-type-kw inst))]
+         (let [lbls (or (:labels (fetch-meta typ)) (user-attribute-names (fetch-schema typ)))]
+           {typ (into {} (mapv (fn [k] [k (k inst)]) lbls))}))
+       inst)))

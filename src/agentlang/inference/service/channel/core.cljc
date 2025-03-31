@@ -5,6 +5,12 @@
 
 (def channel-type-tag :channel-type)
 
+(defn channel-agent-name [ch]
+  (when-let [agent (:via ch)]
+    (u/keyword-as-string agent)))
+
+(defn dissoc-agent [ch] (dissoc ch :via))
+
 ;; The argument-map of `channel-start` should contain the following keys:
 ;; :channel-type - [keyword]
 ;; :name - channel-name [string]

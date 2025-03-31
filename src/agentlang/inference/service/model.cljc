@@ -295,7 +295,7 @@
 (defn- maybe-start-channel [agent-name ch]
   (when (map? ch)
     (when (not= :default (ch/channel-type-tag ch))
-      (ch/channel-start (assoc ch :agent agent-name))))
+      (ch/channel-start (assoc ch :agent (or (ch/channel-agent-name ch) agent-name)))))
   ch)
 
 (defn- start-channels [agent-name channels]
@@ -366,25 +366,22 @@
 (defn maybe-create-channel-agents [agent]
   (when (planner-agent? agent)
     (doseq [ch (:Channels agent)]
-      (when-let [helper-agent-name (:via ch)]
+      (when-let [helper-agent-name (ch/channel-agent-name ch)]
         (let [[tools llm] (get @agent-info-cache (:Name agent))
-              tool-components (set
-                               (concat (:ToolComponents agent)
-                                       (mapv #(first (li/split-path (u/keyword-as-string %)))
-                                             tools)))
-              ins (str "Analyse requests based on the definition(s) of " (s/join ", " tool-components) ".\n")
-              nm (u/keyword-as-string helper-agent-name)
-              _ (preproc-agent-input-spec nm nil)
+              ins (str "Analyse requests based on the definition(s) of " (s/join ", " tools) ".\n")
+              _ (preproc-agent-input-spec helper-agent-name nil)
               result (:result (gs/evaluate-pattern
                                {:Agentlang.Core/Agent
                                 (planner/with-interactive-instructions
-                                  {:Name nm
+                                  {:Name helper-agent-name
                                    :LLM (u/keyword-as-string llm)
                                    :Type "interactive-planner"
-                                   :Delegates [(:Name agent)]
+                                   :Channels [(ch/dissoc-agent ch)]
+                                   :Delegates [(u/keyword-as-string (:Name agent))]
                                    :UserInstruction ins
-                                   :Input nm
-                                   :ToolComponents (mapv u/keyword-as-string tool-components)})}))]
+                                   :Input helper-agent-name
+                                   :Tools (preproc-agent-tools-spec tools)
+                                   :ToolComponents (:ToolComponents agent)})}))]
           (when-not (cn/instance-of? :Agentlang.Core/Agent result)
             (u/throw-ex (str "Failed to create channel agent " helper-agent-name)))))))
   agent)
