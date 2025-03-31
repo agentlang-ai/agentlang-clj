@@ -91,7 +91,7 @@
   #?(:clj
      (try-parse-time default-time-format s)
      :cljs
-     (parse-time s)))
+     s))
 
 (defn as-string
   ([dt pat]
