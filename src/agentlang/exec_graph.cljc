@@ -1,5 +1,6 @@
 (ns agentlang.exec-graph
   (:require [agentlang.util :as u]
+            [agentlang.util.http :as uh]
             [agentlang.lang :as ln]
             [agentlang.global-state :as gs]
             [agentlang.lang.internal :as li]
