@@ -17,6 +17,7 @@
                  [commons-io/commons-io "2.11.0"]
                  [org.apache.commons/commons-exec "1.3"]
                  [cheshire "5.10.1"]
+                 [markdown-clj "1.12.3"]
                  [com.github.seancorfield/next.jdbc "1.3.883"]
                  [c3p0/c3p0 "0.9.1.2"]
                  [selmer "1.12.58"]

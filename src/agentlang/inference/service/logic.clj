@@ -179,7 +179,7 @@
       (if-let [delegate (keyword (first (:Delegates instance)))]
         (let [ins (s/trim (subs resp (+ idx 2)))]
           (try
-            (:result (gs/evaluate-pattern {delegate {:UserInstruction ins}}))
+            [(:result (gs/evaluate-pattern {delegate {:UserInstruction ins}})) model]
             (catch Exception ex
               (log/error ex)
               (.getMessage ex))))

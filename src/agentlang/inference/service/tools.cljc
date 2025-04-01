@@ -169,9 +169,10 @@
     :else (pr-str spec)))
 
 (defn- raw-tool-as-markdown [tag n spec doc]
-  (str "*" tag " " (u/keyword-as-string n) "*\n"
-       (s/join "\n" (mapv (fn [[k v]] (str "    " (name k) " - " (attr-spec-as-string v))) spec))
-       (when doc (str "\n" doc))
+  (str "** " tag " " (u/keyword-as-string n) " **"
+       (when doc (str "\n*" doc "*"))
+       "\n"
+       (s/join "\n" (mapv (fn [[k v]] (str "  - *" (name k) "* " (attr-spec-as-string v))) spec))
        "\n"))
 
 (defn- raw-tool-as-expr [tag n spec doc]

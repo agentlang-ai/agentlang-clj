@@ -2,6 +2,7 @@
  :Family.Teams
  {:clj-import (quote [(:require [org.httpkit.client :as http]
                                 [clojure.string :as s]
+                                [markdown.core :as md]
                                 [agentlang.util :as u]
                                 [agentlang.component :as cn]
                                 [agentlang.connections.client :as cc]
@@ -154,16 +155,17 @@
   (create-new-chat-id access-token sender-user-id recipient-user-id))
 
 (defn send-message-to-user
-  ([^String access-token ^String sender-user-id ^String recipient-user-id ^String chat-message]
+  ([content-type ^String access-token ^String sender-user-id ^String recipient-user-id ^String chat-message]
    (let [chat-id (get-or-create-chat-id access-token sender-user-id recipient-user-id)
          message-url (str "https://graph.microsoft.com/v1.0/chats/" chat-id "/messages")
-         upload-data {:body {:content chat-message}}
+         chat-message (if (string? chat-message) chat-message (json/encode chat-message))
+         upload-data {:body (merge {:content chat-message} (when content-type {:contentType content-type}))}
          result-text (post-json-with-bearer message-url access-token upload-data)]
      {:chat-id chat-id :result result-text}))
-  ([sender-user-id recipient-user-id chat-message]
-   (send-message-to-user (get-access-token) sender-user-id recipient-user-id chat-message))
-  ([recipient-user-id chat-message]
-   (send-message-to-user (u/getenv "TEAMS_USER") recipient-user-id chat-message)))
+  ([content-type sender-user-id recipient-user-id chat-message]
+   (send-message-to-user content-type (get-access-token) sender-user-id recipient-user-id chat-message))
+  ([content-type recipient-user-id chat-message]
+   (send-message-to-user content-type (u/getenv "TEAMS_USER") recipient-user-id chat-message)))
 
 (defn get-last-message [chat-id]
   (do-get (str "https://graph.microsoft.com/v1.0/chats/" chat-id "/messages?$top=1")))
@@ -192,18 +194,30 @@
         msg-id (:id result)]
     [chat-id msg-id]))
 
-(defmethod ch/channel-start tag [{channel-name :name agent-name :agent}]
+(defn- make-welcome-message [doc schema-doc]
+  (str "<p>"
+       (if doc doc "Hi, I'm intelligent agent here to help you.")
+       "</br>"
+       (when schema-doc
+         (str "You can refer to the following definitions while interacting with me:</br>"
+              (md/md-to-html-string schema-doc)))
+       "</p>"))
+
+(defmethod ch/channel-start tag [{channel-name :name agent-name :agent
+                                  doc :doc schema-doc :schema-doc}]
   (swap! run-flags assoc channel-name true)
   (let [send (partial ch/send-instruction-to-agent channel-name agent-name (name channel-name))
         can-run? #(can-run? channel-name)
         to (u/getenv "TEAMS_RECIPIENT")
         send-msg (fn [msg]
-                   (let  [r (send-message-to-user to msg)]
+                   (let  [r (send-message-to-user nil to msg)]
                      (extract-msg-ids r)))]
     (u/parallel-call
      {:delay-ms 2000}
      (fn []
-       (let [[chat-id msg-id] (send-msg "Hello, I'm the joke chat-agent")]
+       (let [[chat-id msg-id]
+             (extract-msg-ids
+              (send-message-to-user "html" to (make-welcome-message doc schema-doc)))]
          (loop [last-msg-id msg-id]
            (when (can-run?)
              (Thread/sleep 10000)
