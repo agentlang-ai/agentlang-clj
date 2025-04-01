@@ -1,18 +1,8 @@
 (component :Joke.Core)
 
-(require '[agentlang.inference.service.channel.cmdline])
-
-{:Agentlang.Core/LLM {:Type "anthropic",
-                      :Config {:MaxTokens 8192
-                               :Cache false},
-                      :Name "llm01"}}
-
 {:Agentlang.Core/Agent
  {:Name :joke-agent
-  :LLM "llm01"
   :UserInstruction "I am an AI bot who tell jokes"
-  :Channels [{:channel-type :cmdline :name :tell-me-a-joke}
-             {:channel-type :teams :name :team-jokes}]
   :Input :Joke.Core/TellAJoke}}
 
 ;; Usage:

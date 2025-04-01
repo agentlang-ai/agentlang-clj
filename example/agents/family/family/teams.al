@@ -1,5 +1,5 @@
 (component
- :Joke.Teams
+ :Family.Teams
  {:clj-import (quote [(:require [org.httpkit.client :as http]
                                 [clojure.string :as s]
                                 [agentlang.util :as u]
