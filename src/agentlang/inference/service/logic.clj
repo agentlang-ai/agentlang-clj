@@ -175,9 +175,9 @@
         [resp model :as r] (handle-chat-agent instance)]
     (log/debug (str "Interactive agent " nm " input: " ins))
     (log/debug (str "Interactive agent " nm " reply: " resp))
-    (if (s/starts-with? resp "OK")
+    (if-let [idx (s/index-of resp "OK")]
       (if-let [delegate (keyword (first (:Delegates instance)))]
-        (let [ins (s/trim (subs resp 2))]
+        (let [ins (s/trim (subs resp (+ idx 2)))]
           (try
             (:result (gs/evaluate-pattern {delegate {:UserInstruction ins}}))
             (catch Exception ex

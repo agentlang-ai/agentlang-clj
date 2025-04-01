@@ -25,12 +25,14 @@
 ;; On success, return a truth value.
 (defmulti channel-shutdown channel-type-tag)
 
-(defn- find-agent-by-name [agent-name]
-  (first
-   (:result
-    (gs/kernel-call
-     #(gs/evaluate-pattern
-       {:Agentlang.Core/Agent {:Name? agent-name}})))))
+(def find-agent-by-name
+  (memoize
+   (fn [agent-name]
+     (first
+      (:result
+       (gs/kernel-call
+        #(gs/evaluate-pattern
+          {:Agentlang.Core/Agent {:Name? agent-name}})))))))
 
 (defn send-instruction-to-agent [channel-name agent-name chat-id message]
   (try
@@ -44,4 +46,5 @@
           (str "No input-event defined for agent " agent-name)))
       (str "Agent " agent-name " not found"))
     (catch #?(:clj Exception :cljs :default) ex
+      (.printStackTrace ex)
       (str "Error invoking agent " agent-name " - " #?(:clj (.getMessage ex) :cljs ex)))))

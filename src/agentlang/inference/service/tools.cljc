@@ -157,13 +157,37 @@
          (dissoc scm :EventContext)
          scm)))))
 
+(defn- prop-as-string [k v]
+  (if (= k :type)
+    (u/keyword-as-string v)
+    (pr-str v)))
+
+(defn- attr-spec-as-string [spec]
+  (cond
+    (keyword? spec) (name spec)
+    (map? spec) (s/join ", " (mapv (fn [[k v]] (str (name k) ": " (prop-as-string k v))) spec))
+    :else (pr-str spec)))
+
+(defn- raw-tool-as-markdown [tag n spec doc]
+  (str "*" tag " " (u/keyword-as-string n) "*\n"
+       (s/join "\n" (mapv (fn [[k v]] (str "    " (name k) " - " (attr-spec-as-string v))) spec))
+       (when doc (str "\n" doc))
+       "\n"))
+
+(defn- raw-tool-as-expr [tag n spec doc]
+  (let [expr (u/pretty-str `(~tag ~n ~spec))]
+    (if (seq doc)
+      (str ";; " doc "\n" expr)
+      expr)))
+
+  (def ^:dynamic documentation-mode nil)
 (defn- raw-tool [tag find-spec n]
   (when-let [spec (maybe-merge-parent-attrs (or (find-spec n) (force-find-spec n)))]
-    (let [doc (cn/docstring n)
-          expr (u/pretty-str `(~tag ~n ~spec))]
-      (if (seq doc)
-        (str ";; " doc "\n" expr)
-        expr))))
+    (let [doc (cn/docstring n)]
+      ((if (= documentation-mode :markdown)
+         raw-tool-as-markdown
+         raw-tool-as-expr)
+       tag n spec doc))))
 
 (def ^:private raw-event-tool (partial raw-tool 'event raw/find-event))
 (def ^:private raw-entity-tool (partial raw-tool 'entity raw/find-entity))
@@ -203,3 +227,12 @@
                          :else (raw-record-tool n)))
                      names))]
     (str (s/join "\n" tools) "\n")))
+
+(defn documentation [tools tool-components]
+  (binding [documentation-mode :markdown]
+    (str (if (seq tool-components)
+           (raw-components (mapv u/string-as-keyword tool-components))
+           "")
+         (if (seq tools)
+           (as-raw-tools (mapv #(u/string-as-keyword (:name %)) tools))
+           ""))))

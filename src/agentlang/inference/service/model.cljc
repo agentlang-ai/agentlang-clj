@@ -22,6 +22,7 @@
             [agentlang.global-state :as gs]
             [agentlang.inference.service.planner :as planner]
             [agentlang.inference.service.agent-gen :as agent-gen]
+            [agentlang.inference.service.tools :as tools]
             [agentlang.inference.service.channel.core :as ch]
             #?(:clj [agentlang.connections.client :as connections])
             #?(:clj [agentlang.util.logger :as log]
@@ -292,14 +293,14 @@
 
       :else attrs)))
 
-(defn- maybe-start-channel [agent-name ch]
+(defn- maybe-start-channel [agent-name tool-docs ch]
   (when (map? ch)
     (when (not= :default (ch/channel-type-tag ch))
-      (ch/channel-start (assoc ch :agent (or (ch/channel-agent-name ch) agent-name)))))
+      (ch/channel-start (assoc ch :schema-doc tool-docs :agent (or (ch/channel-agent-name ch) agent-name)))))
   ch)
 
-(defn- start-channels [agent-name channels]
-  (mapv (partial maybe-start-channel agent-name) channels))
+(defn- start-channels [agent-name tool-docs channels]
+  (mapv (partial maybe-start-channel agent-name tool-docs) channels))
 
 (def ^:private agent-info-cache (atom {}))
 
@@ -323,7 +324,7 @@
          _ (cache-agent-info agent-name tools0 llm)
          docs (:Documents attrs)
          channels (:Channels attrs)
-         _ (when (seq channels) (start-channels agent-name channels))
+         _ (when (seq channels) (start-channels agent-name (tools/documentation tools tool-components) channels))
          integs (when-let [xs (:Integrations attrs)] (mapv u/keyword-as-string xs))
          tools (vec (concat tools (flatten (us/nonils (mapv fetch-channel-tools channels)))))
          new-attrs
@@ -363,6 +364,11 @@
         (inference n {:agent (:Name agent)}))))
   agent)
 
+(defn- maybe-assoc-channel-name [ch agent-name]
+  (if (:name ch)
+    ch
+    (assoc ch :name (u/string-as-keyword agent-name))))
+
 (defn maybe-create-channel-agents [agent]
   (when (planner-agent? agent)
     (doseq [ch (:Channels agent)]
@@ -370,28 +376,29 @@
         (let [[tools llm] (get @agent-info-cache (:Name agent))
               ins (str "Analyse requests based on the definition(s) of " (s/join ", " tools) ".\n")
               _ (preproc-agent-input-spec helper-agent-name nil)
-              result (:result (gs/evaluate-pattern
-                               {:Agentlang.Core/Agent
-                                (planner/with-interactive-instructions
-                                  {:Name helper-agent-name
-                                   :LLM (u/keyword-as-string llm)
-                                   :Type "interactive-planner"
-                                   :Channels [(ch/dissoc-agent ch)]
-                                   :Delegates [(u/keyword-as-string (:Name agent))]
-                                   :UserInstruction ins
-                                   :Input helper-agent-name
-                                   :Tools (preproc-agent-tools-spec tools)
-                                   :ToolComponents (:ToolComponents agent)})}))]
-          (when-not (cn/instance-of? :Agentlang.Core/Agent result)
-            (u/throw-ex (str "Failed to create channel agent " helper-agent-name)))))))
+              result (try
+                       (:result (gs/evaluate-pattern
+                                 {:Agentlang.Core/Agent
+                                  (planner/with-interactive-instructions
+                                    {:Name helper-agent-name
+                                     :LLM (u/keyword-as-string llm)
+                                     :Type "interactive-planner"
+                                     :Channels [(maybe-assoc-channel-name (ch/dissoc-agent ch) helper-agent-name)]
+                                     :Delegates [(u/keyword-as-string (:Name agent))]
+                                     :UserInstruction ins
+                                     :Input helper-agent-name
+                                     :Tools (preproc-agent-tools-spec tools)
+                                     :ToolComponents (:ToolComponents agent)})}))
+                       (catch #?(:clj Exception :cljs :default) ex
+                         (log/warn #?(:clj (.getMessage ex) :cljs ex))
+                         nil))]
+          (when (and result (not (cn/instance-of? :Agentlang.Core/Agent result)))
+            (log/warn (str "Failed to create channel agent " helper-agent-name)))))))
   agent)
 
 (dataflow
  [:before :create :Agentlang.Core/Agent]
- [:call '(agentlang.inference.service.model/maybe-input-as-inference :Instance)])
-
-(dataflow
- [:after :create :Agentlang.Core/Agent]
+ [:call '(agentlang.inference.service.model/maybe-input-as-inference :Instance)]
  [:call '(agentlang.inference.service.model/maybe-create-channel-agents :Instance)])
 
 (def ^:private agent-callbacks (atom nil))

@@ -1,15 +1,22 @@
 (component
  :Family.Core
- {:refer [:Family.Schema]})
+ {:refer [:Family.Schema]
+  :clj-import [(:use [agentlang.inference.service.channel.cmdline])]})
 
 {:Agentlang.Core/LLM {:Name :llm01}}
 
 {:Agentlang.Core/Agent
  {:Name :Family.Core/HelperAgent
   :LLM :llm01
-  :Channels [{:channel-type :default :via :Family.Core/FamilyAgent}]
+  :Channels [{:channel-type :default
+              :via :Family.Core/FamilyAgent}
+             {:channel-type :cmdline
+              :name :family-agent
+              :doc (str "I'm an intelligent agent who will help you manage the family database.")
+              :via :Family.Core/FamilyManager}]
   :Tools [:Family.Schema/Family :Family.Schema/Member
-          :Family.Schema/FamilyMember :Family.Schema/ParentChild]
+          :Family.Schema/FamilyMember :Family.Schema/Siblings
+          :Family.Schema/FindSiblings]
   :UserInstruction (str "Based on the user request, either\n"
                         "1. Create a new Family.\n"
                         "2. Create a Member and add that Member to a Family.\n"
