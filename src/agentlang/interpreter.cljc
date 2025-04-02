@@ -323,9 +323,17 @@
                (log/warn (str "failed to audit " tag " on " inst))))))))
   insts)
 
+(defn- maybe-check-unique-rules [env record-name inst]
+  (when-let [uq-rules (cn/unique-in record-name inst)]
+    (when-let [r (first (:result (evaluate-pattern env {record-name {:? {:where uq-rules}}})))]
+      (when (cn/instance-of? record-name r)
+        (u/throw-ex (str "Unique-rules-check failed for " record-name)))))
+  inst)
+
 (defn- handle-upsert [env resolver recname update-attrs instances]
   (when (seq instances)
     (let [updated-instances (mapv #(realize-instance-values env recname (merge % update-attrs)) instances)
+          _ (doseq [inst updated-instances] (maybe-check-unique-rules env recname inst))
           store-f (fn [updated-instances] (store/update-instances (env/get-store env) recname updated-instances))
           updated-instances (mapv #(cn/fire-pre-event :update %) updated-instances)
           rs
@@ -485,6 +493,7 @@
     (let [extn-attrs (cn/find-extension-attribute-names recname)
           inst (cn/make-instance recname (realize-attribute-values env recname (apply dissoc attrs extn-attrs)))
           _ (when-not inst (u/throw-ex (str "Failed to initialize instance for " recname " from " attrs)))
+          _ (maybe-check-unique-rules env recname inst)
           resolver (rr/resolver-for-path recname)
           store (env/get-store env)
           store-f #(when-let [inst (store/create-instance store %)] inst)

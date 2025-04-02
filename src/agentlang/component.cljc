@@ -2599,3 +2599,24 @@
 (def entity-create-action (partial entity-action :create))
 (def entity-update-action (partial entity-action :update))
 (def entity-delete-action (partial entity-action :delete))
+
+(defn- rewrite-unique-in-rules [uq-rules inst]
+  (let [attr-names (set (keys inst))]
+    (w/prewalk
+     #(if (vector? %)
+        (loop [xs %, result []]
+          (if-let [x (first xs)]
+            (if (some #{x} attr-names)
+              (recur (rest xs) (conj result x (x inst)))
+              (recur (rest xs) (conj result x)))
+            (vec result)))
+        %)
+     uq-rules)))
+
+(defn unique-in
+  ([entity-name inst]
+   (when-let [uq (:unique-in (fetch-meta entity-name))]
+     (if inst
+       (rewrite-unique-in-rules uq inst)
+       uq)))
+  ([entity-name] (unique-in entity-name nil)))
