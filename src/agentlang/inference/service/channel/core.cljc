@@ -1,15 +1,16 @@
 (ns agentlang.inference.service.channel.core
   (:require [agentlang.util :as u]
+            [agentlang.lang.internal :as li]
             [agentlang.component :as cn]
             [agentlang.global-state :as gs]))
 
 (def channel-type-tag :channel-type)
 
 (defn channel-agent-name [ch]
-  (when-let [agent (:via ch)]
-    (u/keyword-as-string agent)))
-
-(defn dissoc-agent [ch] (dissoc ch :via))
+  (let [n (:name ch)]
+    (when-not (= 2 (count (li/split-path n)))
+      (u/throw-ex (str "Not a valid channel-name: " n)))
+    (u/keyword-as-string n)))
 
 ;; The argument-map of `channel-start` should contain the following keys:
 ;; :channel-type - [keyword]

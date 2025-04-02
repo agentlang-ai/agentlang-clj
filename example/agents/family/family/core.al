@@ -11,15 +11,13 @@
  {:Name :Family.Core/HelperAgent
   :LLM :llm01
   :Channels [{:channel-type :default
-              :via :Family.Core/FamilyAgent}
+              :name :Family.Core/HttpChannel}
              {:channel-type :cmdline
-              :name :family-repl-agent
-              :doc agent-msg
-              :via :Family.Core/FamilyReplAgent}
+              :name :Family.Core/ReplChannel
+              :doc agent-msg}
              {:channel-type :teams
-              :name :family-teams-agent
-              :doc agent-msg
-              :via :Family.Core/FamilyTeamsAgent}]
+              :name :Family.Core/TeamsChannel
+              :doc agent-msg}]
   :Tools [:Family.Schema/Family
           :Family.Schema/Member
           :Family.Schema/FamilyMember

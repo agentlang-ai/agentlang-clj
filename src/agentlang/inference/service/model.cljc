@@ -383,7 +383,7 @@
                                     {:Name helper-agent-name
                                      :LLM (u/keyword-as-string llm)
                                      :Type "interactive-planner"
-                                     :Channels [(maybe-assoc-channel-name (ch/dissoc-agent ch) helper-agent-name)]
+                                     :Channels [(maybe-assoc-channel-name ch helper-agent-name)]
                                      :Delegates [(u/keyword-as-string (:Name agent))]
                                      :UserInstruction ins
                                      :Input helper-agent-name
