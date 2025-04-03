@@ -9,7 +9,13 @@
 (entity
  :Role
  {:Name {:type :String
-         li/guid true}})
+         :unique true
+         li/path-identity true}})
+
+(dataflow
+ :LookupRole
+ {:Role {:Name? :LookupRole.Name} :as [:R]}
+ :R)
 
 (def ^:private oprs li/rbac-oprs)
 
@@ -21,31 +27,39 @@
  :Privilege
  {:Name {:type :String
          :default u/uuid-string
-         li/guid true}
+         :unique true
+         li/path-identity true}
   :Actions {:check crud-list?}
   :Resource :Edn})
 
 (entity
  :PrivilegeAssignment
  {:Name {:type :String
+         :unique true
          :default u/uuid-string
-         li/guid true}
-  :Role {:ref :Role.Name
+         li/path-identity true}
+  :Role {:ref :Agentlang.Kernel.Rbac/Role.Name
          :indexed true}
-  :Privilege {:ref :Privilege.Name}
+  :Privilege {:ref :Agentlang.Kernel.Rbac/Privilege.Name}
   :meta {:unique [:Role :Privilege]}})
 
 (entity
  :RoleAssignment
  {:Name {:type :String
+         :unique true
          :default u/uuid-string
-         li/guid true}
-  :Role {:ref :Role.Name
+         li/path-identity true}
+  :Role {:ref :Agentlang.Kernel.Rbac/Role.Name
          :indexed true}
   :Assignee {:type :String ; usually a :Agentlang.Kernel.Identity/User.Name
              :indexed true}
   :meta
   {:unique [:Role :Assignee]}})
+
+(dataflow
+ :LookupRoleAssignment
+ {:RoleAssignment {:Name? :LookupRoleAssignment.Name} :as [:R]}
+ :R)
 
 (dataflow
  :FindRoleAssignments
@@ -54,44 +68,64 @@
 
 (dataflow
  :DeleteRoleAssignments
- [:delete :RoleAssignment {:Assignee :DeleteRoleAssignments.Assignee}])
-
-(defn- priv-assigns-query [env]
-  (let [role-names (env :Agentlang.Kernel.Rbac/FindPrivilegeAssignments.RoleNames)]
-    (str "SELECT * FROM " (stu/entity-table-name :Agentlang.Kernel.Rbac/PrivilegeAssignment)
-         " WHERE (" (stu/attribute-column-name :Role) " in ("
-         (s/join "," (map #(str "'" (str %) "'") role-names)) "))")))
+ [:delete {:RoleAssignment {:Assignee? :DeleteRoleAssignments.Assignee}}])
 
 (dataflow
  :FindPrivilegeAssignments
- [:query {:PrivilegeAssignment? priv-assigns-query}])
-
-(defn- privileges-query [env]
-  (let [names (env :Agentlang.Kernel.Rbac/FindPrivileges.Names)]
-    (str "SELECT * FROM " (stu/entity-table-name :Agentlang.Kernel.Rbac/Privilege)
-         " WHERE (" (stu/attribute-column-name :Name) " in ("
-         (s/join "," (map #(str "'" (str %) "'") names)) "))")))
+ {:PrivilegeAssignment
+  {:Role? [:in :Agentlang.Kernel.Rbac/FindPrivilegeAssignments.RoleNames]}})
 
 (dataflow
  :FindPrivileges
- [:query {:Privilege? privileges-query}])
+ {:Privilege {:Name? [:in :Agentlang.Kernel.Rbac/FindPrivileges.Names]}})
 
-(entity
+(record
  {:InstancePrivilegeAssignment
   {:Name {:type :String
           :default u/uuid-string
-          li/guid true}
-   :Actions {:check crud-list?
-             :optional true}
-   :Resource :Path
-   :ResourceId :Any
+          li/path-identity true}
+   :IsOwner {:type :Boolean :default true}
+   :CanRead {:type :Boolean :default false}
+   :CanUpdate {:type :Boolean :default false}
+   :CanDelete {:type :Boolean :default false}
+   :ResourcePath {:type :String :indexed true}
    :Assignee {:type :String :indexed true}}})
 
-(entity
- {:OwnershipAssignment
-  {:Name {:type :String
-          :default u/uuid-string
-          li/guid true}
-   :Resource :Path
-   :ResourceId :Any
-   :Assignee {:type :String :indexed true}}})
+(event
+ {:AssignInstancePrivilege
+  {:Name {:type :String :default u/uuid-string}
+   :CanRead {:type :Boolean :default false}
+   :CanUpdate {:type :Boolean :default false}
+   :CanDelete {:type :Boolean :default false}
+   :ResourcePath :String
+   :Assignee :String}})
+
+(dataflow
+ :AssignInstancePrivilege
+ {:InstancePrivilegeAssignment
+  {:Name :AssignInstancePrivilege.Name
+   :IsOwner false
+   :CanRead :AssignInstancePrivilege.CanRead
+   :CanUpdate :AssignInstancePrivilege.CanUpdate
+   :CanDelete :AssignInstancePrivilege.CanDelete
+   :ResourcePath :AssignInstancePrivilege.ResourcePath
+   :Assignee :AssignInstancePrivilege.Assignee}})
+
+(event
+ :DeleteInstancePrivilegeAssignment
+ {:ResourcePath :String
+  :Assignee :String})
+
+(event
+ {:AssignOwnership
+  {:Name {:type :String :default u/uuid-string}
+   :ResourcePath :String
+   :Assignee :String}})
+
+(dataflow
+ :AssignOwnership
+ {:InstancePrivilegeAssignment
+  {:Name :AssignOwnership.Name
+   :IsOwner true
+   :ResourcePath :AssignOwnership.ResourcePath
+   :Assignee :AssignOwnership.Assignee}})

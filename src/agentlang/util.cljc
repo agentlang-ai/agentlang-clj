@@ -6,6 +6,8 @@
             #?(:clj [clojure.java.io :as io])
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
+            #?(:cljs [cljs.reader :as reader])
+            [agentlang.global-state :as gs]
             [agentlang.datafmt.json :as json])
   #?(:clj
      (:require [net.cgrand.macrovich :as macros])
@@ -66,27 +68,15 @@
   (= @script-extn (file-extension (str f))))
 
 (defn throw-ex
-  [msg]
-  #?(:clj
-     (throw (Exception. msg))
-     :cljs
-     (let [e (js/Error. msg)]
-       (println msg)
-       (.log js/console (.-stack e)))))
-
-(defn ok-result
-  ([result safe]
-   (let [f (if (map? result) result (first result))]
-     (if (= :ok (:status f))
-       (:result f)
-       (let [msg (str "unexpected result: " result)]
-         (if safe
-           (do (log/warn msg) nil)
-           (throw-ex msg))))))
-  ([result] (ok-result result false)))
-
-(defn safe-ok-result [result]
-  (ok-result result true))
+  ([msg status]
+   (when status (gs/set-error-code! status))
+   #?(:clj
+      (throw (Exception. msg))
+      :cljs
+      (let [e (js/Error. msg)]
+        (println msg)
+        (.log js/console (.-stack e)))))
+  ([msg] (throw-ex msg nil)))
 
 (macros/deftime
   (defmacro passthru
@@ -313,7 +303,7 @@
 
 (def parse-string
   #?(:clj read-string
-     :cljs cljs.reader/read-string))
+     :cljs reader/read-string))
 
 (defn safe-read-string [s]
   (try
@@ -484,3 +474,23 @@
 
 (defn as-agent-tools [ks]
   (mapv (fn [k] {:name (subs (str k) 1)}) ks))
+
+(defn raise-not-implemented [fn-name]
+  (throw-ex "Not implemented - " fn-name))
+
+#?(:clj
+    (defn execute-script
+      [path]
+      (let [process (.exec (Runtime/getRuntime) path)]
+        (io/copy (io/reader (.getInputStream process)) *out*)
+        (let [exit-val (.waitFor process)]
+          (log/info (str "Exit code: " exit-val)))
+        (io/copy (io/reader (.getErrorStream process)) *out*))))
+
+(defn safe-partial [handler & args]
+  (let [f (apply partial args)]
+    (fn [& rest]
+      (try
+        (apply f rest)
+        (catch #?(:clj Exception :cljs :default) ex
+          (handler ex))))))

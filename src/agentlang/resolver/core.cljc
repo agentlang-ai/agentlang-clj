@@ -1,5 +1,6 @@
 (ns agentlang.resolver.core
-  (:require [agentlang.util :as u]
+  (:require [clojure.string :as s]
+            [agentlang.util :as u]
             [agentlang.env :as env]
             [agentlang.component :as cn]
             [agentlang.util.seq :as su]
@@ -130,3 +131,30 @@
   (if (map? arg)
     (cn/id-attr arg)
     (second arg)))
+
+(def query-entity-name :entity-name)
+
+(defn as-attribute-name [x]
+  (if (keyword? x)
+    (let [s (name x)]
+      (if (s/starts-with? s "_")
+        (keyword (subs s 1))
+        x))
+    x))
+
+(defn query-attributes [query-spec]
+  (when-let [qattrs (:query-attributes query-spec)]
+    (into
+     {}
+     (mapv (fn [[k v]]
+             [k (if (vector? v)
+                  `[~(first v) ~@(mapv as-attribute-name (rest v))]
+                  v)])
+           qattrs))))
+
+(defn query-all? [query-attrs]
+  (and (map? query-attrs)
+       (when-let [pq (or (li/path-attr? query-attrs)
+                         (li/path-attr query-attrs))]
+         (and (vector? pq)
+              (= :like (first pq))))))

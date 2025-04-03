@@ -24,9 +24,9 @@
      :cljs
      (float? x)))
 
-(def date-time? dt/parse-date-time)
-(def date? dt/parse-date)
-(def time? dt/parse-time)
+(def date-time? dt/parse-default-date-time)
+(def date? dt/parse-default-date)
+(def time? dt/parse-default-time)
 
 (defn UUID? [s]
   (or (u/uuid-from-string s) (uuid? s)))
@@ -41,23 +41,14 @@
       (list? x) (set? x)))
 
 (defn path?
-  "Encode a path in a agentlang record. Examples:
-     :C, :C/E, :C/E.R. Paths may also be represented
-   as strings - \"C/E.R\""
+  "A string that represents the value of an entity-path attribute.
+   Example -  \":C/E,1\""
   [x]
-  (let [k (cond
-            (string? x)
-            (keyword x)
-
-            (vector? x)
-            (map #(if (string? %)
-                    (keyword %)
-                    %)
-                 x)
-            :else x)]
-    (every?
-     li/name?
-     (li/split-path k))))
+  (when (string? x)
+    (or (li/default-path? x)
+        (let [ps (li/path-to-vec x)]
+          (and (>= (count ps) 2)
+               (= (ffirst ps) \:))))))
 
 (def ^:private email-pattern #"@")
 
@@ -87,6 +78,7 @@
   (concat
    numeric-types
    [:Agentlang.Kernel.Lang/String
+    :Agentlang.Kernel.Lang/Text
     :Agentlang.Kernel.Lang/Keyword
     :Agentlang.Kernel.Lang/Path
     :Agentlang.Kernel.Lang/DateTime

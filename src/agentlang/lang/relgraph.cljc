@@ -5,8 +5,7 @@
             [agentlang.meta :as mt]
             [agentlang.util :as u]
             [agentlang.util.seq :as su]
-            [agentlang.lang.internal :as li]
-            [agentlang.evaluator :as ev]))
+            [agentlang.lang.internal :as li]))
 
 (defn- component-name? [obj]
   (and (li/name? obj)
@@ -21,6 +20,8 @@
 (def ^:private roots-tag :-*-roots-*-)
 (def ^:private paths-tag :-*-paths-*-)
 (def ^:private back-link-tag :-*-back-link-*-)
+
+(def get-roots roots-tag)
 
 (defn- attach-roots [graph]
   (assoc
@@ -85,7 +86,7 @@
 
 (defn build-graph [root]
   (when (component-name? root)
-    (let [enames (cn/entity-names root)]
+    (let [enames (cn/user-entity-names root)]
       (do-build-graph
        (seq
         (filter

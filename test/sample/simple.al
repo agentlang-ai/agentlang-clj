@@ -5,96 +5,74 @@
 
 (entity
  :E1
- {:A :Int
+ {:Id {:type :Int :id true}
+  :A :Int
   :B :Int
   :C :Int
   :X {:type :String
       :write-only true}
-  :Y :DateTime
-  :rbac [{:roles ["order-users"] :allow [:create]}]})
+  :Y :Now
+  :rbac [{:roles ["user"] :allow [:create]}]})
 
 (dataflow
  :K
- {:E1 {:A '(+ 5 :B)
+ {:E1 {:Id :K.Id
+       :A '(+ 5 :B)
        :B :K.Data.I
        :C '(+ 10 :A)
        :X "secret"
        :Y '(agentlang.lang.datetime/now)}})
 
-(record
- {:Result
-  {:Data :Any}})
+(entity :A {:Id {:type :Int :id true} :X :Int
+            :meta {:audit true :actions {:create :CreateA :delete :DeleteA}}
+            :rbac [{:roles ["user"] :allow [:create]}]})
+(entity :B {:Id {:type :Int :id true} :Y :Int})
+(relationship :AB {:meta {:contains [:A :B]}})
+
+(entity :C {:meta {:actions {:update :UpdateC}} :Id {:type :Int :id true} :Z :Int})
+(relationship :AC {:meta {:between [:A :C]}})
 
 (dataflow
- :RaiseError
- [:match :RaiseError.I
-  0 [:eval '(agentlang.util/throw-ex "blah!")]
-  1 {:Result {:Data "hello"}}])
-
-(defn err []
-  (agentlang.util/throw-ex "an error occured"))
-
-(dataflow
- :JJ
- [:eval '(sample.simple/err)
-  :throws
-  [:error {:Agentlang.Kernel.Lang/Response {:HTTP {:status 422 :body "some error"}}}]])
+ :FindAC
+ {:C? {}
+  :AC? {:A {:Id :FindAC.A} :as :A1}
+  :into
+  {:A :A1.X
+   :CZ :C.Z}})
 
 (dataflow
- :Test2
- {:Result {:Data "hello, world"}})
+ :CreateA
+ [:call '(println "create-a")]
+ {:A {} :from :CreateA.Instance})
 
 (dataflow
- :Test3
- {:Result {:Data "bye, bye"}
-  :as :A}
- {:Agentlang.Kernel.Lang/Response {:HTTP {:status 422 :body :A}}})
+ :DeleteA
+ [:call '(println "delete-a")]
+ [:delete {:A {:__path__? :DeleteA.path}}])
 
 (dataflow
- :Q
- [:try
-  {:E1? {}}
-  :not-found {:Agentlang.Kernel.Lang/Response {:HTTP {:status 422 :body "no issues"}}}])
+ :UpdateC
+ [:call '(println "update-c")]
+ {:C {:__path__? :UpdateC.path
+      :Z :UpdateC.Data.Z}})
 
-(entity :T {:X :Int})
-(entity :U {:Y :Int})
+;; Enable for testing auth+rbac
+#_(dataflow
+ :Agentlang.Kernel.Lang/AppInit
+ [:call '(agentlang.util/getenv "SAMPLE_USER") :as :U]
+ {:Agentlang.Kernel.Identity/User {:Email :U}}
+ {:Agentlang.Kernel.Rbac/RoleAssignment {:Role "user" :Assignee :U}})
 
-(dataflow
- :TU
- {:T {:X :TU.X} :as :T1}
- {:U {:Y '(* :T1.X 100)}})
-
-(dataflow
- :F
- {:E1? {} :as :Es}
- {:Result {:Data :Es}})
-
-(entity {:E2 {:Y :DateTime}})
-
-(record {:StringField
-         {:Question {:type :String}
-          :Value {:type :String
-                  :optional true}}})
-
-(defn valid-name? [s]
-  (and (string? s)
-       (<= 3 (count s) 50)))
-
-(entity {:Survey
-         {:Name {:check valid-name?}
-          :Field {:type :StringField}}})
-
-(dataflow :KK {:E2 {:Y '(agentlang.lang.datetime/now)}})
-
-(event :OnTimer {:X :Int})
-
-(dataflow
- :StartTimer
- {:Agentlang.Kernel.Lang/Timer
-  {:Name "BasicTimer/Timer02"
-   :Expiry 25
-   :ExpiryEvent
-   [:q# {:Sample.Simple/OnTimer
-         {:X [:uq# :Sample.Simple/StartTimer.X]}}]}})
-
-(dataflow :OnTimer [:eval '(println :OnTimer.X)])
+#_(dataflow
+ :AssignPrivs
+ {:B? {}
+  :AB?
+  {:A {:Id :AssignPrivs.Id}}
+  :as :As}
+ [:for-each :As
+  {:Agentlang.Kernel.Rbac/AssignInstancePrivilege
+   {:ResourcePath :%.__path__
+    :Assignee :AssignPrivs.Email
+    :CanRead :AssignPrivs.CanRead
+    :CanUpdate :AssignPrivs.CanUpdate
+    :CanDelete :AssignPrivs.CanDelete}}])

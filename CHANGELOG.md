@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2025-03-14
+
+- Support for :filter construct
+- Fix Okta URL encode issue
+
+## [0.6.2-alpha1] - 2024-12-19
+
+- Add anthropic provider APIs
+- Update `:agent-gen` to generate agent with component file only
+- Add support for fetching Ingested docs
+- Escape special characters and wildcard characters for `LIKE` patterns in DB
+- Support for `pgvector` and `sqlite-vec` implementaion for vector search
+- Dataflow suspend/resume feature
+- Add planner as a feature
+- Support for env call in config
+- New delegate semantics
+
 ## [0.6.1] - 2024-12-05
 
 - Telemetry integration

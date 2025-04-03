@@ -36,3 +36,4 @@ db/
 .lein-env
 example/auth/package-lock.json
 resources/graphql/
+vec0.so

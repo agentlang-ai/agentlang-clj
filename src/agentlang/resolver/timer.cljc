@@ -1,6 +1,7 @@
 (ns agentlang.resolver.timer
   (:require [agentlang.util :as u]
             [agentlang.util.seq :as su]
+            [agentlang.global-state :as gs]
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
             [agentlang.component :as cn]
@@ -8,7 +9,6 @@
             [agentlang.resolver.registry
              #?(:clj :refer :cljs :refer-macros)
              [defmake]]
-            [agentlang.evaluator.state :as es]
             [agentlang.lang.datetime :as dt])
   #?(:clj
      (:import [java.util.concurrent ExecutorService Executors
@@ -46,24 +46,24 @@
 (defn- update-heartbeat! [task-name]
   (let [result
         (first
-         ((es/get-safe-eval-patterns)
-          :Agentlang.Kernel.Lang
-          [{:Agentlang.Kernel.Lang/SetTimerHeartbeat
-            {:TimerName task-name}}]))]
+         (:result
+          (gs/evaluate-dataflow-internal
+           [{:Agentlang.Kernel.Lang/SetTimerHeartbeat
+             {:TimerName task-name}}])))]
     (if result
       task-name
-      (log/warn (str "failed to update heartbeat for timer " task-name ", " (:status result))))))
+      (log/warn (str "failed to update heartbeat for timer " task-name)))))
 
 (defn- set-status! [status task-name]
   (let [result
         (first
-         ((es/get-safe-eval-patterns)
-          :Agentlang.Kernel.Lang
-          [{:Agentlang.Kernel.Lang/SetTimerStatus
-            {:TimerName task-name :Status status}}]))]
+         (:result
+          (gs/evaluate-dataflow-internal
+           [{:Agentlang.Kernel.Lang/SetTimerStatus
+             {:TimerName task-name :Status status}}])))]
     (if result
       task-name
-      (log/warn (str "failed to set status for timer " task-name ", " (:status result))))))
+      (log/warn (str "failed to set status for timer " task-name)))))
 
 (def set-status-ok! (partial set-status! "term-ok"))
 (def set-status-error! (partial set-status! "term-error"))
@@ -95,7 +95,7 @@
   (let [n (:Name inst)]
     (log/info (str "running timer task - " n))
     (try
-      (let [result ((es/get-active-evaluator) (cn/make-instance (:ExpiryEvent inst)))]
+      (let [result (:result (gs/evaluate-dataflow-atomic (cn/make-instance (:ExpiryEvent inst))))]
         (set-status-ok! n)
         (log/info (str "timer " n " result: " result))
         result)
@@ -106,9 +106,9 @@
 
 (defn- timer-cancelled? [n]
   (let [inst (first
-              ((es/get-safe-eval-patterns)
-               :Agentlang.Kernel.Lang
-               [{:Agentlang.Kernel.Lang/Lookup_Timer {:Name n}}]))]
+              (:result
+               (gs/evaluate-dataflow-internal
+                [{:Agentlang.Kernel.Lang/LookupTimer {:TimerName n}}])))]
     (if inst
       (= "term-cancel" (:Status inst))
       (do (log/warn (str "failed to check cancelled status of timer " n))
@@ -180,11 +180,6 @@
     (set-status-running! (:Name timer))
     (assoc timer :Status "running")))
 
-(defn- extract-result [result]
-  (when-let [rs (first result)]
-    (when (= :ok (:status rs))
-      (:result rs))))
-
 (defn restart-all-runnable []
   (su/nonils
    (mapv
@@ -192,4 +187,4 @@
       (case (:Status timer)
         "ready" (start-timer timer)
         "running" (when (no-heartbeat? timer) (start-timer timer))))
-    (extract-result ((es/get-active-evaluator) (cn/make-instance {:Agentlang.Kernel.Lang/FindRunnableTimers {}}))))))
+    (:result (gs/evaluate-dataflow-internal (cn/make-instance {:Agentlang.Kernel.Lang/FindRunnableTimers {}}))))))

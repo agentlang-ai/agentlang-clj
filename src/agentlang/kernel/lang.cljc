@@ -14,7 +14,6 @@
     view
     pattern
     attribute
-    rule
     relationship
     component
     resolver
@@ -32,9 +31,11 @@
      [agentlang.resolver.registry :as r]
      [agentlang.component :as cn])]})
 (attribute :Agentlang.Kernel.Lang/String {:check k/kernel-string?})
+(attribute :Agentlang.Kernel.Lang/Text {:check k/kernel-string?})
 (attribute
  :Agentlang.Kernel.Lang/Keyword
- {:check (fn* [p1__394#] (or (keyword? p1__394#) (string? p1__394#)))})
+ {:check
+  (fn* [p1__1294#] (or (keyword? p1__1294#) (string? p1__1294#)))})
 (attribute :Agentlang.Kernel.Lang/Path {:check k/path?})
 (attribute :Agentlang.Kernel.Lang/DateTime {:check k/date-time?})
 (attribute :Agentlang.Kernel.Lang/Date {:check k/date?})
@@ -58,7 +59,7 @@
  :Agentlang.Kernel.Lang/Identity
  {:type :Agentlang.Kernel.Lang/UUID,
   :default u/uuid-string,
-  li/guid true})
+  li/path-identity true})
 (attribute
  :Agentlang.Kernel.Lang/Now
  {:type :Agentlang.Kernel.Lang/DateTime, :default dt/now})
@@ -89,7 +90,7 @@
   {:oneof ["Seconds" "Minutes" "Hours" "Days"], :default "Seconds"},
   :CreatedTimeSecs
   {:type :Agentlang.Kernel.Lang/Int, :default dt/unix-timestamp},
-  :Name {:type :Agentlang.Kernel.Lang/String, :guid true},
+  :Name {:type :Agentlang.Kernel.Lang/String, :id true},
   :Retries {:type :Agentlang.Kernel.Lang/Int, :default 0},
   :Expiry :Agentlang.Kernel.Lang/Int,
   :Status
@@ -131,12 +132,18 @@
                           :Agentlang.Kernel.Lang/CancelTimer.TimerName,
                           :Status "term-cancel"}})
 (dataflow
+ :Agentlang.Kernel.Lang/LookupTimer
+ #:Agentlang.Kernel.Lang{:Timer
+                         {:Name?
+                          :Agentlang.Kernel.Lang/LookupTimer.TimerName}})
+(dataflow
  :Agentlang.Kernel.Lang/FindRunnableTimers
- #:Agentlang.Kernel.Lang{:Timer?
-                         {:where
-                          [:or
-                           [:= :Status "ready"]
-                           [:= :Status "running"]]}})
+ #:Agentlang.Kernel.Lang{:Timer
+                         {:?
+                          {:where
+                           [:or
+                            [:= :Status "ready"]
+                            [:= :Status "running"]]}}})
 (dataflow
  :Agentlang.Kernel.Lang/LoadPolicies
  #:Agentlang.Kernel.Lang{:Policy
@@ -165,7 +172,7 @@
  :Agentlang.Kernel.Lang/Config
  {:Id
   {:type :Agentlang.Kernel.Lang/Int,
-   :guid true,
+   :id true,
    :default 1,
    :read-only true}})
 (entity
@@ -199,18 +206,7 @@
  :Agentlang.Kernel.Lang/Response
  {:HTTP {:check agentlang.kernel.lang/http-response?, :optional true}})
 (r/register-resolvers
- [{:name :meta,
-   :type :meta,
-   :compose? false,
-   :config
-   {:agentlang-api
-    {:component component,
-     :entity entity,
-     :event event,
-     :record record,
-     :dataflow dataflow}},
-   :paths [:Agentlang.Kernel.Lang/LoadModelFromMeta]}
-  {:name :timer,
+ [{:name :timer,
    :type :timer,
    :compose? true,
    :paths [:Agentlang.Kernel.Lang/Timer]}
@@ -222,4 +218,4 @@
     :paths [:Agentlang.Kernel.Lang/DataSync]})])
 (def
  Agentlang_Kernel_Lang___COMPONENT_ID__
- "fbf212fe-4d7a-4a82-b497-89c77854f5cb")
+ "f4d2c395-13db-406b-a6aa-bfa45692fd63")

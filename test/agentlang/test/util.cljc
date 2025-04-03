@@ -1,27 +1,35 @@
 (ns agentlang.test.util
-  (:require [agentlang.evaluator :as e]
-            [agentlang.evaluator.internal :as ei]
-            [agentlang.evaluator.intercept :as ec]
-            [agentlang.component :as cn]
-            [agentlang.lang.internal :as li]
-            #?(:clj  [clojure.test :refer [is]]
-               :cljs [cljs.test :refer-macros [is]])
-            [agentlang.util :as u]
-            [agentlang.store :as store]
-            [agentlang.rbac.core :as rbac]
-            [agentlang.lang.rbac :as lr]
-            [clojure.spec.gen.alpha :as gen]
+  (:require [clojure.spec.gen.alpha :as gen]
             [clojure.spec.alpha :as s]
             [cljc.java-time.local-date-time :as local-date-time]
             [cljc.java-time.local-date :as local-date]
             [cljc.java-time.local-time :as local-time]
             [cljc.java-time.zone-offset :refer [utc]]
-            [cljc.java-time.month :as month]))
+            [cljc.java-time.month :as month]
+            [agentlang.component :as cn]
+            [agentlang.lang.internal :as li]
+            [agentlang.interpreter :as intrp]
+            #?(:clj  [clojure.test :refer [is]]
+               :cljs [cljs.test :refer-macros [is]])
+            [agentlang.util :as u]
+            [agentlang.store :as store]
+            [agentlang.global-state :as gs]
+            [agentlang.datafmt.json :as json]
+            #?(:clj [agentlang.http :as http]))
+  #?(:clj (:import [org.httpkit BytesInputStream])))
 
-(defn- report-expected-ex [ex]
-  (println (str "Expected exception in test: "
-                #?(:clj (.getMessage ex)
-                   :cljs ex)))
+(defn evaluate-dataflow [event-instance]
+  (intrp/evaluate-dataflow (store/get-default-store) event-instance))
+
+(defn invoke [event]
+  (let [event (if (map? event) event {event {}})]
+    (:result (evaluate-dataflow (cn/make-instance event)))))
+
+(defn- report-expected-ex [ex errmsg]
+  (println (str "Expected exception: "
+                (or errmsg
+                    #?(:clj (.getMessage ex)
+                       :cljs ex))))
   ex)
 
 (defn- maybe-result-map [r]
@@ -30,15 +38,24 @@
     (and (seqable? r) (map? (first r))) (first r)
     :else nil))
 
-(defn is-error [f]
-  (is (try
-        (if-let [r (maybe-result-map (f))]
-          (ei/error? r)
-          true)
-        #?(:clj (catch Exception ex
-                  (report-expected-ex ex))
-           :cljs (catch js/Error e
-                   (report-expected-ex e))))))
+(defn is-error
+  ([errmsg f]
+   (is (try
+         (if-let [r (maybe-result-map (f))]
+           (:error r)
+           true)
+         #?(:clj (catch Exception ex
+                   (report-expected-ex ex errmsg))
+            :cljs (catch js/Error e
+                    (report-expected-ex e errmsg))))))
+  ([f] (is-error nil f)))
+
+(defn is-forbidden [f]
+  (is
+   (try
+     (and (f) false)
+     (catch Exception _
+       (= :forbidden (gs/get-error-code))))))
 
 (defn- finalize-kernel-components []
   (doseq [cn [:Agentlang.Kernel.Lang
@@ -49,7 +66,8 @@
 
 (defn finalize-component [component]
   (finalize-kernel-components)
-  (store/force-init-schema (store/get-default-store) component))
+  (store/force-init-schema (store/get-default-store) component)
+  component)
 
 (defmacro defcomponent [component & body]
   `(do (agentlang.lang/component ~component)
@@ -79,17 +97,6 @@
   (if (keyword? evt)
     {evt {}}
     evt))
-
-(defn result [evt]
-  (fresult
-   (e/eval-all-dataflows
-    (maybe-as-map evt))))
-
-(def eval-all-dataflows e/eval-all-dataflows)
-
-(defn first-result [evt]
-  (let [r (result (maybe-as-map evt))]
-    (if (map? r) r (first r))))
 
 (defn sleep [msec f]
   #?(:clj
@@ -288,32 +295,19 @@
 (defn make-path [component-name record-name]
   (li/make-path [component-name record-name]))
 
-(defn not-found? [r]
-  (cond
-    (map? r) (= :not-found (:status r))
-    (vector? r) (not-found? (first r))
-    :else false))
-
 (defn sort-by-attr [attr xs]
   (sort #(compare (attr %1) (attr %2)) xs))
 
 (defn type-check [t]
   (partial cn/instance-of? t))
 
-(defn call-with-rbac
-  ([f finalize]
-   (is (rbac/init))
-   (is (= [:rbac] (ec/init-interceptors [:rbac])))
-   (try
-     (f)
-     (finally
-       (finalize))))
-  ([f] (call-with-rbac f ec/reset-interceptors!)))
-
-(defn finalize-events []
-  (lr/finalize-events eval-all-dataflows))
-
-(def reset-events! lr/reset-events!)
+(defn call-with-rbac [f]
+  (let [old-config (gs/get-app-config)]
+    (gs/merge-app-config! {:rbac-enabled true})
+    (try
+      (f)
+      (finally
+        (gs/set-app-config! old-config)))))
 
 (defn with-user [email event]
   (cn/assoc-event-context-user
@@ -323,8 +317,54 @@
       {event {}}
       event))))
 
-(def guid li/guid)
 (def path-identity li/path-identity)
 
 (defn windows? []
   (= :windows (u/host-os)))
+
+#?(:clj
+   (do
+     (def auth-handler (constantly false))
+     (def auth-info [nil auth-handler])
+
+     (defn- make-body [obj]
+       (let [^String s (json/encode obj)
+             content-len (.length s)
+             ^BytesInputStream ins (BytesInputStream. (.getBytes s) content-len)]
+         {:content-length content-len
+          :body ins}))
+
+     (defn- make-request [ep obj]
+       (let [body (make-body obj)]
+         (merge
+          {:params {:* ep},
+           :route-params {:* ep}
+           :headers
+           {"host" "localhost:8000"
+            "user-agent" "al-unit-tests"
+            "content-type" "application/json"
+            "content-length" (:content-length body)
+            "accept" "application/json"}
+           :content-type "application/json"
+           :character-encoding "utf8"
+           :url (str "/api/" ep)}
+          body)))
+
+     (defn- format-api-result [result]
+       (let [body (:body result)]
+         (merge
+          result
+          (when body
+            (let [r (if (and (seq body) (string? body))
+                      (json/decode body)
+                      body)
+                  type (if (map? r) (:type r) r)]
+              {:body
+               (if type
+                 (assoc r :type (u/string-as-keyword type))
+                 r)})))))
+
+     ;; TODO: add all handler-functions required for testing the HTTP apis.
+     (defn api-post [ep obj]
+       (let [result (http/process-post-request auth-info (make-request ep obj))]
+         (format-api-result result)))))

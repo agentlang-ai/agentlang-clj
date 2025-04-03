@@ -229,3 +229,11 @@
     (map? xs)  xs
     (vector? (first xs)) (into {} xs)
     :else (into {} (mapv vec (partition 2 xs)))))
+
+(defn make-mutable-stack [] (atom []))
+(defn mutable-stack-peek [s] (peek @s))
+(defn mutable-stack-push! [s obj] (reset! s (conj @s obj)))
+(defn mutable-stack-pop! [s]
+  (let [sv @s]
+    (when (seq sv)
+      (reset! s (pop sv)))))

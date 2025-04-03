@@ -139,17 +139,19 @@
                  reftok)
             (refresh-tokens auth-config reftok sid))))))
 
-(defn- introspection-required? [auth-config cookie-created-millis]
+(defn- introspection-required? [auth-config cookie-created-millis [_ auth-res]]
   (if cookie-created-millis
     (if-let [ttl-ms (:cookie-ttl-ms auth-config)]
-      (< ttl-ms (- (System/currentTimeMillis) cookie-created-millis))
+      (let [cookie-ttl (get auth-res :ttl-ms 0)
+            ttl-ms1 (if (> ttl-ms cookie-ttl) ttl-ms cookie-ttl)]
+        (< ttl-ms1 (- (System/currentTimeMillis) cookie-created-millis)))
       (:introspect auth-config))
     (:introspect auth-config)))
 
 (defmethod auth/verify-token tag [auth-config [data cookie-created-millis]]
   (if (vector? data)
     (let [result
-          (if (introspection-required? auth-config cookie-created-millis)
+          (if (introspection-required? auth-config cookie-created-millis data)
             (do (log/debug (str "auth/okta: introspecting token remotely - " data))
                 (introspect auth-config data))
             (do (log/debug (str "auth/okta: verifying token locally - " data))
@@ -187,7 +189,7 @@
 
 (def ^:private user-state-delim "._.")
 
-(defn- make-okta-url [{domain :domain
+(defn- make-authorize-url [{domain :domain
                        auth-server :auth-server
                        authorize-redirect-url :authorize-redirect-url
                        server-redirect-host :server-redirect-host
@@ -215,7 +217,7 @@
 
 (defn- fetch-tokens [config login-result]
   (let [session-token (:sessionToken login-result)
-        [url state] (make-okta-url (assoc config :no-prompt true :session-token session-token))
+        [url state] (make-authorize-url (assoc config :no-prompt true :session-token session-token))
         result (http/do-get url {:follow-redirects false})]
     (log/debug (str "okta fetch-tokens from " url " returned status " (:status result)))
     (if (= 302 (:status result))
@@ -273,7 +275,7 @@
   (let [user-state (str (when client-url (b64/encode-string client-url)) user-state-delim
                         (when server-redirect-host (b64/encode-string server-redirect-host)))
         auth-config (assoc auth-config :user-state user-state)
-        redirect-url (first (make-okta-url auth-config))]
+        redirect-url (first (make-authorize-url auth-config))]
     (if-let [sid (auth/cookie-to-session-id auth-config cookie)]
       (do
         (log/debug (str "auth/authenticate-session with cookie " sid))
@@ -425,7 +427,7 @@
                  :FirstName "profile.firstName"
                  :LastName "profile.lastName"
                  (name n))]
-      (http/url-encode (str attr " " opr " \"" (last clause) "\"")))))
+      (http/url-encode-plain (str attr " " opr " \"" (last clause) "\"")))))
 
 (defmethod auth/lookup-users tag [{domain :domain api-token :api-token :as config}]
   (when-not api-token

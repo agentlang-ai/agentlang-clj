@@ -13,8 +13,7 @@
             [agentlang.lang.name-util :as nu]
             [agentlang.lang.internal :as li]
             [agentlang.lang.tools.util :as tu]
-            [agentlang.lang.tools.schema.model :as sm]
-            [agentlang.evaluator.state :as es])
+            [agentlang.lang.tools.schema.model :as sm])
   #?(:clj
      (:import [java.io FileInputStream InputStreamReader PushbackReader])))
 
@@ -118,9 +117,6 @@
     `(~'pattern ~pat)
     pat))
 
-(defn- component-name-as-ns [cn]
-  (symbol (s/lower-case (subs (str cn) 1))))
-
 #?(:clj
    (do
      (def ^:dynamic *parse-expressions* true)
@@ -148,16 +144,50 @@
                 (u/throw-ex (str "invalid import directive - " (first import-spec))))
               (rest import-spec))))))
 
+     (defn- lang-construct? [tag exp]
+       (and (seqable? exp) (= tag (first exp))))
+
+     (def ^:private dataflow? (partial lang-construct? 'dataflow))
+     (def ^:private component? (partial lang-construct? 'component))
+
+     (defn- component-spec [exp]
+       (first (nthrest exp 2)))
+
+     (defn- set-component-spec [exp spec]
+       `(~(first exp) ~(second exp) ~spec))
+
+     (defn- maybe-fix-expression [exp]
+       (cond
+         (dataflow? exp)
+         `(~'dataflow ~(second exp)
+           ~@(mapv (fn [exp]
+                     (if (and (vector? exp) (= li/call-fn (first exp))
+                              (not (= 'quote (first (second exp)))))
+                       `[~li/call-fn (~'quote ~(second exp)) ~@(nthrest exp 2)]
+                       exp))
+                   (nthrest exp 2)))
+
+         (component? exp)
+         (let [spec (component-spec exp)]
+           (if-let [clj-import (:clj-import spec)]
+             (if-not (= 'quote (first clj-import))
+               (set-component-spec exp (assoc spec :clj-import `(~'quote ~clj-import)))
+               exp)
+             exp))
+
+         :else exp))
+
      (defn evaluate-expression [exp]
-       (when (and (seqable? exp) (= 'component (first exp)))
+       (when (component? exp)
          (eval `(ns ~(component-name-as-ns (second exp))))
          (use-lang)
-         (let [spec (first (nthrest exp 2))]
+         (let [spec (component-spec exp)]
            (do-clj-imports (:clj-import spec))
            (doseq [dep (:refer spec)]
-             (let [dep-ns (component-name-as-ns dep)]
+             (let [dep-ns (tu/component-name-as-ns dep)]
                (require [dep-ns])))))
-       (eval exp))
+       (let [exp (maybe-fix-expression exp)]
+         (eval exp)))
 
      (defn read-expressions
   "Read expressions in sequence from a agentlang component file. Each expression read
@@ -179,13 +209,12 @@
             (loop [exp (rdf), raw-exps [], exps []]
               (if (= exp :done)
                 (do
-                  (raw/maybe-intern-component raw-exps) 
+                  (raw/maybe-intern-component raw-exps)
                   exps)
                 (let [exp (fqn exp)]
                   (recur (rdf) (conj raw-exps exp) (conj exps (parser exp))))))
             (finally
-              (u/safe-close reader)))
-          ))
+              (u/safe-close reader)))))
        ([file-name-or-input-stream]
         (read-expressions
          file-name-or-input-stream
@@ -314,6 +343,13 @@
        ([model model-root]
         (load-components-from-model model model-root false)))
 
+     (defn load-test-components [model-name]
+       (when-let [[model model-root] (read-model
+                                      (tu/get-system-model-paths) model-name)]
+         (load-components
+          (mapv script-name-from-component-name (:test-components model))
+          model-root false)))
+
      (defn read-components-from-model [model model-root]
        (binding [*parse-expressions* false]
          (load-components-from-model model model-root)))
@@ -361,7 +397,14 @@
        (when (seqable? exp)
          (let [tag (first exp)]
            (case tag
-             defn [:defn (second exp) [(nth exp 2) (nth exp 3)]]
+             defn (let [fn-name (second exp)
+                        has-docstring? (string? (nth exp 2))
+                        docstring (if has-docstring?
+                                    (nth exp 2)
+                                    nil)
+                        params (if has-docstring? (nth exp 3) (nth exp 2))
+                        body (if has-docstring? (nth exp 4) (nth exp 3))]
+                    [:defn fn-name docstring [params body]])
              def [:def (second exp) (nth exp 2)]
              nil))))
 
@@ -377,7 +420,11 @@
          (doseq [exp component-spec]
            (if-let [[tag n v] (maybe-def-expr exp)]
              (if (= tag :defn)
-               (raw/create-function cname n (first v) (second v))
+               (let [[params body] (last v)
+                     docstring (nth v 1)]
+                 (if docstring
+                  (raw/create-function cname n docstring params body)
+                  (raw/create-function cname n params body)))
                (raw/create-definition cname n v))
              (let [is-standalone-pattern (li/maybe-upsert-instance-pattern? exp)]
                (when-let [intern (if is-standalone-pattern

@@ -6,7 +6,6 @@
             [clojure.string :as s]
             [clojure.walk :as w]
             [agentlang.global-state :as gs]
-            [agentlang.lang.tools.build.client :as cl]
             [agentlang.lang.tools.loader :as loader]
             [agentlang.lang.tools.util :as tu]
             [agentlang.util :as u]
@@ -93,13 +92,6 @@
            :else
            (pprint/pprint contents w))))))
   ([] (make-writer nil)))
-
-(defn- client-path [model-name]
-  (let [path (str (project-dir model-name) "client" u/path-sep)
-        f (File. path)]
-    (FileUtils/createParentDirectories f)
-    (.mkdir f)
-    path))
 
 (defn- clj-io [model-name]
   (let [prefix (project-dir model-name)]
@@ -188,7 +180,7 @@
 
 (def ^:private clj-defs #{'def 'defn 'defn-})
 (def ^:private agentlang-defs #{'entity 'dataflow 'event 'record 'relationship
-                                'view 'attribute 'rule 'inference 'resolver 'pattern})
+                                'view 'attribute 'inference 'resolver 'pattern})
 
 (defn- update-local-defs [ns-name component]
   (let [local-defs (set
@@ -295,33 +287,16 @@
 
 (def ^:private config-edn "config.edn")
 
-(defn- write-config-edn [model-root write]
-  (let [src-cfg (str model-root u/path-sep config-edn)]
-    (when (.exists (File. src-cfg))
-      (let [cfg (u/read-config-file src-cfg)]
-        (write config-edn cfg :spit)
-        cfg))))
-
-(defn- create-client-project [orig-model-name model-name ver agentlang-ver app-config]
-  (let [build-type (if (:service (:authentication app-config))
-                     'prod
-                     'dev)]
-    (cl/build-project
-     model-name ver agentlang-ver
-     (client-path orig-model-name) build-type)))
-
-(defn- build-clj-project [orig-model-name model-root model components]
+(defn- build-clj-project [orig-model-name model components]
   (if (create-clj-project orig-model-name model)
-    (let [[rd wr] (clj-io orig-model-name)
+    (let [[_ wr] (clj-io orig-model-name)
           ver (model-version model)
-          agentlang-ver (fetch-agentlang-version model)
           log-config (make-log-config orig-model-name ver)]
       (wr "logback.xml" log-config :spit)
       (let [model-name (model-name-as-string (:name model))
-            cmps (mapv (partial copy-component wr model-name) components)]
-        (let [rs (write-model-clj wr cmps model)]
-          (apply write-core-clj wr rs))
-        (create-client-project orig-model-name model-name ver agentlang-ver (write-config-edn model-root wr))))
+            cmps (mapv (partial copy-component wr model-name) components)
+            rs (write-model-clj wr cmps model)]
+        (apply write-core-clj wr rs)))
     (log/error (str "failed to create clj project for " orig-model-name))))
 
 (defn- normalize-deps-spec [deps]
@@ -403,7 +378,7 @@
            (FileUtils/deleteDirectory projdir)
            (when-not (.exists out-file)
              (.mkdir out-file)))
-         (when (build-clj-project orig-model-name model-root model components)
+         (when (build-clj-project orig-model-name model components)
            [orig-model-name result])))))
   ([model-paths model-name]
    (build-model model-paths model-name nil)))
@@ -444,6 +419,9 @@
   (if-let [r (loader/load-model model-name)]
     r
     (log/error (str "failed to load components from " model-name))))
+
+(defn load-test-components [model-name]
+  (loader/load-test-components model-name))
 
 (defn load-model-migration 
   ([model-name migration-type path-or-branch model-paths]
