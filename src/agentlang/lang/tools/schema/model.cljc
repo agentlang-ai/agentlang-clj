@@ -123,7 +123,8 @@
     (vals (into (sorted-map) (select-keys diffs ks)))))
 
 (defn- get-model-spec [runtime-version model]
-  (let [spec (get model-spec runtime-version)]
+  (let [spec0 (get model-spec runtime-version)
+        spec #?(:clj spec0 :cljs (or spec0 (first (vals model-spec))))]
     (or spec
         (if-let [diff (get diffs runtime-version)]
           (if-let [root-spec (or (get model-spec (:root-agentlang-version model))
