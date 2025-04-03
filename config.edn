@@ -1,7 +1,7 @@
 {:service {:port 8000}
  :store {:type :h2
          :dbname "./db"}
- ;; :exec-graph-enabled? true
+ ;; :exec-graph {:enabled? true}
  ;; :embeddings {:vectordb :pgvector,
  ;;              :config {:host (env POSTGRES_HOST),
  ;;                       :port 5432,

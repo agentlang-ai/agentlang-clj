@@ -45,7 +45,7 @@
  [xs]
  (let
   [xs (mapv u/string-as-keyword xs)]
-  (every? (fn* [p1__1295#] (some #{p1__1295#} oprs)) (set xs))))
+  (every? (fn* [p1__1296#] (some #{p1__1296#} oprs)) (set xs))))
 (entity
  :Agentlang.Kernel.Rbac/Privilege
  {:Name
@@ -162,4 +162,4 @@
                           :Agentlang.Kernel.Rbac/AssignOwnership.Assignee}})
 (def
  Agentlang_Kernel_Rbac___COMPONENT_ID__
- "dc02a601-bc9f-407d-b26d-e65c9d608462")
+ "d2746dce-b48c-46fd-9f8a-e2046aa480eb")
