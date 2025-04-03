@@ -31,7 +31,8 @@
 (def ^:private global-enabled-flag (atom nil))
 
 (defn exec-graph-enabled? []
-  (and (or (:exec-graph-enabled? (gs/get-app-config)) @global-enabled-flag)
+  (and (or (:enabled? (:exec-graph (gs/get-app-config)))
+           @global-enabled-flag)
        (enabled?)))
 
 (defn call-disabled [f]

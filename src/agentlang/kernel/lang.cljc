@@ -35,7 +35,7 @@
 (attribute
  :Agentlang.Kernel.Lang/Keyword
  {:check
-  (fn* [p1__1293#] (or (keyword? p1__1293#) (string? p1__1293#)))})
+  (fn* [p1__1294#] (or (keyword? p1__1294#) (string? p1__1294#)))})
 (attribute :Agentlang.Kernel.Lang/Path {:check k/path?})
 (attribute :Agentlang.Kernel.Lang/DateTime {:check k/date-time?})
 (attribute :Agentlang.Kernel.Lang/Date {:check k/date?})
@@ -132,6 +132,11 @@
                           :Agentlang.Kernel.Lang/CancelTimer.TimerName,
                           :Status "term-cancel"}})
 (dataflow
+ :Agentlang.Kernel.Lang/LookupTimer
+ #:Agentlang.Kernel.Lang{:Timer
+                         {:Name?
+                          :Agentlang.Kernel.Lang/LookupTimer.TimerName}})
+(dataflow
  :Agentlang.Kernel.Lang/FindRunnableTimers
  #:Agentlang.Kernel.Lang{:Timer
                          {:?
@@ -187,4 +192,4 @@
     :paths [:Agentlang.Kernel.Lang/DataSync]})])
 (def
  Agentlang_Kernel_Lang___COMPONENT_ID__
- "6386eef3-dd6e-4326-afd2-f4eca46f2135")
+ "f4d2c395-13db-406b-a6aa-bfa45692fd63")
