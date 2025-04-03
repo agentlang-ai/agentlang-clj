@@ -3,13 +3,23 @@
             [clojure.string :as s]
             [agentlang.component :as cn]
             [agentlang.lang.internal :as li]
-            [agentlang.util :as u]))
+            [agentlang.util :as u]
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])))
 
 (def deleted-flag-col "AGENTLANG__IS_DELETED")
 (def deleted-flag-col-kw (keyword (str "_" deleted-flag-col)))
 
-(defn- sys-col? [n]
-  (= (s/upper-case n) deleted-flag-col))
+(def sql-keywords #{:select :where := :<> :> :>= :< :<=
+                    :and :or :between :in :count :group-by
+                    :join :left-join :right-join :having
+                    :order-by :limit :offset :as})
+
+(defn sql-keyword? [k]
+  (let [k (keyword (s/lower-case (name k)))]
+    (some #{k} sql-keywords)))
+
+(defn- sys-col? [n] (= (s/upper-case n) deleted-flag-col))
 
 (defn db-ident [k]
   (if (keyword? k)
@@ -52,6 +62,9 @@
 
 (defn attribute-column-name [aname]
   (str "_" (name aname)))
+
+(defn attribute-column-name-kw [aname]
+  (keyword (attribute-column-name aname)))
 
 (defn index-table-name
   "Construct the lookup table-name for the attribute, from the main entity
@@ -100,6 +113,11 @@
 
 (defn find-entity-schema [rec-name]
   (if-let [scm (cn/entity-schema rec-name)]
+    scm
+    (u/throw-ex (str "schema not found for entity - " rec-name))))
+
+(defn find-record-schema [rec-name]
+  (if-let [scm (cn/record-schema rec-name)]
     scm
     (u/throw-ex (str "schema not found for record - " rec-name))))
 
@@ -167,6 +185,18 @@
       (subs s 2)
       (subs s 1))))
 
+(defn- clob-to-string [attr-name clob]
+  (if (string? clob)
+    clob
+    #?(:clj
+       (let [len0 (.length clob)
+             len (if (>= len0 Integer/MAX_VALUE)
+                   (do (log/warn (str "Value of " attr-name " too large to read, will be trimmed"))
+                       Integer/MAX_VALUE)
+                   len0)]
+         (.getSubString clob 1 (int len)))
+       :cljs clob)))
+
 (defn- normalize-attribute [schema kw-type-attrs [k v]]
  (let [attr-type (or (get (cn/find-attribute-schema (get schema k)) :type) (get schema k))]
   [k
@@ -175,6 +205,7 @@
      (uuid? v) (str v)
      (and v (= :Agentlang.Kernel.Lang/Boolean attr-type)) (not (#{0 false} v))
      (and (number? v) (= :Agentlang.Kernel.Lang/Decimal attr-type)) #?(:clj (bigdec v) :cljs (float v))
+     (= :Agentlang.Kernel.Lang/Text attr-type) (clob-to-string k v)
      (encoded-clj-object? v) (decode-clj-object v)
      :else v)]))
 
@@ -243,3 +274,29 @@
 
 (defn normalize-aggregates [results]
   (mapv normalize-aggregate results))
+
+(def inst-priv-entity cn/inst-priv-entity-name)
+
+(defn inst-priv-table [entity-name]
+  (entity-table-name (inst-priv-entity entity-name)))
+
+(defn- fetch-into-val [kms [k v]]
+  (let [[_ n] (li/split-path k)
+        n (keyword (s/lower-case (name n)))]
+    [(n kms) v]))
+
+(defn results-as-into-specs [into-spec rslt]
+  (if (seq rslt)
+    (let [ks (keys into-spec)
+          r1 (first rslt)]
+      (if ((first ks) r1)
+        rslt
+        ;; Postgres will return column-names in the table_name/col_name format.
+        (mapv (fn [r]
+                (into
+                 {}
+                 (mapv
+                  (fn [[k v]]
+                    [(second (li/split-path k)) v])
+                  r)))
+              rslt)))))

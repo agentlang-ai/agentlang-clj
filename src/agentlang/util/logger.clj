@@ -1,11 +1,12 @@
 (ns agentlang.util.logger
   (:require [clojure.tools.logging :as logger])
-  (:import [org.slf4j LoggerFactory]
+  (:import [java.io File]
+           [org.slf4j LoggerFactory]
            [ch.qos.logback.classic Level]
            [ch.qos.logback.classic Logger]
-           [ch.qos.logback.classic LoggerContext]
-           [ch.qos.logback.classic.spi ILoggingEvent]
-           [ch.qos.logback.classic.net SyslogAppender]))
+           [ch.qos.logback.classic LoggerContext] 
+           [ch.qos.logback.classic.net SyslogAppender]
+           [ch.qos.logback.classic.joran JoranConfigurator]))
 
 ;; flag applies only to low-priority log-modes (debug and info)
 (def logging-enabled (atom true))
@@ -71,3 +72,11 @@
        logger)))
   ([config] (create-syslogger "ROOT" config))
   ([] (create-syslogger nil)))
+
+(defn apply-custom-logback-config [config-path]
+  (let [^LoggerContext context (LoggerFactory/getILoggerFactory)
+        configurator (JoranConfigurator.)]
+    (.reset context)
+    (.setContext configurator context)
+    (.doConfigure configurator (File. config-path))
+    (println (str "Applied logback config from: " config-path))))

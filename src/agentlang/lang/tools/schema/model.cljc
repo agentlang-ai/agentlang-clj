@@ -133,11 +133,13 @@
           (u/throw-ex (str "No model schema or diff for version: " runtime-version))))))
 
 (defn- call-validation [vfn model]
-  (let [rv (:agentlang-version model)
-        runtime-version (if (or (not rv) (= rv "current"))
-                          (gs/agentlang-version)
-                          rv)]
-    (vfn (get-model-spec runtime-version model) model)))
+  #?(:clj
+     (let [rv (:agentlang-version model)
+           runtime-version (if (or (not rv) (= rv "current"))
+                             (gs/agentlang-version)
+                             rv)]
+       (vfn (get-model-spec runtime-version model) model))
+     :cljs true))
 
 (def validate (partial call-validation m/validate))
 (def explain (partial call-validation m/explain))

@@ -1,10 +1,9 @@
-(ns agentlang.evaluator.intercept
+(ns agentlang.intercept
   (:require #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])
-            [agentlang.evaluator.intercept.rbac :as irbac]
-            [agentlang.evaluator.intercept.core :as interceptors]))
+            [agentlang.intercept.core :as ic]))
 
-(def ^:private makers {:rbac irbac/make})
+(def ^:private makers {})
 
 (defn- make-interceptor [[n config]]
   (when-let [make (makers n)]
@@ -18,8 +17,13 @@
 
 (defn init-interceptors [interceptor-config]
   (mapv
-   #(interceptors/add-interceptor!
+   #(ic/add-interceptor!
      (make-interceptor %))
    (normalize-config interceptor-config)))
 
-(def reset-interceptors! interceptors/reset-interceptors!)
+(def reset-interceptors! ic/reset-interceptors!)
+
+(def call-interceptors-for-create (partial ic/call-interceptors :create))
+(def call-interceptors-for-read (partial ic/call-interceptors :read))
+(def call-interceptors-for-update (partial ic/call-interceptors :update))
+(def call-interceptors-for-delete (partial ic/call-interceptors :delete))

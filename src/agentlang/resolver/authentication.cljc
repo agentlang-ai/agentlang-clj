@@ -36,11 +36,13 @@
 (def ^:private create (partial crdel :create))
 (def ^:private delete (partial crdel :delete))
 
-(defn- lookup [auth-service [entity-name {clause :where} :as param]]
-  (when (= (li/split-path entity-name) [:Agentlang.Kernel.Identity :User])
-    (if (or (= clause :*) (nil? (seq clause)))
-      (auth/lookup-all-users auth-service)
-      (auth/lookup-users (assoc auth-service auth/query-key clause)))))
+(defn- lookup [auth-service params]
+  (let [entity-name (r/query-entity-name params)]
+    (when (= (li/split-path entity-name) [:Agentlang.Kernel.Identity :User])
+      (let [qattrs (r/query-attributes params)]
+        (if (r/query-all? qattrs)
+          (auth/lookup-all-users auth-service)
+          (auth/lookup-users (assoc auth-service auth/query-key (first (vals qattrs)))))))))
 
 (defmake :authentication
   (fn [resolver-name config]

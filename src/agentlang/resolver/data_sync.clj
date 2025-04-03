@@ -6,8 +6,13 @@
             [agentlang.component :as cn]
             [agentlang.store :as store]
             [agentlang.lang.internal :as li]
-            [agentlang.evaluator.state :as es]
             [agentlang.datafmt.csv :as csv]))
+
+(defn get-active-evaluator []
+  (u/raise-not-implemented 'get-active-evaluator))
+
+(defn get-active-store []
+  (u/raise-not-implemented 'get-active-store))
 
 (defn- normalize-attribute-names [entity-schema attr-map]
   (into
@@ -60,7 +65,7 @@
   (mapv (partial record-as-instance entity-name attr-map) records))
 
 (defn- upsert-instances [insts]
-  (let [ev (es/get-active-evaluator)
+  (let [ev (get-active-evaluator)
         [component entity-name] (li/split-path (cn/instance-type (first insts)))
         event-name (li/make-path
                     [component
@@ -123,7 +128,7 @@
 
 (defn- file-export [spec]
   (let [entity-name (li/split-path (:Entity spec))
-        store (es/get-active-store)
+        store (get-active-store)
         query (store/compile-query
                store
                {:from entity-name :where :*})

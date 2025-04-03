@@ -17,7 +17,6 @@
             [agentlang.util :as u]
             [agentlang.util.seq :as us]
             [agentlang.util.http :as http]
-            [agentlang.evaluator :as e]
             [agentlang.datafmt.json :as json]
             [agentlang.lang.internal :as li]
             [agentlang.global-state :as gs]
@@ -41,7 +40,7 @@
 (entity
  :Agentlang.Core/LLM
  {:Type {:type :String :default "openai"} ; e.g "openai"
-  :Name {:type :String :guid true :default #(us/generate-code 5)}
+  :Name {:type :String :id true :default #(us/generate-code 5)}
   :Config {:type :Map :optional true}
   ;; example config for openai:
   ;; {:ApiKey (agentlang.util/getenv "OPENAI_API_KEY")
@@ -54,7 +53,8 @@
 (dataflow
  :Agentlang.Core/FindLLM
  {:Agentlang.Core/LLM
-  {:Name? :Agentlang.Core/FindLLM.Name}})
+  {:Name? :Agentlang.Core/FindLLM.Name} :as [:LLM]}
+ :LLM)
 
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/LLM
@@ -113,7 +113,7 @@
 
 (entity
  :Agentlang.Core/Document
- {:Id {:type :UUID :default u/uuid-string :guid true}
+ {:Id {:type :UUID :default u/uuid-string :id true}
   :AppUuid {:type :UUID :default u/get-app-uuid}
   :Agent {:type :String :optional true}
   :Uri {:check document-uri?}
@@ -163,7 +163,7 @@
 
 (entity
  :Agentlang.Core/Agent
- {:Name {:type :String :guid true}
+ {:Name {:type :String :id true}
   :Type {:type :String :default "chat"}
   :Features {:check feature-list? :optional true}
   :AppUuid {:type :UUID :default u/get-app-uuid}
@@ -177,6 +177,11 @@
   :Channels {:listof :Any :optional true}
   :CacheChatSession {:type :Boolean :default true}})
 
+(dataflow
+ :Agentlang.Core/FindAgentByName
+ {:Agentlang.Core/Agent {:Name? :Agentlang.Core/FindAgentByName.Name} :as [:A]}
+ :A)
+
 (defn- agent-of-type? [typ agent-instance]
   (= typ (:Type agent-instance)))
 
@@ -186,17 +191,22 @@
 
 (defn- eval-event
   ([event callback atomic?]
-   (when-let [result (first ((if atomic?
-                               e/eval-all-dataflows-atomic
-                               e/eval-all-dataflows)
-                             event))]
-     (when (= :ok (:status result))
-       (callback (:result result)))))
+   (when-let [result ((if atomic?
+                        gs/evaluate-dataflow-atomic
+                        gs/evaluate-dataflow)
+                      event)]
+     (callback (:result result))))
   ([event callback] (eval-event event callback true))
   ([event] (eval-event event identity)))
 
 (defn- eval-internal-event [event & args]
-  (apply eval-event (e/mark-internal (cn/make-instance event)) args))
+  (gs/kernel-call
+   #(apply eval-event (cn/make-instance event) args)))
+
+(defn force-find-agent-by-name [agent-name]
+  (eval-internal-event
+   {:Agentlang.Core/FindAgentByName
+    {:Name (u/keyword-as-string agent-name)}}))
 
 (defn- preproc-agent-tools-spec [tools]
   (when tools
@@ -215,6 +225,8 @@
     (let [n (csk/->PascalCase agent-name)]
       (cn/canonical-type-name n))))
 
+(def ^:private inference-event-schema {:meta {:inherits :Agentlang.Core/Inference}})
+
 (defn- preproc-agent-input-spec [agent-name input]
   (if input
     (cond
@@ -222,7 +234,7 @@
       (keyword? input) (subs (str input) 1)
       :else (u/throw-ex (str "Invalid agent input: " input)))
     (let [event-name (as-event-name agent-name)]
-      (and (event-internal event-name {:UserInstruction :String})
+      (and (event-internal event-name inference-event-schema)
            (preproc-agent-input-spec nil event-name)))))
 
 (defn- preproc-agent-docs [docs]
@@ -317,7 +329,7 @@
     (if (cn/event? event-name)
       event-name
       (u/throw-ex (str "not an event - " event-name)))
-    (event {event-name {:meta {:inherits :Agentlang.Core/Inference}}})))
+    (event {event-name inference-event-schema})))
 
 (defn maybe-input-as-inference [agent]
   (when-let [input (:Input agent)]
@@ -328,7 +340,7 @@
 
 (dataflow
  [:before :create :Agentlang.Core/Agent]
- [:eval '(agentlang.inference.service.model/maybe-input-as-inference :Instance)]
+ [:call '(agentlang.inference.service.model/maybe-input-as-inference :Instance)]
  :Instance)
 
 (def ^:private agent-callbacks (atom nil))
@@ -349,15 +361,12 @@
 
 (dataflow
  :Agentlang.Core/FindAgentDelegates
- [:for-each :Agentlang.Core/FindAgentDelegates.DelegateNames
-  {:Agentlang.Core/Agent
-   {:Name? :%}}
-  :as :Rs]
- [:eval '(agentlang.inference.service.model/concat-results :Rs)])
+ {:Agentlang.Core/Agent
+  {:Name? [:in :Agentlang.Core/FindAgentDelegates.DelegateNames]}})
 
 (entity
  :Agentlang.Core/ChatSession
- {:Id {:type :String :guid true :default u/uuid-string}
+ {:Id {:type :String :id true :default u/uuid-string}
   :Messages {:check agent-messages?}})
 
 (relationship
@@ -373,8 +382,7 @@
 (dataflow
  :Agentlang.Core/LookupAgentChatSessions
  {:Agentlang.Core/ChatSession? {}
-  :-> [[:Agentlang.Core/AgentChatSession?
-        :Agentlang.Core/LookupAgentChatSessions.Agent]]})
+  :Agentlang.Core/AgentChatSession? :Agentlang.Core/LookupAgentChatSessions.Agent})
 
 (dataflow
  :Agentlang.Core/CreateAgentChatSession
@@ -382,12 +390,12 @@
   {:Agentlang.Core/ChatSession
    {:Id :Agentlang.Core/CreateAgentChatSession.ChatId
     :Messages :Agentlang.Core/CreateAgentChatSession.Messages}
-   :-> [[:Agentlang.Core/AgentChatSession :Agentlang.Core/CreateAgentChatSession.Agent]]}
+   :Agentlang.Core/AgentChatSession :Agentlang.Core/CreateAgentChatSession.Agent}
   :error {:Agentlang.Core/LookupAgentChatSessions {:Agent :Agentlang.Core/CreateAgentChatSession.Agent}}])
 
 (dataflow
  :Agentlang.Core/ResetAgentChatSessions
- [:eval '(agentlang.inference.service.model/reset-agent-chat-session
+ [:call '(agentlang.inference.service.model/reset-agent-chat-session
           :Agentlang.Core/ResetAgentChatSessions.Agent)])
 
 (defn- tool-param? [x]
@@ -400,7 +408,7 @@
 
 (entity
  :Agentlang.Core/Tool
- {:id {:type :UUID :guid true :default u/uuid-string}
+ {:id {:type :UUID :id true :default u/uuid-string}
   :name :String
   :type {:type :String :default "function"}
   :description {:type :String :optional true}
@@ -437,9 +445,8 @@
   {:Agent :Agentlang.Core/AddAgentDocument.Agent
    :Uri :Agentlang.Core/AddAgentDocument.Uri
    :Title :Agentlang.Core/AddAgentDocument.Title}
-  :as :Doc}
- {:Agentlang.Core/AgentDocument {:Agent :Doc.Agent :Document :Doc.Id}}
- :Doc)
+  :Agentlang.Core/AgentDocument
+  {:Agentlang.Core/Agent {:Name? :Agentlang.Core/AddAgentDocument.Agent}}})
 
 (attribute
  :Agentlang.Core/Documents
@@ -449,29 +456,22 @@
 
 (dataflow
  :Agentlang.Core/LLMsForAgent
- {:Agentlang.Core/AgentLLM
-  {:Agent? :Agentlang.Core/LLMsForAgent.Agent}})
+ {:Agentlang.Core/LLM? {}
+  :Agentlang.Core/AgentLLM? :Agentlang.Core/LLMsForAgent.Agent})
 
 (dataflow
  :Agentlang.Core/AgentTools
- {:Agentlang.Core/AgentTool
-  {:Agent? :Agentlang.Core/AgentTools.Agent} :as :R}
- [:for-each :R
-  {:Agentlang.Core/Tool
-   {:id? :%.Tool}}])
-
-(dataflow
- :Agentlang.Core/HasAgentDocuments
- {:Agentlang.Core/AgentDocument
-  {:Agent? :Agentlang.Core/HasAgentDocuments.Agent}})
+ {:Agentlang.Core/Tool? {}
+  :Agentlang.Core/AgentTool? :Agentlang.Core/AgentTools.Agent})
 
 (dataflow
  :Agentlang.Core/AgentDocuments
- {:Agentlang.Core/AgentDocument
-  {:Agent? :Agentlang.Core/AgentDocuments.Agent} :as :R}
- [:for-each :R
-  {:Agentlang.Core/Document
-   {:Id? :%.Document}}])
+ {:Agentlang.Core/Document? {}
+  :Agentlang.Core/AgentDocument? :Agentlang.Core/AgentDocuments.Agent})
+
+(dataflow
+ :Agentlang.Core/LookupAgentByName
+ {:Agentlang.Core/Agent {:Name? :Agentlang.Core/LookupAgentByName.Name}})
 
 (defn- maybe-agent-pattern [p]
   (when (and (map? p)
@@ -481,7 +481,7 @@
 (defn lookup-agent-by-name [agent-name]
   #?(:clj
      (eval-event
-      {:Agentlang.Core/Lookup_Agent
+      {:Agentlang.Core/LookupAgentByName
        {:Name (u/keyword-as-string agent-name)}}
       first)
      :cljs
@@ -508,15 +508,14 @@
   (when-let [ds (seq (:Delegates agent-instance))]
     (eval-event
      {:Agentlang.Core/FindAgentDelegates
-      {:DelegateNames ds}})))
+      {:DelegateNames (vec ds)}})))
 
 (defn- lookup-for-agent [event-name proc agent-instance]
   (eval-event
-   {event-name
-    {:Agent (:Name agent-instance)}}
-   #(mapv proc %)))
+   {event-name {:Agent agent-instance}}
+   #(when (seq %) (mapv proc %))))
 
-(def lookup-llms-for-agent (partial lookup-for-agent :Agentlang.Core/LLMsForAgent :LLM))
+(def lookup-llms-for-agent (memoize (partial lookup-for-agent :Agentlang.Core/LLMsForAgent :Name)))
 
 (defn ensure-llm-for-agent [agent-instance]
   (if-let [llm (first (lookup-llms-for-agent agent-instance))]
@@ -536,7 +535,7 @@
     (str (:Title docchunk) " " (:Content docchunk))))
 
 (def lookup-agent-docs (partial lookup-for-agent :Agentlang.Core/AgentDocuments normalize-docchunk))
-(def has-agent-docs? (partial lookup-for-agent :Agentlang.Core/HasAgentDocuments seq))
+(def has-agent-docs? (memoize (partial lookup-for-agent :Agentlang.Core/AgentDocuments seq)))
 
 (defn add-agent-document [agent-name doc-title doc-uri]
   (eval-event
@@ -576,7 +575,7 @@
 (defn update-agent-chat-session [chat-session messages]
   (eval-internal-event
    {:Agentlang.Core/Update_ChatSession
-    {li/path-attr (li/path-attr chat-session)
+    {:path (li/path-attr chat-session)
      :Data {:Messages messages}}}
    identity true))
 

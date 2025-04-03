@@ -1,6 +1,4 @@
 (ns agentlang.resolvers
   ;; load resolvers required by kernel
-  (:require [agentlang.resolver.meta]
-            [agentlang.resolver.timer]
-            [agentlang.resolver.policy]
+  (:require [agentlang.resolver.timer]
             #?(:clj [agentlang.resolver.data-sync])))

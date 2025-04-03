@@ -80,7 +80,7 @@
                {"type" "image_url"
                 "image_url" {"url" image-url}}]}]
             openai-api-key (or api-key (:ApiKey config) (get-openai-api-key))
-            model-name (or model-name (:CompletionModel config) default-ocr-completion-model)
+            model-name (or model-name default-ocr-completion-model)
             max-tokens (or max-tokens default-max-tokens)]
         [{:headers {"Content-type"  "application/json"
                     "Authorization" (str "Bearer " openai-api-key)}

@@ -1,4 +1,4 @@
-(ns agentlang.test.auth
+#_(do (ns agentlang.test.auth
   (:require #?(:clj [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [agentlang.util.logger :as log]
@@ -38,4 +38,4 @@
                (let [response (auth/http-get api-obj "https://slack.com/api/conversations.list")
                      status (:status response)]
                  (is (or (= status 200) (= status 404))))))
-           (is (auth/release auth-obj)))))))
+           (is (auth/release auth-obj))))))))

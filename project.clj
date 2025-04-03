@@ -1,8 +1,9 @@
-(defproject com.github.agentlang-ai/agentlang "0.6.2"
+(defproject com.github.agentlang-ai/agentlang "0.7.0-alpha1"
   :dependencies [[org.clojure/clojure "1.12.0"]
                  [org.clojure/clojurescript "1.11.132"
                   :exclusions [com.google.code.findbugs/jsr305]]
                  [org.clojure/core.memoize "1.0.257"]
+                 [org.clojure/core.cache "1.1.234"]
                  [org.clojure/tools.cli "1.0.206"]
                  [org.clojure/data.xml "0.2.0-alpha5"]
                  [org.clojure/data.csv "1.0.0"]
@@ -22,7 +23,7 @@
                  [com.h2database/h2 "1.4.200"]
                  [redis.clients/jedis "5.1.2"]
                  [org.mindrot/jbcrypt "0.4"]
-                 [honeysql "1.0.461"]
+                 [com.github.seancorfield/honeysql "2.6.1270"]
                  [compojure "1.7.1"]
                  [http-kit "2.7.0"]
                  [cljs-http "0.1.48"]

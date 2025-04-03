@@ -14,11 +14,20 @@
   @app-config)
 
 (defn audit-trail-enabled? []
-  (:enable-audit-trail @app-config))
+  (:enabled? (:audit-trail @app-config)))
 
 (def ^:dynamic active-event-context nil)
 
+(defn call-with-event-context [ctx f]
+  (if ctx
+    (binding [active-event-context ctx]
+      (f))
+    (f)))
+
 (defn active-user [] (:User active-event-context))
+
+(defn active-session-info []
+  (get-in active-event-context [:UserDetails :session-info]))
 
 #?(:clj
    (def ^:private active-txn (ThreadLocal.))
@@ -42,8 +51,6 @@
 
 (defn in-script-mode? [] @script-mode)
 
-(def ^:dynamic audit-trail-mode nil)
-
 (def ^:dynamic migration-mode nil)
 
 #?(:clj
@@ -55,15 +62,11 @@
   #?(:clj (.set error-code code)
      :cljs (reset! error-code code)))
 
+(defn reset-error-code! [] (set-error-code! nil))
+
 (defn get-error-code []
   #?(:clj (.get error-code)
      :cljs @error-code))
-
-(defn set-error-no-perm! []
-  (set-error-code! :no-permission))
-
-(defn error-no-perm? []
-  (= (get-error-code) :no-permission))
 
 #?(:clj
    (def agentlang-version
@@ -82,3 +85,68 @@
 (defn uninstall-standalone-patterns! [] (reset! standalone-patterns nil))
 
 (def fire-post-events (atom nil))
+
+(def ^:dynamic kernel-mode nil)
+
+(defn kernel-mode? [] kernel-mode)
+
+(defn kernel-call [f]
+  (binding [kernel-mode true]
+    (f)))
+
+(defn rbac-enabled? []
+  (if kernel-mode
+    false
+    (:rbac-enabled @app-config)))
+
+(def ^:private evaluate-dataflow-fn (atom nil))
+(def ^:private evaluate-dataflow-internal-fn (atom nil))
+(def ^:private evaluate-pattern-fn (atom nil))
+
+(defn set-evaluate-dataflow-fn! [f] (reset! evaluate-dataflow-fn f))
+(defn set-evaluate-pattern-fn! [f] (reset! evaluate-pattern-fn f))
+
+(defn evaluate-dataflow
+  ([event-instance]
+   (@evaluate-dataflow-fn event-instance))
+  ([env event-instance]
+   (@evaluate-dataflow-fn nil env event-instance)))
+
+(defn evaluate-dataflow-internal [event-instance]
+  (kernel-call #(evaluate-dataflow event-instance)))
+
+(defn evaluate-pattern
+  ([env pat] (@evaluate-pattern-fn env pat))
+  ([pat] (evaluate-pattern nil pat)))
+
+(def evaluate-patterns evaluate-dataflow)
+
+(defn evaluate-pattern-internal [env pat]
+  (kernel-call #(evaluate-pattern env pat)))
+
+(defn evaluate-dataflow-atomic
+  ([evaluator arg]
+   (let [txn (get-active-txn)]
+     (set-active-txn! nil)
+     (try
+       (evaluator arg)
+       (finally
+         (set-active-txn! txn)))))
+  ([event-instance] (evaluate-dataflow-atomic evaluate-dataflow event-instance)))
+
+#?(:clj
+   (def ^:private dataflow-suspend-flag (ThreadLocal.))
+   :cljs
+   (def ^:dynamic dataflow-suspend-flag nil))
+
+(defn set-dataflow-suspended! [flag]
+  #?(:clj
+     (.set dataflow-suspend-flag flag)
+     :cljs
+     (reset! dataflow-suspend-flag flag)))
+
+(defn dataflow-suspended? []
+  #?(:clj
+     (.get dataflow-suspend-flag)
+     :cljs
+     @dataflow-suspend-flag))
