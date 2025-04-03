@@ -82,3 +82,42 @@
            (is (cn/instance-of? :Exg01/A (exg/pattern-result n1)))
            (is (and (exg/graph? n2) (exg/event-graph? n2)))
            (is (cn/instance-of? :Exg01/B (:result n2)))))))))
+
+(deftest issue-1726
+  (defcomponent :UqIn
+    (entity
+     :UqIn/E
+     {:Id {:type :Int :id true}
+      :Start :String
+      :End :String
+      :meta {:unique-in
+             [:and [:<= :Start] [:>= :End]]}})
+    (entity
+     :UqIn/F
+     {:Id {:type :Int :id true}
+      :X :Int
+      :meta {:unique-in [:> :X]}}))
+  (let [cre (fn [id s e]
+             (tu/invoke
+              {:UqIn/Create_E
+               {:Instance
+                {:UqIn/E
+                 {:Id id
+                  :Start s
+                  :End e}}}}))
+        e? (partial cn/instance-of? :UqIn/E)]
+    (is (e? (cre 1 "2024-12-01" "2025-01-02")))
+    (tu/is-error #(cre 2 "2024-12-01" "2025-01-01"))
+    (is (e? (cre 2 "2024-01-03" "2025-01-20")))
+    (is (e? (cre 3 "2024-12-02" "2025-01-22")))
+    (tu/is-error #(cre 4 "2024-12-02" "2024-12-05")))
+  (let [crf (fn [id x]
+              (tu/invoke
+               {:UqIn/Create_F
+                {:Instance
+                 {:UqIn/F
+                  {:Id id :X x}}}}))
+        f? (partial cn/instance-of? :UqIn/F)]
+    (is (f? (crf 1 10)))
+    (tu/is-error #(crf 2 9))
+    (is (f? (crf 2 11)))))
