@@ -159,23 +159,26 @@
 
 (defn get-feature-prompt [ft] (get feature-set ft ""))
 
-(defn notify-channel [ch-type ch-name msg]
+(defn notify-channel [ch-type ch-name msg data]
   (ch/channel-send {:channel-type (u/string-as-keyword ch-type)
                     :name ch-name
-                    :message msg}))
+                    :message msg
+                    :data data}))
 
 (event
  :Agentlang.Core/NotifyChannel
  {:ChannelType :String
   :ChannelName :String
-  :Message :String})
+  :Message :String
+  :Data {:type :Any :optional true}})
 
 (dataflow
  :Agentlang.Core/NotifyChannel
  [:call '(agentlang.inference.service.model/notify-channel
           :Agentlang.Core/NotifyChannel.ChannelType
           :Agentlang.Core/NotifyChannel.ChannelName
-          :Agentlang.Core/NotifyChannel.Message)])
+          :Agentlang.Core/NotifyChannel.Message
+          :Agentlang.Core/NotifyChannel.Data)])
 
 (record
  :Agentlang.Core/Inference

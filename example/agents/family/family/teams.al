@@ -204,10 +204,16 @@
        "</p>"))
 
 (def send-msg-fn (atom nil))
+(def last-sent-ids (atom nil))
 
 (defmethod ch/channel-send tag [{msg :message}]
   (when-let [send @send-msg-fn]
-    (and (send msg) true)))
+    (reset! last-sent-ids (send msg))
+    true))
+
+(defn- last-sent-msg-id? [id]
+  (when-let [[_ lstid] @last-sent-ids]
+    (= id lstid)))
 
 (defmethod ch/channel-start tag [{channel-name :name agent-name :agent
                                   doc :doc schema-doc :schema-doc}]
@@ -231,7 +237,7 @@
              (let [r (get-last-message chat-id)
                    msg (first (:value r))
                    id (:id msg)]
-               (if (not= last-msg-id id)
+               (if (and (not= last-msg-id id) (not (last-sent-msg-id? id)))
                  (let [resp (send (get-in msg [:body :content]))
                        [_ last-msg-id] (send-msg resp)]
                    (recur last-msg-id))
