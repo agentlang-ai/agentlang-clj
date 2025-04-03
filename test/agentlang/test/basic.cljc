@@ -918,6 +918,43 @@
     (is (= ["e06" "e07"] (map :N (last result))))
     (is (= [1 1] (map :X (last result))))))
 
+(deftest embedded-match
+  (defcomponent :Em
+    (entity
+     :Em/E
+     {:Id {:type :Int :id true}
+      :X :Int})
+    (record :Em/R {:Y :Int})
+    (dataflow
+     :Em/Df
+     {:Em/E? {} :as :Es}
+     [:for-each :Es
+      [:match
+       [:= :%.X 1] {:Em/R {:Y 1}}
+       [:> :%.X 10] {:Em/R {:Y 10}}
+       {:Em/R {:Y 100}}]]))
+  (let [cre (fn [id x]
+              (tu/invoke
+               {:Em/Create_E
+                {:Instance
+                 {:Em/E {:Id id :X x}}}}))
+        e? (partial cn/instance-of? :Em/E)
+        es (mapv cre [1 2 3 4 5] [1 2 1 11 12])
+        r? (partial cn/instance-of? :Em/R)
+        rs? (fn [rs y c]
+              (let [rs2 (filter (fn [r]
+                                  (= y (:Y r)))
+                                rs)]
+                (is (= c (count rs2)))))]
+    (is (= 5 (count es)))
+    (is (every? e? es))
+    (let [rs (tu/invoke {:Em/Df {}})]
+      (is (= 5 (count rs)))
+      (is (every? r? rs))
+      (rs? rs 1 2)
+      (rs? rs 10 2)
+      (rs? rs 100 1))))
+
 (defn- assert-le
   ([n obj xs y]
    (is (cn/instance-of? n obj))
