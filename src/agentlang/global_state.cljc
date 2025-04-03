@@ -14,7 +14,7 @@
   @app-config)
 
 (defn audit-trail-enabled? []
-  (:enable-audit-trail @app-config))
+  (:enabled? (:audit-trail @app-config)))
 
 (def ^:dynamic active-event-context nil)
 

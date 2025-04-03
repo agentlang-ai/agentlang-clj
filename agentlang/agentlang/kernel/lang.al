@@ -77,6 +77,7 @@
 (dataflow :SetTimerStatus {:Timer {:Name? :SetTimerStatus.TimerName :Status :SetTimerStatus.Status}})
 (dataflow :SetTimerHeartbeat {:Timer {:Name? :SetTimerHeartbeat.TimerName :LastHeartbeatSecs '(agentlang.lang.datetime/unix-timestamp)}})
 (dataflow :CancelTimer {:SetTimerStatus {:TimerName :CancelTimer.TimerName :Status "term-cancel"}})
+(dataflow :LookupTimer {:Timer {:Name? :LookupTimer.TimerName}})
 
 (dataflow
  :FindRunnableTimers

@@ -1,4 +1,4 @@
-#_(do (ns agentlang.test.timer
+(ns agentlang.test.timer
   (:require #?(:clj [clojure.test :refer [deftest is]]
                :cljs [cljs.test :refer-macros [deftest is]])
             [agentlang.util :as u]
@@ -6,7 +6,6 @@
             [agentlang.lang
              :refer [component attribute event
                      entity record dataflow]]
-            [agentlang.evaluator :as e]
             [agentlang.lang.datetime :as dt]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
@@ -38,12 +37,13 @@
       :BasicTimer/LookupEByX
       {:BasicTimer/E {:X? :BasicTimer/LookupEByX.X}}))
    (defn query-e [x]
-     (let [r (tu/first-result
-              {:BasicTimer/LookupEByX
-               {:X x}})]
+     (let [r (first
+              (tu/invoke
+               {:BasicTimer/LookupEByX
+                {:X x}}))]
        (is (cn/instance-of? :BasicTimer/E r))
        (is (= (:X r) x))))
-   (let [r (tu/first-result
+   (let [r (tu/invoke
             {:BasicTimer/StartTimer
              {:X 100}})]
      (is (cn/instance-of? :Agentlang.Kernel.Lang/Timer r))
@@ -62,7 +62,7 @@
          :Expiry 1
          :ExpiryEvent
          [:q# {:RepeatTimer/OnTimer01 {}}]}})
-      (dataflow :RepeatTimer/OnTimer01 [:eval '(agentlang.test.timer/set-a1)])
+      (dataflow :RepeatTimer/OnTimer01 [:call '(agentlang.test.timer/set-a1)])
       (dataflow
        :RepeatTimer/StartRepeatTimer
        {:Agentlang.Kernel.Lang/Timer
@@ -71,14 +71,14 @@
          :Expiry 1
          :ExpiryEvent
          [:q# {:RepeatTimer/OnTimer02 {}}]}})
-      (dataflow :RepeatTimer/OnTimer02 [:eval '(agentlang.test.timer/set-a2)]))
+      (dataflow :RepeatTimer/OnTimer02 [:call '(agentlang.test.timer/set-a2)]))
     (let [timer? (partial cn/instance-of? :Agentlang.Kernel.Lang/Timer)]
-      (is (timer? (tu/first-result {:RepeatTimer/StartNormalTimer {}})))
-      (is (timer? (tu/first-result {:RepeatTimer/StartRepeatTimer {}})))
+      (is (timer? (tu/invoke {:RepeatTimer/StartNormalTimer {}})))
+      (is (timer? (tu/invoke {:RepeatTimer/StartRepeatTimer {}})))
       (Thread/sleep 3000)
       (is (= @a1 100))
       (is (> @a2 100))
-      (is (timer? (tu/first-result {:Agentlang.Kernel.Lang/CancelTimer {:TimerName "RepeatTimer/Timer02"}})))
+      (is (timer? (first (tu/invoke {:Agentlang.Kernel.Lang/CancelTimer {:TimerName "RepeatTimer/Timer02"}}))))
       (Thread/sleep 3000)
       (let [c @a2]
         (Thread/sleep 3000)
@@ -101,10 +101,10 @@
          :Expiry 1
          :ExpiryEvent
          [:q# {:RetryTimer/OnTimer01 {}}]}})
-      (dataflow :RetryTimer/OnTimer01 [:eval '(agentlang.test.timer/check-a1)]))
+      (dataflow :RetryTimer/OnTimer01 [:call '(agentlang.test.timer/check-a1)]))
     (let [timer? (partial cn/instance-of? :Agentlang.Kernel.Lang/Timer)]
-      (is (timer? (tu/first-result {:RetryTimer/StartTimer {}})))
+      (is (timer? (tu/invoke {:RetryTimer/StartTimer {}})))
       (Thread/sleep 3000)
       (is (= @a 2))
       (Thread/sleep 3000)
-      (is (= @a 2))))))
+      (is (= @a 2)))))
