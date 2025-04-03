@@ -375,8 +375,10 @@
     (let [s (:* (:params request))
           [uri suffix] (if (s/ends-with? s "/__tree")
                          [(subs s 0 (s/index-of s "/__tree")) :tree]
-                         [s nil])]
-      (assoc (uh/parse-rest-uri uri) :suffix suffix))
+                         [s nil])
+          query-params (when-let [qs (:query-string request)]
+                         (uh/form-decode qs))]
+      (assoc (uh/parse-rest-uri uri) :suffix suffix :query-params query-params))
     (catch Exception ex
       (log/warn (str "failed to parse uri: " (.getMessage ex))))))
 
@@ -442,9 +444,9 @@
                    {:Data (li/record-attributes obj)
                     :path (li/vec-to-path path)}})))))))))
 
-(defn- fetch-all [entity-name path]
+(defn- fetch-all-helper [eval-pat entity-name path]
   (let [relname (last (drop-last path))]
-    (gs/evaluate-pattern
+    (eval-pat
      (if (cn/between-relationship? relname)
        (let [other-entity (first path)
              other-path (drop-last 2 path)]
@@ -453,6 +455,8 @@
           {other-entity {li/path-attr (li/vec-to-path other-path)}}})
        {entity-name
         {li/path-attr? [:like (str (li/vec-to-path path) "%")]}}))))
+
+(def ^:private fetch-all (partial fetch-all-helper gs/evaluate-pattern))
 
 (defn- fetch-tree [entity-name insts]
   (if-let [rels (seq (cn/contained-children entity-name))]
@@ -472,6 +476,19 @@
       rels))
     insts))
 
+(defn- process-query-param [[k v]]
+  [(li/name-as-query-pattern k)
+   (let [s (u/parse-string v)]
+     (if (symbol? s)
+       (name s)
+       s))])
+
+(defn- fetch-by-params [entity-name params path]
+  (let [proc-params (into {} (mapv process-query-param params))
+        attrs (li/record-attributes (fetch-all-helper identity entity-name path))
+        pat {entity-name (merge attrs proc-params)}]
+    (gs/evaluate-pattern pat)))
+
 (defn process-get-request [[auth-config maybe-unauth] request]
   (or (maybe-unauth request)
       (gs/call-with-event-context
@@ -482,11 +499,18 @@
             data-fmt
             #(if-let [parsed-path (parse-rest-uri request)]
                (let [path (:path parsed-path)
-                     entity-name (:entity parsed-path)]
+                     entity-name (:entity parsed-path)
+                     query-params (:query-params parsed-path)]
                  (if (cn/entity? entity-name)
                    (let [result
-                         (if (= entity-name (last path))
+                         (cond
+                           query-params
+                           (fetch-by-params entity-name query-params path)
+
+                           (= entity-name (last path))
                            (fetch-all entity-name path)
+
+                           :else
                            (gs/evaluate-dataflow
                             {(cn/crud-event-name entity-name :Lookup)
                              {:path (li/vec-to-path path)}}))]
