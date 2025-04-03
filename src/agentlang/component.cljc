@@ -2609,3 +2609,24 @@
          (let [lbls (or (:labels (fetch-meta typ)) (user-attribute-names (fetch-schema typ)))]
            {typ (into {} (mapv (fn [k] [k (k inst)]) lbls))}))
        inst)))
+
+(defn- rewrite-unique-in-rules [uq-rules inst]
+  (let [attr-names (set (keys inst))]
+    (w/prewalk
+     #(if (vector? %)
+        (loop [xs %, result []]
+          (if-let [x (first xs)]
+            (if (some #{x} attr-names)
+              (recur (rest xs) (conj result x (x inst)))
+              (recur (rest xs) (conj result x)))
+            (vec result)))
+        %)
+     uq-rules)))
+
+(defn unique-in
+  ([entity-name inst]
+   (when-let [uq (:unique-in (fetch-meta entity-name))]
+     (if inst
+       (rewrite-unique-in-rules uq inst)
+       uq)))
+  ([entity-name] (unique-in entity-name nil)))

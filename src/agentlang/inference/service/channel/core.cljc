@@ -8,9 +8,8 @@
 
 (defn channel-agent-name [ch]
   (let [n (:name ch)]
-    (when-not (= 2 (count (li/split-path n)))
-      (u/throw-ex (str "Not a valid channel-name: " n)))
-    (u/keyword-as-string n)))
+    (when (= 2 (count (li/split-path n)))
+      (u/keyword-as-string n))))
 
 ;; The argument-map of `channel-start` should contain the following keys:
 ;; :channel-type - [keyword]
