@@ -159,6 +159,24 @@
 
 (defn get-feature-prompt [ft] (get feature-set ft ""))
 
+(defn notify-channel [ch-type ch-name msg]
+  (ch/channel-send {:channel-type (u/string-as-keyword ch-type)
+                    :name ch-name
+                    :message msg}))
+
+(event
+ :Agentlang.Core/NotifyChannel
+ {:ChannelType :String
+  :ChannelName :String
+  :Message :String})
+
+(dataflow
+ :Agentlang.Core/NotifyChannel
+ [:call '(agentlang.inference.service.model/notify-channel
+          :Agentlang.Core/NotifyChannel.ChannelType
+          :Agentlang.Core/NotifyChannel.ChannelName
+          :Agentlang.Core/NotifyChannel.Message)])
+
 (record
  :Agentlang.Core/Inference
  {:UserInstruction :String
@@ -326,7 +344,10 @@
          channels (:Channels attrs)
          _ (when (seq channels) (start-channels agent-name (tools/documentation tools tool-components) channels))
          integs (when-let [xs (:Integrations attrs)] (mapv u/keyword-as-string xs))
-         tools (vec (concat tools (flatten (us/nonils (mapv fetch-channel-tools channels)))))
+         tools0 (vec (concat tools (flatten (us/nonils (mapv fetch-channel-tools channels)))))
+         tools (if (seq channels)
+                 (vec (conj tools0 {:name "Agentlang.Core/NotifyChannel"}))
+                 tools0)
          new-attrs
          (-> attrs
              (cond->

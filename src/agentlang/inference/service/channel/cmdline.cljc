@@ -38,3 +38,7 @@
 
 (defmethod ch/channel-shutdown tag [{channel-name :name}]
   (stop channel-name))
+
+(defmethod ch/channel-send tag [{msg :message}]
+  (println msg)
+  true)

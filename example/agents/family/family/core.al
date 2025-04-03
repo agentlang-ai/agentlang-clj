@@ -24,7 +24,9 @@
           :Family.Schema/Siblings
           :Family.Schema/FindSiblings]
   :UserInstruction (str "Based on the user request, either\n"
-                        "1. Create a new Family.\n"
+                        "1. Create a new Family. "
+                        "Also notify the `Family.Core/TeamsChannel` channel of type `teams` that the new family is created, "
+                        "then return the new family.\n"
                         "2. Create a Member and add that Member to a Family.\n"
                         "3. Lookup all Members in a Family.\n"
                         "4. Create a Member as a child of another Member.\n"

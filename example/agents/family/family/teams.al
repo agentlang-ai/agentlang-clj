@@ -203,6 +203,12 @@
               (md/md-to-html-string schema-doc)))
        "</p>"))
 
+(def send-msg-fn (atom nil))
+
+(defmethod ch/channel-send tag [{msg :message}]
+  (when-let [send @send-msg-fn]
+    (and (send msg) true)))
+
 (defmethod ch/channel-start tag [{channel-name :name agent-name :agent
                                   doc :doc schema-doc :schema-doc}]
   (swap! run-flags assoc channel-name true)
@@ -212,6 +218,7 @@
         send-msg (fn [msg]
                    (let  [r (send-message-to-user nil to msg)]
                      (extract-msg-ids r)))]
+    (reset! send-msg-fn send-msg)
     (u/parallel-call
      {:delay-ms 2000}
      (fn []

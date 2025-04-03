@@ -20,11 +20,20 @@
 ;; return a truth value.
 (defmulti channel-start channel-type-tag)
 
-;; The argument-map of `channel-shutdown should contain the following keys:
+;; The argument-map of `channel-shutdown` should contain the following keys:
 ;; :channel-type - [keyword]
 ;; :name - channel-name [string]
 ;; On success, return a truth value.
 (defmulti channel-shutdown channel-type-tag)
+
+;; Send a message over the channel.
+;; The argument-map of `channel-send` should contain the following keys:
+;; :channel-type - [keyword]
+;; :name - channel-name [string]
+;; :message - message to send, usually a text [any]
+;; The argument-map may contain other values as required by the implementation.
+;; On success, return a truth value.
+(defmulti channel-send channel-type-tag)
 
 (def find-agent-by-name
   (memoize
