@@ -172,6 +172,20 @@
   (when-let [app-config (gs/get-app-config)]
     (mapv (partial save-model-config-instance app-config) (cn/model-names))))
 
+(defn- fetch-model-config-declaration [entity-name]
+  (when-let [app-config (gs/get-app-config)]
+    (when-let [rec (entity-name app-config)]
+      (cn/make-instance entity-name rec))))
+
+(defn fetch-model-config-instance [model-name]
+  (let [model-name (if (vector? model-name)
+                     (second model-name)
+                     model-name)]
+    (when-let [ent (cn/model-config-entity model-name)]
+      (let [evt-name (cn/crud-event-name ent :LookupAll)]
+        (or (first (gs/evaluate-dataflow-internal {evt-name {}}))
+            (fetch-model-config-declaration ent))))))
+
 (defn run-appinit-tasks! [evaluator init-data]
   (save-model-config-instances)
   (run-configuration-patterns! evaluator (gs/get-app-config))

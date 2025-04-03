@@ -7,10 +7,11 @@
             [agentlang.component :as cn]
             [agentlang.lang.b64 :as b64]
             [agentlang.datafmt.json :as json]
-            [agentlang.global-state :as gs]
             [agentlang.auth.jwt :as jwt]
             [agentlang.auth.core :as auth]
-            [agentlang.user-session :as sess]))
+            [agentlang.user-session :as sess]
+            [saml20-clj.encode-decode :as encode-decode]
+            [saml20-clj.core :as saml]))
 
 (def ^:private tag :okta)
 
@@ -189,24 +190,30 @@
 (def ^:private user-state-delim "._.")
 
 (defn- make-authorize-url [{domain :domain
-                            auth-server :auth-server
-                            authorize-redirect-url :authorize-redirect-url
-                            server-redirect-host :server-redirect-host
-                            client-id :client-id
-                            no-prompt :no-prompt
-                            scope :scope
-                            user-state :user-state
-                            session-token :session-token}]
-  (let [nonce (str "n-" (us/generate-code 3) "_" (us/generate-code 6))
-        s0 (us/generate-code 10)
-        state (if user-state (str s0 user-state-delim user-state) s0)
-        url0 (str "https://" domain "/oauth2/" auth-server "/v1/authorize?client_id=" client-id
-                  "&response_type=code&scope=" (http/url-encode-plain scope) "&redirect_uri="
-                  (http/url-encode (or server-redirect-host authorize-redirect-url)) "&state=" state "&nonce=" nonce)
-        url (if no-prompt (str url0 "&prompt=none") url0)]
-    [(if session-token
-       (str url "&sessionToken=" session-token)
-       url) state]))
+                       auth-server :auth-server
+                       authorize-redirect-url :authorize-redirect-url
+                       server-redirect-host :server-redirect-host
+                       client-id :client-id
+                       no-prompt :no-prompt
+                       scope :scope
+                       user-state :user-state
+                       session-token :session-token
+                       mode :mode
+                       sso-url :sso-url}]
+  (let [s0 (us/generate-code 10)
+        state (if user-state (str s0 user-state-delim user-state) s0)]
+    (case mode
+      :saml
+      (let [url (str sso-url "?RelayState=" state)]
+        [url state])
+      (let [nonce (str "n-" (us/generate-code 3) "_" (us/generate-code 6))
+            url0 (str "https://" domain "/oauth2/" auth-server "/v1/authorize?client_id=" client-id
+                      "&response_type=code&scope=" (http/url-encode scope) "&redirect_uri="
+                      (http/url-encode (or server-redirect-host authorize-redirect-url)) "&state=" state "&nonce=" nonce)
+            url (if no-prompt (str url0 "&prompt=none") url0)]
+        [(if session-token
+           (str url "&sessionToken=" session-token)
+           url) state]))))
 
 (defn- fetch-tokens [config login-result]
   (let [session-token (:sessionToken login-result)
@@ -267,16 +274,18 @@
                                            :as auth-config}]
   (let [user-state (str (when client-url (b64/encode-string client-url)) user-state-delim
                         (when server-redirect-host (b64/encode-string server-redirect-host)))
-        auth-config (assoc auth-config :user-state user-state)]
+        auth-config (assoc auth-config :user-state user-state)
+        redirect-url (first (make-authorize-url auth-config))]
     (if-let [sid (auth/cookie-to-session-id auth-config cookie)]
       (do
         (log/debug (str "auth/authenticate-session with cookie " sid))
         (if (sess/lookup-session-cookie-user-data sid)
           {:status :redirect-found
            :location client-url}
-          {:status :redirect-found}))
+          {:status :redirect-found
+           :location redirect-url}))
       {:status :redirect-found
-       :location (first (make-authorize-url auth-config))})))
+       :location redirect-url})))
 
 (defn- cleanup-roles [roles default-role]
   (let [roles (if (vector? roles)
@@ -292,21 +301,40 @@
       (b64/decode-to-string st))))
 
 (defn client-url-from-state [state]
-  (get-nth-state state 1))
+  (when state
+    (get-nth-state state 1)))
 
 (defn server-redirect-host-from-state [state]
   (get-nth-state state 2))
 
+(defn- validate-callback-user [auth-config session-id params]
+  (case (:mode auth-config)
+    :saml
+    (let [saml-resp (get-in params [:params "SAMLResponse"])
+          result (-> saml-resp
+                     encode-decode/base64->str
+                     saml/->Response
+                     (saml/validate
+                      (:saml-certificate auth-config)
+                      nil {:acs-url (:authorize-redirect-url auth-config)})
+                     saml/assertions
+                     first)
+          user (get-in result [:name-id :value])]
+      [result {:username user}])
+    (let [server-redirect-host (server-redirect-host-from-state (:state params))
+          tokens (code-to-tokens (assoc auth-config :server-redirect-host server-redirect-host) (:code params))
+          result {:authentication-result (us/snake-to-kebab-keys tokens)}
+          auth-status (auth/verify-token auth-config [[session-id result] nil])]
+      [result auth-status])))
+
 (defmethod auth/handle-auth-callback tag [{client-url :client-url args :args :as auth-config}]
   (let [request (:request args)
         current-sid (cookie-to-sid (get-in request [:headers "cookie"]))
-        params (http/form-decode (:query-string request))
-        server-redirect-host (server-redirect-host-from-state (:state params))
-        tokens (code-to-tokens (assoc auth-config :server-redirect-host server-redirect-host) (:code params))
+        params (or (:params args) (when-let [qs (:query-string request)] (http/form-decode qs)))
         session-id (or current-sid (u/uuid-string))
-        result {:authentication-result (us/snake-to-kebab-keys tokens)}
-        auth-status (auth/verify-token auth-config [[session-id result] nil])
-        client-url (or (client-url-from-state (:state params)) client-url)
+        state (or (:state params) (get-in params [:params "RelayState"])) 
+        client-url (or (client-url-from-state state) client-url)
+        [result auth-status] (validate-callback-user auth-config session-id params)
         user (:username auth-status)]
     (log/debug (str "auth/handle-auth-callback returning session-cookie " session-id " to " client-url))
     (when-not (sess/ensure-local-user

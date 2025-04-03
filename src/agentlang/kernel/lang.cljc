@@ -175,6 +175,32 @@
    :id true,
    :default 1,
    :read-only true}})
+(entity
+ :Agentlang.Kernel.Lang/AuthConfig
+ {:meta {:inherits :Agentlang.Kernel.Lang/Config}
+  :Service            {:type :Keyword :optional true}
+  :Mode               {:type :Keyword :optional true}
+  :SsoUrl             {:type :String :optional true}
+  :AuthorizeRedirectUrl {:type :String :optional true}
+  :SamlCertificate    {:type :String :optional true}
+  :CookieDomain       {:type :String :optional true}
+  :CookieTtlMs        {:type :Int :default 1209600000}
+  :ClientUrl          {:type :String :optional true}
+  :SuperuserEmail     {:type :String :optional true}
+  :Domain             {:type :String :optional true}
+  :AuthServer         {:type :String :default "default"}
+  :ClientId           {:type :String :optional true}
+  :ClientSecret       {:type :String :optional true}
+  :ApiToken           {:type :String :optional true}
+  :Scope              {:type :String :default "openid offline_access"}
+  :Introspect         {:type :Boolean :default true}
+  :RoleClaim          {:type :Keyword :default :roles}
+  :DefaultRole        {:type :String :default "user"}
+  :Whitelist          {:type :Boolean :default false}
+  :DisableUserSessions {:type :Boolean :default false}
+  :UserPoolId         {:type :String :optional true}
+  :AccessKey          {:type :String :optional true}
+  :Region             {:type :String :optional true}})
 (defn- http-response? [x] (and (map? x) (int? (:status x))))
 (record
  :Agentlang.Kernel.Lang/Response
