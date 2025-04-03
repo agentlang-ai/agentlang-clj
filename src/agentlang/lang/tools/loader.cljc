@@ -179,7 +179,7 @@
 
      (defn evaluate-expression [exp]
        (when (component? exp)
-         (eval `(ns ~(component-name-as-ns (second exp))))
+         (eval `(ns ~(tu/component-name-as-ns (second exp))))
          (use-lang)
          (let [spec (component-spec exp)]
            (do-clj-imports (:clj-import spec))
