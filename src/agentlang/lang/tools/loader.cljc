@@ -117,9 +117,6 @@
     `(~'pattern ~pat)
     pat))
 
-(defn- component-name-as-ns [cn]
-  (symbol (s/lower-case (subs (str cn) 1))))
-
 #?(:clj
    (do
      (def ^:dynamic *parse-expressions* true)
@@ -182,12 +179,12 @@
 
      (defn evaluate-expression [exp]
        (when (component? exp)
-         (eval `(ns ~(component-name-as-ns (second exp))))
+         (eval `(ns ~(tu/component-name-as-ns (second exp))))
          (use-lang)
          (let [spec (component-spec exp)]
            (do-clj-imports (:clj-import spec))
            (doseq [dep (:refer spec)]
-             (let [dep-ns (component-name-as-ns dep)]
+             (let [dep-ns (tu/component-name-as-ns dep)]
                (require [dep-ns])))))
        (let [exp (maybe-fix-expression exp)]
          (eval exp)))
@@ -212,13 +209,12 @@
             (loop [exp (rdf), raw-exps [], exps []]
               (if (= exp :done)
                 (do
-                  (raw/maybe-intern-component raw-exps) 
+                  (raw/maybe-intern-component raw-exps)
                   exps)
                 (let [exp (fqn exp)]
                   (recur (rdf) (conj raw-exps exp) (conj exps (parser exp))))))
             (finally
-              (u/safe-close reader)))
-          ))
+              (u/safe-close reader)))))
        ([file-name-or-input-stream]
         (read-expressions
          file-name-or-input-stream
@@ -346,6 +342,13 @@
          model-root load-from-resource))
        ([model model-root]
         (load-components-from-model model model-root false)))
+
+     (defn load-test-components [model-name]
+       (when-let [[model model-root] (read-model
+                                      (tu/get-system-model-paths) model-name)]
+         (load-components
+          (mapv script-name-from-component-name (:test-components model))
+          model-root false)))
 
      (defn read-components-from-model [model model-root]
        (binding [*parse-expressions* false]

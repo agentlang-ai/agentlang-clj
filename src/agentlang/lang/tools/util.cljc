@@ -19,6 +19,9 @@
       #(.isDirectory (io/file (repo-dir % n)))
       paths)))
 
+(defn component-name-as-ns [cn]
+  (symbol (s/lower-case (subs (str cn) 1))))
+
 (defn maybe-clone-model [spec paths]
   (when (map? spec)
     #?(:clj

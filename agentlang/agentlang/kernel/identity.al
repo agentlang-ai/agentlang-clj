@@ -53,7 +53,8 @@
  :SessionCookie
  {:Id {:type :String :id true}
   :UserData :Any
-  :CreatedTimeMillis :Int64})
+  :CreatedTimeMillis :Int64
+  :TtlMs {:type :Int64 :default 3600000}})
 
 (dataflow
  :LookupSessionCookie

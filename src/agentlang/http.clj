@@ -35,7 +35,9 @@
             [ring.middleware.params :refer [wrap-params] :as params]
             [ring.middleware.keyword-params :refer [wrap-keyword-params]]
             [ring.middleware.nested-params :refer [wrap-nested-params]]
-            [drawbridge.core :as drawbridge])
+            [drawbridge.core :as drawbridge]
+            [agentlang.util.seq :as us]
+            [agentlang.util.runtime :as ur])
   (:use [compojure.core :only [DELETE GET POST PUT routes ANY]]
         [compojure.route :only [not-found]]))
 
@@ -901,19 +903,22 @@
 (defn- process-auth [[auth-config _] request]
   (log-request "Auth request" request)
   (let [cookie (get-in request [:headers "cookie"])
-        query-params (when-let [s (:query-string request)] (uh/form-decode s))]
+        query-params (when-let [s (:query-string request)] (uh/form-decode s))
+        client-url (or (:origin query-params) (:client-url auth-config))
+        server-redirect-host (or (:server_redirect_host query-params) (:server-redirect-host auth-config))]
     (auth-response
      (auth/authenticate-session (assoc auth-config
                                        :cookie cookie
-                                       :client-url (:origin query-params)
-                                       :server-redirect-host (:server_redirect_host query-params))))))
+                                       :client-url client-url
+                                       :server-redirect-host server-redirect-host)))))
 
 (defn- process-auth-callback [call-post-signup [auth-config _] request]
   (log-request "Auth-callback request" request)
   (auth-response
    (auth/handle-auth-callback
     (assoc auth-config :args {:call-post-signup call-post-signup
-                              :request request}))))
+                              :request request
+                              :params (params/params-request request)}))))
 
 (defn- make-magic-link [username op payload description expiry]
   (let [hskey (u/getenv "AGENTLANG_HS256_KEY")]
@@ -1043,7 +1048,7 @@
            (POST uh/dynamic-eval-prefix [] (:eval handlers))
            (POST uh/ai-prefix [] (:ai handlers))
            (GET uh/auth-prefix [] (:auth handlers))
-           (GET uh/auth-callback-prefix [] (:auth-callback handlers))
+           (ANY uh/auth-callback-prefix [] (:auth-callback handlers))
            (POST uh/register-magiclink-prefix [] (:register-magiclink handlers))
            (GET uh/get-magiclink-prefix [] (:get-magiclink handlers))
            (POST uh/preview-magiclink-prefix [] (:preview-magiclink handlers))
@@ -1094,7 +1099,11 @@
   (some #{(:service auth)} [:keycloak :cognito :okta :dataflow]))
 
 (defn make-auth-handler [config]
-  (let [auth (:authentication config)
+  (let [auth-config-entity (when-let [inst (ur/fetch-model-config-instance :Agentlang)]
+                             (-> inst
+                                 (dissoc :type-*-tag-*- :-*-type-*- :id :__instmeta__)
+                                 us/camel-to-kebab-keys))
+        auth (merge auth-config-entity (:authentication config))
         auth-check (if auth (partial handle-request-auth auth) (constantly false))]
     [auth auth-check]))
 

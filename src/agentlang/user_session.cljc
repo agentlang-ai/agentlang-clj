@@ -60,9 +60,12 @@
    {:Agentlang.Kernel.Identity/Create_SessionCookie
     {:Instance
      {:Agentlang.Kernel.Identity/SessionCookie
-      {:Id (normalize-sid sid)
-       :UserData user-data
-       :CreatedTimeMillis #?(:clj (System/currentTimeMillis) :cljs 0)}}}}))
+      (merge
+       {:Id (normalize-sid sid)
+        :UserData user-data
+        :CreatedTimeMillis #?(:clj (System/currentTimeMillis) :cljs 0)}
+       (when-let [ttl (get-in user-data [:authentication-result :expires-in])]
+         {:TtlMs (* 1000 ttl)}))}}}))
 
 (defn session-cookie-delete [sid]
   (evaluate-dataflow-internal

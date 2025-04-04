@@ -209,6 +209,16 @@
                 a-map)]
     (into {} r)))
 
+(defn camel-to-kebab-keys [a-map]
+  (let [r (map (fn [[k v]]
+                 [(-> k name
+                      (s/replace #"([A-Z])([A-Z][a-z])" "$1-$2")
+                      (s/replace #"([a-z])([A-Z])" "$1-$2")
+                      s/lower-case
+                      keyword) v])
+               a-map)]
+    (into {} r)))
+
 (defn flatten-map [obj]
   (if (map? obj)
     (vec (apply concat obj))

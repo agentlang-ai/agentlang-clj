@@ -9,7 +9,8 @@
 
 (agentlang.lang/model
  {:name :Agentlang,
-  :agentlang-version "current",
+  :agentlang-version "current" 
+  :config-entity :Agentlang.Kernel.Lang/AuthConfig
   :components
   [:Agentlang.Kernel.Lang
    :Agentlang.Kernel.Identity

@@ -32,7 +32,9 @@
             [agentlang.swagger.docindex :as docindex]
             [agentlang.graphql.generator :as gg]
             [agentlang.util.runtime :as ur]
-            [agentlang.lang.tools.nrepl.core :as nrepl])
+            [agentlang.lang.tools.nrepl.core :as nrepl]
+            [agentlang.lang.tools.util :as tu]
+            [clojure.test :refer [run-tests]])
   (:import [java.util Properties]
            [java.io File]
            [org.apache.commons.exec CommandLine Executor DefaultExecutor])
@@ -75,10 +77,23 @@
           (.execute executor cmd-line))))
     (ur/log-seq! "components" components)))
 
+(defn run-test-command [model-name]
+  (let [components (build/load-model model-name)]
+    (doseq [c components]
+      (clojure.core/refer (tu/component-name-as-ns c)))
+    (if-let [test-components (build/load-test-components model-name)]
+      (doseq [c test-components]
+        (let [res (run-tests (tu/component-name-as-ns c))]
+          (when-not (and (= 0 (:fail res)) (= 0 (:error res)))
+            (System/exit 1))))
+      (do
+        (println "agent test: test component(s) not specified in model")
+        (System/exit 1)))))
+
 (defn generate-graphql-schema [model-name args]
   (let [model-path (first args)]
     (if (build/compiled-model? model-path model-name)
-      (let [components (remove (cn/internal-component-names)
+      (let [components (remove (set (cn/internal-component-names))
                                  (cn/component-names))]
           (doseq [component components]
             (let [comp-name (clojure.string/replace
@@ -201,8 +216,10 @@
   (println "  build MODEL-NAME           Compile a model to produce a standalone application")
   (println "  publish MODEL-NAME TARGET  Publish the model to the target - local, clojars or github")
   (println "  exec MODEL-NAME            Build and run the model as a standalone application")
-  (println "  repl MODEL-NAME            Launch the Agentlang REPL") 
+  (println "  repl MODEL-NAME            Launch the Agentlang REPL")
   (println "  doc MODEL-NAME             Generate OpenAPI and HTML documentation")
+  (println "  test MODEL-NAME            Run tests for a model, given test-component(s) in model file")
+  
   (println "  migrate MODEL-NAME [git/local] [branch/path]          Migrate database given previous version of the app")
   (println)
   (println "The model will be searched in the local directory or under the paths pointed-to by")
@@ -242,12 +259,18 @@
     (print-help)
     (System/exit 0))
   (let [{options :options args :arguments
-         summary :summary errors :errors} (parse-opts args cli-options)
-        [basic-config options] (ur/merge-options-with-config options)]
+         errors :errors} (parse-opts args cli-options)
+        cmd (-> args first keyword)
+        [basic-config options]
+        (if (= cmd :test)
+          [{} options] 
+          (ur/merge-options-with-config options))]
     (when-let [syslog-cfg (get-in basic-config [:logging :syslog])]
       (log/create-syslogger syslog-cfg))
     (when (get-in basic-config [:logging :dev-mode])
       (log/enable-dev-logging!))
+    (when-let [logback-config (get-in basic-config [:logging :logback-config])]
+      (log/apply-custom-logback-config logback-config))
     (initialize)
     (gs/set-app-config! basic-config)
     (cond
@@ -267,6 +290,7 @@
                                                    (run-service
                                                     (ur/read-model-and-config options)
                                                     (agentlang-nrepl-handler (first %) options))))
+                  :test              #(run-test-command %)
                   :doc               #(ur/call-after-load-model (first %) generate-swagger-doc)
                   :migrate           (fn [args]
                                        (let [args (if (= 3 (count args)) args (cons nil args))]
