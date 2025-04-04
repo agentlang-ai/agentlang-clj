@@ -2,7 +2,9 @@
   (:require [agentlang.util :as u]
             [agentlang.lang.internal :as li]
             [agentlang.component :as cn]
-            [agentlang.global-state :as gs]))
+            [agentlang.global-state :as gs]
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])))
 
 (def channel-type-tag :channel-type)
 
@@ -55,5 +57,5 @@
           (str "No input-event defined for agent " agent-name)))
       (str "Agent " agent-name " not found"))
     (catch #?(:clj Exception :cljs :default) ex
-      (.printStackTrace ex)
+      (log/warn (str "failed to send instruction to agent - " #?(:clj (.getMessage ex) :cljs ex)))
       (str "Error invoking agent " agent-name " - " #?(:clj (.getMessage ex) :cljs ex)))))

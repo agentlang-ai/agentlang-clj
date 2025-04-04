@@ -183,7 +183,7 @@
                      model-name)]
     (when-let [ent (cn/model-config-entity model-name)]
       (let [evt-name (cn/crud-event-name ent :LookupAll)]
-        (or (first (gs/evaluate-dataflow-internal {evt-name {}}))
+        (or (first (:result (gs/evaluate-dataflow-internal {evt-name {}})))
             (fetch-model-config-declaration ent))))))
 
 (defn run-appinit-tasks! [evaluator init-data]
