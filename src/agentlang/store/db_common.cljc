@@ -258,9 +258,13 @@
             (execute-stmt-once! % pstmt params))))
     instance))
 
+(defn- dissoc-dynamic [entity-name instance]
+  (apply dissoc instance (cn/dynamic-attributes entity-name)))
+
 (defn upsert-instance [upsert-inst-statement create-mode datasource entity-name instance]
   (upsert-relational-entity-instance
-   upsert-inst-statement create-mode datasource entity-name instance))
+   upsert-inst-statement create-mode datasource entity-name
+   (dissoc-dynamic entity-name instance)))
 
 (def create-instance (partial upsert-instance create-inst-statement true))
 (def update-instance (partial upsert-instance update-inst-statement false))

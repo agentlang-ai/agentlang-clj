@@ -1100,6 +1100,7 @@
 
 (defn make-auth-handler [config]
   (let [auth-config-entity (when-let [inst (ur/fetch-model-config-instance :Agentlang)]
+                             (u/pprint inst)
                              (-> inst
                                  (dissoc :type-*-tag-*- :-*-type-*- :id :__instmeta__)
                                  us/camel-to-kebab-keys))

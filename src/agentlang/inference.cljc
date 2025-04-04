@@ -57,7 +57,10 @@
 (defn run-inference-for-event [event agent-instance]
   (when-not agent-instance (u/throw-ex (str "Agent not initialized for " event)))
   (log/debug (str "Processing response for inference " (cn/instance-type event) " - " (u/pretty-str agent-instance)))
-  (let [updated-instruction (s/trim
+  (let [agent-instance (if-not (:Context agent-instance)
+                         (assoc agent-instance :Context event)
+                         agent-instance)
+        updated-instruction (s/trim
                              (str (or (maybe-feature-instruction agent-instance) "")
                                   "\n"
                                   (if (model/planner-agent? agent-instance)
@@ -75,3 +78,5 @@
         r1 (if (string? r0) (edn/read-string r0) r0)
         r2 (if-let [f (model/agent-response-handler agent-instance)] (f r1) r1)]
     (if (vector? r2) (first r2) r2)))
+
+(gs/set-run-inference-fn! run-inference-for-event)

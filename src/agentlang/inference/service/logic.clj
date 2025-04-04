@@ -38,9 +38,6 @@
   (let [[app-uuid tag type] (s/split (:Id instance) #"__")]
     {:app-uuid app-uuid :tag tag :type type}))
 
-(defn- log-trigger-agent! [instance]
-  (log/info (str "Triggering " (:Type instance) " agent - " (:Name instance))))
-
 (defn- format-as-agent-response [agent-instance result]
   ;; TODO: response parsing should also move to agent-registry,
   ;; one handler will be needed for each type of agent.
@@ -76,7 +73,6 @@
        agent-documents-limit))))
 
 (defn handle-chat-agent [instance]
-  (log-trigger-agent! instance)
   (p/call-with-provider
    (model/ensure-llm-for-agent instance)
    #(let [ins (:UserInstruction instance)
@@ -88,37 +84,6 @@
 (defn handle-agent-gen-agent [instance]
   (let [s (str (:UserInstruction instance) "\nGenerate an agent with `core.al` file contents and `model.al` file contents.\n")]
     (handle-chat-agent (assoc instance :UserInstruction s))))
-
-(defn- start-chat [agent-instance]
-  ;; TODO: integrate messaging resolver
-  (println (str (:Name agent-instance) ": " (:UserInstruction agent-instance)))
-  (:ChatUuid agent-instance))
-
-(defn- get-next-chat-message [_]
-  ;; TODO: integrate messaging resolver
-  (print " ? ")
-  (flush)
-  (read-line))
-
-(defn- make-chat-completion [instance]
-  (let [agent-name (:Name instance)
-        chat-id (start-chat instance)]
-    (loop [iter 0, instance instance]
-      (if (< iter 5)
-        (let [[result _ :as r] (provider/make-completion instance)
-              chat-session (model/lookup-agent-chat-session instance)
-              msgs (:Messages chat-session)]
-          (log/debug (str "Response " iter " from " agent-name " - " result))
-          (if (= \{ (first (s/trim result)))
-            (do (println (str agent-name ": Thanks, your request is queued for processing."))
-                r)
-            (do (println (str agent-name ": " result))
-                (model/update-agent-chat-session
-                 chat-session
-                 (vec (concat msgs [{:role :user :content (get-next-chat-message chat-id)}])))
-                (recur (inc iter) (if (zero? iter) (dissoc instance :UserInstruction) instance)))))
-        (do (println (str agent-name ": session expired"))
-            [(json/encode {:error "chat session with agent " agent-name " has expired."}) "agentlang"])))))
 
 (defn- format-planner-result [r]
   (cond
@@ -175,7 +140,6 @@
            (str "You can use these additional definitions:\n" tools "\n\n" ins))))
 
 (defn handle-planner-agent [instance]
-  (log-trigger-agent! instance)
   (let [deleg-events (su/nonils (mapv #(when-let [s (:Input %)] (keyword s)) (model/find-agent-delegates instance)))
         instance (if (seq deleg-events)
                    (add-delegates-as-tools instance deleg-events)
@@ -204,6 +168,23 @@
            model-name])
       :else
       [result model-name])))
+
+(defn handle-interactive-planner-agent [instance]
+  (let [nm (:Name instance)
+        ins (or (get-in instance [:Context :UserInstruction]) (:UserInstruction instance))
+        [resp model :as r] (handle-chat-agent instance)]
+    (log/debug (str "Interactive agent " nm " input: " ins))
+    (log/debug (str "Interactive agent " nm " reply: " resp))
+    (if-let [idx (s/index-of resp "OK")]
+      (if-let [delegate (keyword (first (:Delegates instance)))]
+        (let [ins (s/trim (subs resp (+ idx 2)))]
+          (try
+            [(:result (gs/evaluate-pattern {delegate {:UserInstruction ins}})) model]
+            (catch Exception ex
+              (log/error ex)
+              (.getMessage ex))))
+        r)
+      r)))
 
 (defn handle-ocr-agent [instance]
   (p/call-with-provider

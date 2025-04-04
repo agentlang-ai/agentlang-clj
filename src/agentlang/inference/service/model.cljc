@@ -22,6 +22,8 @@
             [agentlang.global-state :as gs]
             [agentlang.inference.service.planner :as planner]
             [agentlang.inference.service.agent-gen :as agent-gen]
+            [agentlang.inference.service.tools :as tools]
+            [agentlang.inference.service.channel.core :as ch]
             #?(:clj [agentlang.connections.client :as connections])
             #?(:clj [agentlang.util.logger :as log]
                :cljs [agentlang.util.jslogger :as log])))
@@ -153,8 +155,30 @@
 
 (def ^:private has-planner? (partial has-feature? "planner"))
 (def ^:private has-ocr? (partial has-feature? "ocr"))
+(def ^:private has-interactive? (partial has-feature? "interactive"))
 
 (defn get-feature-prompt [ft] (get feature-set ft ""))
+
+(defn notify-channel [ch-type ch-name msg data]
+  (ch/channel-send {:channel-type (u/string-as-keyword ch-type)
+                    :name ch-name
+                    :message msg
+                    :data data}))
+
+(event
+ :Agentlang.Core/NotifyChannel
+ {:ChannelType :String
+  :ChannelName :String
+  :Message :String
+  :Data {:type :Any :optional true}})
+
+(dataflow
+ :Agentlang.Core/NotifyChannel
+ [:call '(agentlang.inference.service.model/notify-channel
+          :Agentlang.Core/NotifyChannel.ChannelType
+          :Agentlang.Core/NotifyChannel.ChannelName
+          :Agentlang.Core/NotifyChannel.Message
+          :Agentlang.Core/NotifyChannel.Data)])
 
 (record
  :Agentlang.Core/Inference
@@ -170,23 +194,19 @@
   :UserInstruction {:type :String :optional true}
   :ToolComponents {:check tool-components-list? :optional true}
   :Input {:type :String :optional true}
-  :Context {:type :Map :optional true}
+  :Context {:type :Map :optional true :dynamic true}
   :Response {:type :Any :read-only true}
   :Integrations {:listof :String :optional true}
   :Delegates {:listof :String :optional true}
   :Channels {:listof :Any :optional true}
   :CacheChatSession {:type :Boolean :default true}})
 
-(dataflow
- :Agentlang.Core/FindAgentByName
- {:Agentlang.Core/Agent {:Name? :Agentlang.Core/FindAgentByName.Name} :as [:A]}
- :A)
-
 (defn- agent-of-type? [typ agent-instance]
   (= typ (:Type agent-instance)))
 
 (def ocr-agent? (partial agent-of-type? "ocr"))
 (def planner-agent? (partial agent-of-type? "planner"))
+(def interactive-planner-agent? (partial agent-of-type? "interactive-planner"))
 (def agent-gen-agent? (partial agent-of-type? "agent-gen"))
 
 (defn- eval-event
@@ -202,11 +222,6 @@
 (defn- eval-internal-event [event & args]
   (gs/kernel-call
    #(apply eval-event (cn/make-instance event) args)))
-
-(defn force-find-agent-by-name [agent-name]
-  (eval-internal-event
-   {:Agentlang.Core/FindAgentByName
-    {:Name (u/keyword-as-string agent-name)}}))
 
 (defn- preproc-agent-tools-spec [tools]
   (when tools
@@ -264,49 +279,82 @@
     (when (get-in (cn/fetch-model channel) [:channel :subscriptions])
       (register-subscription-event channel input))))
 
-(defn- preproc-agent-delegates [delegs]
+(defn- preproc-kws-vect [delegs]
   (when (seq delegs)
     (mapv u/keyword-as-string delegs)))
 
+(def ^:private preproc-agent-delegates preproc-kws-vect)
+(def ^:private preproc-agent-tool-components preproc-kws-vect)
+
 (defn- maybe-cast-to-planner [attrs]
-  (cond
-    (= :planner (u/string-as-keyword (:Type attrs)))
-    attrs
+  (let [tp (u/string-as-keyword (:Type attrs))]
+    (cond
+      (or (= :planner tp) (= :interactive-planner tp))
+      attrs
 
-    (or (seq (:Tools attrs))
-        (seq (:Delegates attrs)))
-    (assoc attrs :Type :planner)
+      (seq (:Features attrs))
+      (let [fs (:Features attrs)]
+        (cond
+          (has-planner? fs)
+          (if (has-interactive? fs)
+            (assoc attrs :Type :interactive-planner)
+            (assoc attrs :Type :planner))
 
-    (seq (:Features attrs))
-    (let [fs (:Features attrs)]
-      (cond
-        (has-planner? fs)
-        (assoc attrs :Type :planner)
-        (has-ocr? fs)
-        (assoc attrs :Type :ocr)
-        :else attrs))
+          (has-ocr? fs)
+          (assoc attrs :Type :ocr)
 
-    :else attrs))
+          (has-interactive? fs)
+          (assoc attrs :Type :interactive-planner)
+
+          :else attrs))
+
+      (or (seq (:Tools attrs))
+          (seq (:Delegates attrs)))
+      (assoc attrs :Type :planner)
+
+      :else attrs)))
+
+(defn- maybe-start-channel [agent-name tool-docs ch]
+  (when (map? ch)
+    (when (not= :default (ch/channel-type-tag ch))
+      (ch/channel-start (assoc ch :schema-doc tool-docs :agent (or (ch/channel-agent-name ch) agent-name)))))
+  ch)
+
+(defn- start-channels [agent-name tool-docs channels]
+  (mapv (partial maybe-start-channel agent-name tool-docs) channels))
+
+(def ^:private agent-info-cache (atom {}))
+
+(defn- cache-agent-info [agent-name tools llm]
+  (swap! agent-info-cache assoc agent-name [tools llm]))
 
 (ln/install-standalone-pattern-preprocessor!
  :Agentlang.Core/Agent
  (fn [pat]
    (let [attrs (maybe-cast-to-planner (li/record-attributes pat))
          nm (:Name attrs)
+         agent-name (u/keyword-as-string nm)
          input (preproc-agent-input-spec nm (:Input attrs))
-         tools (preproc-agent-tools-spec (:Tools attrs))
+         tools0 (:Tools attrs)
+         tools (preproc-agent-tools-spec tools0)
          delegates (preproc-agent-delegates (:Delegates attrs))
+         tool-components (preproc-agent-tool-components (:ToolComponents attrs))
          features (when-let [ftrs (:Features attrs)] (mapv u/keyword-as-string ftrs))
          tp (:Type attrs)
          llm (or (:LLM attrs) {:Type "openai"})
+         _ (cache-agent-info agent-name tools0 llm)
          docs (:Documents attrs)
          channels (:Channels attrs)
+         _ (when (seq channels) (start-channels agent-name (tools/documentation tools tool-components) channels))
          integs (when-let [xs (:Integrations attrs)] (mapv u/keyword-as-string xs))
-         tools (vec (concat tools (flatten (us/nonils (mapv fetch-channel-tools channels)))))
+         tools0 (vec (concat tools (flatten (us/nonils (mapv fetch-channel-tools channels)))))
+         tools (if (seq channels)
+                 (vec (conj tools0 {:name "Agentlang.Core/NotifyChannel"}))
+                 tools0)
          new-attrs
          (-> attrs
              (cond->
-                 nm (assoc :Name (u/keyword-as-string nm))
+                 nm (assoc :Name agent-name)
                  input (assoc :Input input)
                  tools (assoc :Tools tools)
                  delegates (assoc :Delegates delegates)
@@ -314,13 +362,15 @@
                  tp (assoc :Type (u/keyword-as-string tp))
                  features (assoc :Features features)
                  integs (assoc :Integrations integs)
-                 channels (assoc :Channels (mapv name channels))
+                 channels (assoc :Channels channels)
+                 tool-components (assoc :ToolComponents tool-components)
                  llm (assoc :LLM (u/keyword-as-string llm))))]
      (when (seq channels)
        (maybe-register-subscription-handlers! channels (keyword input)))
      (assoc pat :Agentlang.Core/Agent
             (cond
               (planner-agent? new-attrs) (planner/with-instructions new-attrs)
+              (interactive-planner-agent? new-attrs) (planner/with-interactive-instructions new-attrs)
               (agent-gen-agent? new-attrs) (agent-gen/with-instructions new-attrs)
               :else new-attrs)))))
 
@@ -338,10 +388,42 @@
         (inference n {:agent (:Name agent)}))))
   agent)
 
+(defn- maybe-assoc-channel-name [ch agent-name]
+  (if (:name ch)
+    ch
+    (assoc ch :name (u/string-as-keyword agent-name))))
+
+(defn maybe-create-channel-agents [agent]
+  (when (planner-agent? agent)
+    (doseq [ch (:Channels agent)]
+      (when-let [helper-agent-name (ch/channel-agent-name ch)]
+        (let [[tools llm] (get @agent-info-cache (:Name agent))
+              ins (str "Analyse requests based on the definition(s) of " (s/join ", " tools) ".\n")
+              _ (preproc-agent-input-spec helper-agent-name nil)
+              result (try
+                       (:result (gs/evaluate-pattern
+                                 {:Agentlang.Core/Agent
+                                  (planner/with-interactive-instructions
+                                    {:Name helper-agent-name
+                                     :LLM (u/keyword-as-string llm)
+                                     :Type "interactive-planner"
+                                     :Channels [(maybe-assoc-channel-name ch helper-agent-name)]
+                                     :Delegates [(u/keyword-as-string (:Name agent))]
+                                     :UserInstruction ins
+                                     :Input helper-agent-name
+                                     :Tools (preproc-agent-tools-spec tools)
+                                     :ToolComponents (:ToolComponents agent)})}))
+                       (catch #?(:clj Exception :cljs :default) ex
+                         (log/warn #?(:clj (.getMessage ex) :cljs ex))
+                         nil))]
+          (when (and result (not (cn/instance-of? :Agentlang.Core/Agent result)))
+            (log/warn (str "Failed to create channel agent " helper-agent-name)))))))
+  agent)
+
 (dataflow
  [:before :create :Agentlang.Core/Agent]
  [:call '(agentlang.inference.service.model/maybe-input-as-inference :Instance)]
- :Instance)
+ [:call '(agentlang.inference.service.model/maybe-create-channel-agents :Instance)])
 
 (def ^:private agent-callbacks (atom nil))
 

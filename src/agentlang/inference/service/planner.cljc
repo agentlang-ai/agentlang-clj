@@ -387,6 +387,69 @@
               "These are the application specific entity and event definitions shared by the user:\n\n" (agent-tools-as-definitions instance)
               "Additional application specific instructions from the user follows:\n\n" (:UserInstruction instance))))
 
+(def ^:private generic-interactive-planner-instructions
+  (str "You are provided with the model of an application as entities, relationships and events. Entities define the schema of business objects."
+       "Relationships define hierarchical (:contains) and two-way (:between) connections between entities." 
+       "Events trigger various business workflows.\nBased on the model analyse a user request. If the request is valid "
+       "in the context of the model, reply \"OK <complete-valid-instruction>\". Otherwise, state what additional input is required from the user. "
+       "Consider the following example model of a School application:\n"
+       (u/pretty-str
+        '(entity
+          :School.Core/School
+          {:Name {:type :String :id true}
+           :Address :String}))
+       "\n"
+       (u/pretty-str
+        '(entity
+          :School.Core/Teacher
+          {:FirstName :String
+           :LastName :String
+           :Sex {:oneof ["male" "female"]}
+           :Age {:type :Int :optional true}
+           :Email {:type :Email :unique true}
+           :Id {:type :Int :id true}}))
+       "\n"
+       (u/pretty-str
+        '(relationship
+          :School.Core/SchoolTeacher
+          {:meta {:contains {:School.Core/School :School.Core/Teacher}}}))
+       "\n"
+       (u/pretty-str
+        '(entity
+          :School.Core/Course
+          {:CourseName {:type :String :id true}}))
+       "\n"
+       (u/pretty-str
+        '(relationship
+          :School.Core/TeacherCourse
+          {:meta {:doc "Assign a teacher to a course."
+                  :between {:School.Core/Teacher :School.Core/Course}}}))
+       "\n\n"
+       "Now for instance, if the user instruction is: \"Create a new teacher named James Thomas, aged 25\", you should reply - "
+       "\"To create a teacher, the Id, Sex and Email attributes are mandatory. You provided only the FirstName and LastName attributes.\"\n"
+       "As another example, if the user instruction is: \"Create a new course with name `Basics of Computation`\", then you must reply "
+       "\"OK Create a new course named `Basics of Computation`\", because all information required to create the course is contained "
+       "in the user-instruction.\n"
+       "If you get an instruction like \"Assign course `Genetics` to teacher `James Thomas`\", you must reply \"Teacher's email is required "
+       "to assign course\". This is because a course assignment is acheieved via the TeacherCourse :between relationship. Creating a :between "
+       "relationship requires the `:id` attribute values of both entities involved. In this case, the `:id` values required are :Course.CourseName "
+       "and :Teacher.Email. The user might reply, \"The teacher's email is james@school.org\", for this you must reply \"OK Assign "
+       "course `Genetics` to teacher james@school.org\". Otherwise, if the instruction was "
+       "\"Assign course `Genetics` to teacher james@abc.com\", then you must reply \"OK Assign course `Genetics` to teacher james@abc.com\".\n"
+       "For establishing a :contains relationship, the `:id` value of the parent entity and the complete attribute values of the child entity are "
+       "required. For example, a valid request to create a new teacher under a school could is \"Add teacher Jacob John under the shool `St. Matthews`."
+       "The other details of the new teacher are: Id=101, Age=25, Email=jj@stmatthews.edu and Sex=male\".\n"
+       "You may also receive requests to lookup, update and delete entities by various attribute-values. In these cases, unlike the `create` scenarios "
+       "we discussed above, not all attributes are needed. Return an `OK` response, if the provided attributes look reasonable.\n"
+       "For lookup or updates via a relationship, the `:id` attribute value will be required.\n"
+       "Based on the above instructions, respond to user-instructions on the application specific model that follows.\n\n"))
+
+(defn with-interactive-instructions [instance]
+  (assoc instance :UserInstruction
+         (str generic-interactive-planner-instructions
+              "These are the application specific entity, event and dataflow definitions shared by the user:\n\n" (agent-tools-as-definitions instance)
+              "Additional application specific instructions from the user follows:\n\n" (:UserInstruction instance))))
+
 (defn validate-expressions [exprs]
   (doseq [expr (rest exprs)]
     (when-not (or (seqable? expr) (symbol? expr))

@@ -1,3 +1,3 @@
 {:name :Family
  :agentlang-version "current"
- :components [:Family.Core]}
+ :components [:Family.Schema :Family.Teams :Family.Core]}
