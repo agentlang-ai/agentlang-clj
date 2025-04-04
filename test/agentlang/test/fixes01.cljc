@@ -155,3 +155,16 @@
              {:I352Dtu/Lookup_E
               {:path (li/path-attr r1)}}))]
     (is (cn/same-instance? r1 r2))))
+
+(deftest issue-1703-commas-in-ids
+  (defcomponent :I1703
+    (entity
+     :I1703/E
+     {:Id {:type :String :id true}
+      :X :Int}))
+  (let [[cre e?] (tu/make-create :I1703/E)
+        _ (tu/is-error "Comma in Id" #(cre {:Id "101,100" :X 1}))
+        e (cre {:Id "101-100" :X 1})]
+    (is (e? e))
+    (is (= "101-100" (:Id e)))
+    (is (= [":I1703/E" "101-100"] (li/path-to-vec (li/path-attr e))))))

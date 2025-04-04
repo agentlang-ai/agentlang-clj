@@ -18,7 +18,8 @@
      (:import [java.io File]
               [java.net MalformedURLException]
               [org.apache.commons.io FilenameUtils]
-              [org.apache.commons.exec CommandLine Executor DefaultExecutor])))
+              [org.apache.commons.exec CommandLine Executor DefaultExecutor]
+              [java.net URLEncoder URLDecoder URI URL IDN])))
 
 (def ^:private on-init-fns (atom []))
 
@@ -506,3 +507,26 @@
      #?(:clj (.start (Thread. f))
         :cljs (f))))
   ([f] (parallel-call nil f)))
+
+(defn url-encode [s]
+  #?(:clj
+     (let [^URL url (URL. s)
+           ^URI uri (URI. (.getProtocol url)
+                          (.getUserInfo url)
+                          (IDN/toASCII (.getHost url))
+                          (.getPort url)
+                          (.getPath url)
+                          (.getQuery url)
+                          (.getRef url))]
+       (.toASCIIString uri))
+     :cljs s))
+
+(defn url-encode-plain [s]
+  #?(:clj
+     (URLEncoder/encode s "UTF-8")
+     :cljs s))
+
+(defn url-decode-plain [s]
+  #?(:clj
+     (URLDecoder/decode s "UTF-8")
+     :cljs s))

@@ -669,3 +669,9 @@
 (defn match-attribute-spec? [x]
   (and (vector? x)
        (= :match (first x))))
+
+(defn validate-id [id]
+  (when (and (string? id)
+             (s/index-of id ","))
+    (u/throw-ex (str "Identity cannot contain the comma character - " id)))
+  id)

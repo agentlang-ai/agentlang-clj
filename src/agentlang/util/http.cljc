@@ -13,8 +13,7 @@
             [agentlang.global-state :as gs]
             #?(:clj [ring.util.codec :as codec])
             #?(:cljs [cljs.core.async :refer [<!]]))
-  #?(:cljs (:require-macros [cljs.core.async.macros :refer [go]]))
-  #?(:clj (:import [java.net URLEncoder URI URL IDN])))
+  #?(:cljs (:require-macros [cljs.core.async.macros :refer [go]])))
 
 #?(:clj
    (alter-var-root #'org.httpkit.client/*default-client* (fn [_] sni-client/default-client)))
@@ -62,23 +61,9 @@
 (def preview-magiclink-prefix "/preview-magiclink")
 (def post-inference-service-question "/post-inference-service-question")
 
-(defn url-encode [s]
-  #?(:clj
-     (let [^URL url (URL. s)
-           ^URI uri (URI. (.getProtocol url)
-                          (.getUserInfo url)
-                          (IDN/toASCII (.getHost url))
-                          (.getPort url)
-                          (.getPath url)
-                          (.getQuery url)
-                          (.getRef url))]
-       (.toASCIIString uri))
-     :cljs s))
-
-(defn url-encode-plain [s]
-  #?(:clj
-     (URLEncoder/encode s)
-     :cljs s))
+(def url-encode u/url-encode)
+(def url-encode-plain u/url-encode-plain)
+(def url-decode-plain u/url-decode-plain)
 
 (defn- remote-resolver-error [response]
   (u/throw-ex (str "remote service error - " (or (:error response) response))))
