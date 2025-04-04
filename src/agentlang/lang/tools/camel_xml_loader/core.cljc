@@ -137,7 +137,6 @@
                       :BeanValues  {:type :Map :default {}}))]
     #?(:clj (log/debug (str "Defining event" ek "with params" ep))
        :cljs (js/console.debug "Defining event" ek "with params" ep))
-    (println "The component name is: " component-name)
     (ln/component component-name)
     (ln/event ek ep)))
 
