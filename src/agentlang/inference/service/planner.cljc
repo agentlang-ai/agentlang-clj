@@ -163,7 +163,12 @@
       pat)))
 
 (defn- parse-fn-call [expr alias]
-  (let [pat [:call (list* (first expr) (mapv parse-ref-or-expr (rest expr)))]]
+  (let [pat
+        (if (seqable? expr)
+          (if (or (string? expr) (vector? expr))
+            [:call (list* 'identity expr)]
+            [:call (list* (first expr) (mapv parse-ref-or-expr (rest expr)))])
+          [:call (list* 'identity expr)])]
     (if alias
       (vec (concat pat [:as alias]))
       pat)))

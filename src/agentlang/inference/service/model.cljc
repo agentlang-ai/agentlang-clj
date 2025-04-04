@@ -159,23 +159,31 @@
 
 (defn get-feature-prompt [ft] (get feature-set ft ""))
 
-(defn notify-channel [ch-type ch-name msg data]
-  (ch/channel-send {:channel-type (u/string-as-keyword ch-type)
-                    :name ch-name
-                    :message msg
-                    :data data}))
+(def ^:private channel-registry (atom []))
+
+(defn- register-channel! [ch]
+  (let [ch (assoc ch :name (u/string-as-keyword (:name ch)))]
+    (swap! channel-registry conj ch)))
+
+(defn- find-channel-in-registry [ch-name]
+  (first (filter #(= ch-name (:name %)) @channel-registry)))
+
+(defn notify-channel [ch-name msg data]
+  (when-let [ch (find-channel-in-registry (u/string-as-keyword ch-name))]
+    (ch/channel-send {:channel-type (:channel-type ch)
+                      :name ch-name
+                      :message msg
+                      :data data})))
 
 (event
  :Agentlang.Core/NotifyChannel
- {:ChannelType :String
-  :ChannelName :String
+ {:ChannelName :String
   :Message :String
   :Data {:type :Any :optional true}})
 
 (dataflow
  :Agentlang.Core/NotifyChannel
  [:call '(agentlang.inference.service.model/notify-channel
-          :Agentlang.Core/NotifyChannel.ChannelType
           :Agentlang.Core/NotifyChannel.ChannelName
           :Agentlang.Core/NotifyChannel.Message
           :Agentlang.Core/NotifyChannel.Data)])
@@ -316,6 +324,7 @@
 
 (defn- maybe-start-channel [agent-name tool-docs ch]
   (when (map? ch)
+    (register-channel! ch)
     (when (not= :default (ch/channel-type-tag ch))
       (ch/channel-start (assoc ch :schema-doc tool-docs :agent (or (ch/channel-agent-name ch) agent-name)))))
   ch)
