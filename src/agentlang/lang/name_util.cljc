@@ -177,6 +177,12 @@
 (defn- fq-preproc-rule-def [exp]
   `(~(symbol "rule") ~(fq-name (second exp)) ~@(mapv #(fq-generic % false) (nthrest exp 2))))
 
+(defn- fq-preproc-schedule-def [exp]
+  (let [nm (fq-name (first exp))
+        spec0 (second exp)
+        spec (assoc spec0 :event (fq-generic (:event spec0)))]
+    `(~(symbol "schedule") ~nm ~spec)))
+
 (defn- fq-preproc-pattern-def [pat-exp]
   (let [orig-exp (second pat-exp)
         exp (fq-generic orig-exp false)]
@@ -195,6 +201,7 @@
    'rule fq-preproc-rule-def
    'dataflow fq-preproc-dataflow-def
    'resolver fq-preproc-record-def
+   'schedule fq-preproc-schedule-def
    'pattern fq-preproc-pattern-def})
 
 (defn fully-qualified-names [declared-names exp]

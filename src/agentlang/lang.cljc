@@ -1271,3 +1271,29 @@
                        [li/call-fn `(~'agentlang.lang/standalone-pattern-error [:q# ~(cleanup-standalone-pattern raw-pat)])])]]
     (gs/install-init-pattern! final-pat)
     (raw/pattern raw-pat)))
+
+(defn- validate-schedule-expiry [[expiry expiry-unit]]
+  (when-not (int? expiry)
+    (u/throw-ex (str expiry " expiry must be an integer")))
+  (when-not (some #{expiry-unit} #{:seconds :minutes :hours :days})
+    (u/throw-ex (str "Invalid expiry-unit " expiry-unit)))
+  [expiry (s/capitalize (name expiry-unit))])
+
+(defn schedule [n {evry :every aftr :after evnt :event}]
+  (when-not (map? evnt)
+    (u/throw-ex (str "Must be an event-instance - " evnt)))
+  (let [[[expiry expiry-unit] restart?]
+        (cond
+          evry
+          [(validate-schedule-expiry evry) true]
+          aftr
+          [(validate-schedule-expiry aftr) false]
+          :else (u/throw-ex (str "schedule must have one of :every or :after specification")))]
+    (u/set-on-init!
+     #(gs/evaluate-pattern
+       {:Agentlang.Kernel.Lang/Timer
+        {:Name (u/keyword-as-string n)
+         :Expiry expiry
+         :ExpiryUnit expiry-unit
+         :ExpiryEvent [:q# evnt]
+         :Restart restart?}}))))

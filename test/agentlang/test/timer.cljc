@@ -5,7 +5,7 @@
             [agentlang.component :as cn]
             [agentlang.lang
              :refer [component attribute event
-                     entity record dataflow]]
+                     entity record dataflow schedule]]
             [agentlang.lang.datetime :as dt]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
@@ -108,3 +108,25 @@
       (is (= @a 2))
       (Thread/sleep 3000)
       (is (= @a 2)))))
+
+(deftest schedule-tests
+  #?(:clj
+     (let [x (atom nil)]
+       (defn set-st-x! [e] (reset! x e))
+       (defcomponent :ST
+         ;; TODO: add more tests, also test the loader
+         (schedule
+          :ST/Timer01
+          {:after [1 :seconds]
+           :event {:ST/Evt {}}})
+         (entity :ST/E {:Id {:type :Int :id true} :X :Int})
+         (dataflow
+          :ST/Evt
+          {:ST/E {:Id 1 :X 100} :as :E}
+          [:call '(agentlang.test.timer/set-st-x! :E)]
+          :E))
+       (u/run-init-fns)
+       (Thread/sleep 2000)
+       (let [e @x]
+         (is (cn/instance-of? :ST/E e))
+         (is (= 100 (:X e)))))))
