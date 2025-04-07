@@ -190,9 +190,9 @@
          (eval exp)))
 
      (defn read-expressions
-  "Read expressions in sequence from a agentlang component file. Each expression read
-   is preprocessed to add component-name prefixes to names. Then the expression is evaluated.
-   Return a list with the results of evaluations."
+      "Read expressions in sequence from a agentlang component file. Each expression read
+       is preprocessed to add component-name prefixes to names. Then the expression is evaluated.
+       Return a list with the results of evaluations."
        ([file-name-or-input-stream declared-names]
         (let [reader (PushbackReader.
                       (InputStreamReader.
@@ -435,7 +435,11 @@
                      (u/throw-ex (str "failed to intern " exp)))
                    (catch js/Object _
                      (let [corrupted-exp (get-corrupted-entity-form (second exp) (first exp))]
-                       (apply intern (rest (fqn corrupted-exp))))))))))))
+                       (apply intern (rest (fqn corrupted-exp)))))))))
+          (loop [xs component-spec exps []]
+           (if-let [x (first xs)]
+             (recur (rest xs) (conj exps (fqn (maybe-preproc-standalone-pattern x))))
+             (raw/intern-component cname `(~(first component-spec) ~@(rest exps))))))))
 
      (defn load-components-from-model [model callback]
        (doseq [c (:components model)]
