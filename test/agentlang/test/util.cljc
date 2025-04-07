@@ -368,3 +368,9 @@
      (defn api-post [ep obj]
        (let [result (http/process-post-request auth-info (make-request ep obj))]
          (format-api-result result)))))
+
+(defmacro make-create [entity-name]
+  (let [evt (cn/crud-event-name entity-name :Create)]
+    `[(fn [attrs#]
+        (invoke {~evt {:Instance {~entity-name attrs#}}}))
+      (partial cn/instance-of? ~entity-name)]))

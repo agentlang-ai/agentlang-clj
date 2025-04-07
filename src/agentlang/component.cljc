@@ -1065,7 +1065,7 @@
 (defn- maybe-assoc-path [recname attrs]
   (if (entity? recname)
     (let [path (li/path-attr attrs)
-          id ((identity-attribute-name recname) attrs)]
+          id (li/validate-id ((identity-attribute-name recname) attrs))]
       (if (li/default-path? path)
         (assoc attrs li/path-attr (str (li/make-path recname) "," id))
         (assoc attrs li/path-attr (maybe-complete-path path id))))
