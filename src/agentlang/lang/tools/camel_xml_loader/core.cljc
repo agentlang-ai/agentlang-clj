@@ -135,8 +135,8 @@
         ep (-> template-params
                (assoc :SleepMillis {:type :Int :default 10000}
                       :BeanValues  {:type :Map :default {}}))]
-    #?(:clj (log/debug (str "Defining event" ek "with params" ep))
-       :cljs (js/console.debug "Defining event" ek "with params" ep))
+    #?(:clj (log/debug (str "Defining event " ek " with params " ep))
+       :cljs (js/console.debug "Defining event " ek " with params " ep))
     (ln/component component-name)
     (ln/event ek ep)))
 
@@ -156,15 +156,15 @@
 
       ;; Register each template as an event
       (doseq [[template-id params] templates]
-        #?(:clj (log/info (str "Registering template as event:" template-id))
-           :cljs (js/console.log "Registering template as event:" template-id))
+        #?(:clj (log/info (str "Registering template as event: " template-id))
+           :cljs (js/console.log "Registering template as event: " template-id))
         (define-event template-id params))
 
       ;; Return all templates
       templates)
     (catch #?(:clj Exception :cljs js/Error) e
       #?(:clj (log/error (str "Failed to parse XML template " e))
-         :cljs (js/console.error "Failed to parse XML template:" e))
+         :cljs (js/console.error "Failed to parse XML template: " e))
       (throw (ex-info "Failed to register XML templates"
                       {:cause #?(:clj (.getMessage e) :cljs (.-message e))}
                       e)))))
@@ -188,8 +188,8 @@
 
       (if params
         (do
-          #?(:clj (log/info (str "Registering template as event:" template-key))
-             :cljs (js/console.log "Registering template as event:" template-key))
+          #?(:clj (log/info (str "Registering template as event: " template-key))
+             :cljs (js/console.log "Registering template as event: " template-key))
           (define-event template-key params)
           {:success true :template-id template-key :params params})
         (let [error-msg (str "Template ID not found in XML: " template-key)]
@@ -199,6 +199,6 @@
     (catch #?(:clj Exception :cljs js/Error) e
       (let [error-msg #?(:clj (.getMessage e) :cljs (.-message e))]
        #?(:clj (log/error (str "Failed to register template " e))
-          :cljs (js/console.error "Failed to register template:" e))
+          :cljs (js/console.error "Failed to register template: " e))
        {:success false
         :error error-msg}))))
