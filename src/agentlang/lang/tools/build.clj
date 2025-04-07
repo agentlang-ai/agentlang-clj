@@ -296,7 +296,8 @@
       (let [model-name (model-name-as-string (:name model))
             cmps (mapv (partial copy-component wr model-name) components)
             rs (write-model-clj wr cmps model)]
-        (apply write-core-clj wr rs)))
+        (apply write-core-clj wr rs))
+      orig-model-name)
     (log/error (str "failed to create clj project for " orig-model-name))))
 
 (defn- normalize-deps-spec [deps]
