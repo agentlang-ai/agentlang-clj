@@ -237,3 +237,6 @@
   (let [sv @s]
     (when (seq sv)
       (reset! s (pop sv)))))
+
+(defn count-of [x xs]
+  (count (filter (partial = x) xs)))

@@ -96,9 +96,18 @@
     (subs s i (inc (s/last-index-of s ")")))
     s))
 
+(defn- fix-parens [s]
+  (let [opns (su/count-of \( s)
+        cls (su/count-of \) s)]
+    (cond
+      (= opns cls) s
+      (< opns cls) (str (apply str (repeat (- cls opns) \()) s)
+      (> opns cls) (str s (apply str (repeat (- opns cls) \)))))))
+
 (defn- normalize-planner-expressions [s]
   (if-let [exprs (if (string? s)
-                   (u/safe-read-string (trim-till-first-expr s))
+                   (u/safe-read-string
+                    (fix-parens (trim-till-first-expr s)))
                    s)]
     (cond
       (planner/maybe-expressions? exprs) exprs
