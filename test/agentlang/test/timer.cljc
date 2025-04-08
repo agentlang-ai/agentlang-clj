@@ -6,6 +6,7 @@
             [agentlang.lang
              :refer [component attribute event
                      entity record dataflow schedule]]
+            [agentlang.lang.raw :as lr]
             [agentlang.lang.datetime :as dt]
             #?(:clj [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
@@ -133,6 +134,20 @@
          (dataflow
           :ST/Evt2
           [:call '(agentlang.test.timer/inc-y)]))
+       (is (= '(do
+                 (component :ST)
+                 (schedule :ST/Timer01 {:after [2 :seconds], :event #:ST{:Evt1 {}}})
+                 (schedule :ST/Timer02 {:every [1 :seconds], :event #:ST{:Evt2 {}}})
+                 (entity :ST/E {:Id {:type :Int, :id true}, :X :Int})
+                 (dataflow
+                  :ST/Evt1
+                  {:ST/E {:Id 1, :X 100}, :as :E}
+                  [:call (agentlang.test.timer/set-st-x! :E)]
+                  :E)
+                 (dataflow :ST/Evt2 [:call (agentlang.test.timer/inc-y)]))
+              (lr/as-edn :ST)))
+       (is (= {:every [1 :seconds], :event #:ST{:Evt2 {}}} (lr/find-schedule :ST/Timer02)))
+       (is (= {:after [2 :seconds], :event #:ST{:Evt1 {}}} (lr/find-schedule :ST/Timer01)))
        (u/run-init-fns)
        (Thread/sleep 3000)
        (is (pos? @y))
