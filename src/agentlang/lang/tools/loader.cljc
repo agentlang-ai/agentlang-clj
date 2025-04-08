@@ -438,7 +438,7 @@
                        (apply intern (rest (fqn corrupted-exp)))))))))
           (loop [xs component-spec exps []]
            (if-let [x (first xs)]
-             (recur (rest xs) (conj exps (fqn (maybe-preproc-standalone-pattern x))))
+             (recur (rest xs) (conj exps (maybe-preproc-standalone-pattern x)))
              (raw/intern-component cname `(~(first component-spec) ~@(rest exps))))))))
 
      (defn load-components-from-model [model callback]
