@@ -293,6 +293,7 @@
 (def find-rule (partial find-definition 'rule))
 (def find-inference (partial find-definition 'inference))
 (def find-resolver (partial find-definition 'resolver))
+(def find-schedule (partial find-definition 'schedule))
 
 (defn find-attribute [n]
   (when-not (li/internal-attribute-name? n)
@@ -330,6 +331,7 @@
 (def rule (partial add-definition 'rule))
 (def inference (partial add-definition 'inference))
 (def resolver (partial add-definition 'resolver))
+(def schedule (partial add-definition 'schedule))
 
 (def ^:private count-patterns (partial count-defs 'pattern))
 
@@ -363,6 +365,7 @@
 (def remove-rule (partial remove-definition 'rule))
 (def remove-inference (partial remove-definition 'inference))
 (def remove-resolver (partial remove-definition 'resolver))
+(def remove-schedule (partial remove-definition 'schedule))
 
 (defn remove-event [event-name]
   (if (vector? event-name) ; pre-post event - e.g: [:after :create :AnEntity]
@@ -381,6 +384,7 @@
     :rule (remove-rule record-name)
     :inference (remove-inference record-name)
     :resolver (remove-resolver record-name)
+    :schedule (remove-schedule record-name)
     :attribute (remove-attribute record-name)))
 
 (defn fetch-attributes [tag record-name]
@@ -398,6 +402,7 @@
 (def fetch-all-rules (partial fetch-all-defs 'rule))
 (def fetch-all-inferences (partial fetch-all-defs 'inference))
 (def fetch-all-resolvers (partial fetch-all-defs 'resolver))
+(def fetch-all-schedules (partial fetch-all-defs 'schedule))
 (def fetch-all-patterns (comp (partial mapv second) (partial fetch-all-defs 'pattern)))
 
 (defn record-attributes-include-inherits [entity-name]

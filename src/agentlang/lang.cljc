@@ -1279,7 +1279,7 @@
     (u/throw-ex (str "Invalid expiry-unit " expiry-unit)))
   [expiry (s/capitalize (name expiry-unit))])
 
-(defn schedule [n {evry :every aftr :after evnt :event}]
+(defn schedule [n {evry :every aftr :after evnt :event :as spec}]
   (when-not (map? evnt)
     (u/throw-ex (str "Must be an event-instance - " evnt)))
   (let [[[expiry expiry-unit] restart?]
@@ -1290,6 +1290,7 @@
           [(validate-schedule-expiry aftr) false]
           :else (u/throw-ex (str "schedule must have one of :every or :after specification")))
         tname (u/keyword-as-string n)]
+    (raw/schedule n spec)
     (u/set-on-init!
      #(try
         (gs/evaluate-dataflow-internal
