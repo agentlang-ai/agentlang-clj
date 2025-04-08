@@ -111,22 +111,31 @@
 
 (deftest schedule-tests
   #?(:clj
-     (let [x (atom nil)]
+     (let [x (atom nil)
+           y (atom 0)]
        (defn set-st-x! [e] (reset! x e))
+       (defn inc-y [] (swap! y inc) @y)
        (defcomponent :ST
-         ;; TODO: add more tests, also test the loader
          (schedule
           :ST/Timer01
-          {:after [1 :seconds]
-           :event {:ST/Evt {}}})
+          {:after [2 :seconds]
+           :event {:ST/Evt1 {}}})
+         (schedule
+          :ST/Timer02
+          {:every [1 :seconds]
+           :event {:ST/Evt2 {}}})
          (entity :ST/E {:Id {:type :Int :id true} :X :Int})
          (dataflow
-          :ST/Evt
+          :ST/Evt1
           {:ST/E {:Id 1 :X 100} :as :E}
           [:call '(agentlang.test.timer/set-st-x! :E)]
-          :E))
+          :E)
+         (dataflow
+          :ST/Evt2
+          [:call '(agentlang.test.timer/inc-y)]))
        (u/run-init-fns)
-       (Thread/sleep 2000)
+       (Thread/sleep 3000)
+       (is (pos? @y))
        (let [e @x]
          (is (cn/instance-of? :ST/E e))
          (is (= 100 (:X e)))))))

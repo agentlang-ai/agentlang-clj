@@ -178,9 +178,9 @@
   `(~(symbol "rule") ~(fq-name (second exp)) ~@(mapv #(fq-generic % false) (nthrest exp 2))))
 
 (defn- fq-preproc-schedule-def [exp]
-  (let [nm (fq-name (first exp))
-        spec0 (second exp)
-        spec (assoc spec0 :event (fq-generic (:event spec0)))]
+  (let [nm (fq-name (second exp))
+        spec0 (nth exp 2)
+        spec (assoc spec0 :event (fq-generic (:event spec0) false))]
     `(~(symbol "schedule") ~nm ~spec)))
 
 (defn- fq-preproc-pattern-def [pat-exp]

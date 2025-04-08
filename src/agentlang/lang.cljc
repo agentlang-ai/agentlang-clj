@@ -1288,12 +1288,19 @@
           [(validate-schedule-expiry evry) true]
           aftr
           [(validate-schedule-expiry aftr) false]
-          :else (u/throw-ex (str "schedule must have one of :every or :after specification")))]
+          :else (u/throw-ex (str "schedule must have one of :every or :after specification")))
+        tname (u/keyword-as-string n)]
     (u/set-on-init!
-     #(gs/evaluate-pattern
-       {:Agentlang.Kernel.Lang/Timer
-        {:Name (u/keyword-as-string n)
-         :Expiry expiry
-         :ExpiryUnit expiry-unit
-         :ExpiryEvent [:q# evnt]
-         :Restart restart?}}))))
+     #(try
+        (gs/evaluate-dataflow-internal
+         [[:delete {:Agentlang.Kernel.Lang/Timer {:Name? tname}}]
+          [:delete :Agentlang.Kernel.Lang/Timer :purge]
+          {:Agentlang.Kernel.Lang/Timer
+           {:Name tname
+            :Expiry expiry
+            :ExpiryUnit expiry-unit
+            :ExpiryEvent [:q# evnt]
+            :Restart restart?}}])
+        (catch #?(:clj Exception :cljs :default) ex
+          (log/error (str "schedule " n " failed: "
+                          #?(:clj (.getMessage ex) :cljs ex))))))))
