@@ -4,7 +4,8 @@
             [clojure.data.xml :as xml]
             [agentlang.lang :as ln]
             #?(:clj [clojure.java.io :as io])
-            #?(:clj [agentlang.util.logger :as log])))
+            #?(:clj [agentlang.util.logger :as log])
+            [agentlang.component :as cn]))
 
 #?(:clj
    (do
@@ -137,7 +138,8 @@
                       :BeanValues  {:type :Map :default {}}))]
     #?(:clj (log/debug (str "Defining event " ek " with params " ep))
        :cljs (js/console.debug "Defining event " ek " with params " ep))
-    (ln/component component-name)
+    (when-not (cn/component-exists? component-name)
+     (ln/component component-name))
     (ln/event ek ep)))
 
 (defn register-xml-templates
