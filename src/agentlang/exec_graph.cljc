@@ -257,7 +257,7 @@
     g))
 
 (defn- graph-as-string [g]
-  (s/replace (pr-str g) "#object" "obj#"))
+  (s/replace (pr-str g) "#object" ""))
 
 (defn save-current-graph []
   (when (exec-graph-enabled?)
