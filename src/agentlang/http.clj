@@ -312,9 +312,15 @@
                  {"post" {"parameters" (cn/encode-expressions-in-schema (cn/event-schema n))}}})
         (cn/event-names component)))
 
+(defn- get-params [request]
+  (or (when (seq (:params request))
+        (:params request))
+      (when-let [s (:query-string request)]
+        (uh/form-decode s))))
+
 (defn- process-meta-request [[_ maybe-unauth] request]
   (or (maybe-unauth request)
-      (let [params (:params request)]
+      (let [params (get-params request)]
         (if-not (seq params)
           (ok {:components (cn/component-names)})
           (let [c (keyword (:component params))]
