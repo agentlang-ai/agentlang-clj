@@ -119,11 +119,11 @@
        (defcomponent :ST
          (schedule
           :ST/Timer01
-          {:after [2 :seconds]
+          {:after {:duration 2 :unit :seconds}
            :event {:ST/Evt1 {}}})
          (schedule
           :ST/Timer02
-          {:every [1 :seconds]
+          {:every {:duration 1 :unit :seconds}
            :event {:ST/Evt2 {}}})
          (entity :ST/E {:Id {:type :Int :id true} :X :Int})
          (dataflow
@@ -136,8 +136,8 @@
           [:call '(agentlang.test.timer/inc-y)]))
        (is (= '(do
                  (component :ST)
-                 (schedule :ST/Timer01 {:after [2 :seconds], :event #:ST{:Evt1 {}}})
-                 (schedule :ST/Timer02 {:every [1 :seconds], :event #:ST{:Evt2 {}}})
+                 (schedule :ST/Timer01 {:after {:duration 2 :unit :seconds}, :event #:ST{:Evt1 {}}})
+                 (schedule :ST/Timer02 {:every {:duration 1 :unit :seconds}, :event #:ST{:Evt2 {}}})
                  (entity :ST/E {:Id {:type :Int, :id true}, :X :Int})
                  (dataflow
                   :ST/Evt1
@@ -146,8 +146,8 @@
                   :E)
                  (dataflow :ST/Evt2 [:call (agentlang.test.timer/inc-y)]))
               (lr/as-edn :ST)))
-       (is (= {:every [1 :seconds], :event #:ST{:Evt2 {}}} (lr/find-schedule :ST/Timer02)))
-       (is (= {:after [2 :seconds], :event #:ST{:Evt1 {}}} (lr/find-schedule :ST/Timer01)))
+       (is (= {:every {:duration 1 :unit :seconds}, :event #:ST{:Evt2 {}}} (lr/find-schedule :ST/Timer02)))
+       (is (= {:after {:duration 2 :unit :seconds}, :event #:ST{:Evt1 {}}} (lr/find-schedule :ST/Timer01)))
        (u/run-init-fns)
        (Thread/sleep 3000)
        (is (pos? @y))

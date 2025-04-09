@@ -1272,7 +1272,7 @@
     (gs/install-init-pattern! final-pat)
     (raw/pattern raw-pat)))
 
-(defn- validate-schedule-expiry [[expiry expiry-unit]]
+(defn- validate-schedule-expiry [{expiry :duration expiry-unit :unit}]
   (when-not (int? expiry)
     (u/throw-ex (str expiry " expiry must be an integer")))
   (when-not (some #{expiry-unit} #{:seconds :minutes :hours :days})
