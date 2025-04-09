@@ -108,6 +108,23 @@
                (ls/with-alias :Rs
                  (ls/for-each :Result (mapv ls/introspect [{:SynFe/R {:A :%.A}}])))))))
 
+(deftest _filter
+  (defcomponent :SynF
+    (entity :SynF/E {:Id {:type :Int :id true} :X :Int}))
+  (let [r (is-pat ls/filter? [:filter
+                              [:match :%.X
+                               odd? true
+                               false]
+                              {:SynF/E? {}}
+                              :as :R])]
+    (is (= [:match
+            :%.X
+            odd? true
+            false]
+           (ls/raw (ls/filter-predicate r))))
+    (is (= #:SynF{:E? {}}
+           (ls/raw (ls/filter-value r))))))
+
 (deftest delete
   (defcomponent :SynDel
     (entity :SynDel/E {:Id {:type :Int :id true} :X :Int}))
