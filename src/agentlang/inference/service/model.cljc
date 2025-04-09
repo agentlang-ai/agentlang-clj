@@ -124,11 +124,7 @@
 
 (defn- agent-messages? [xs]
   (if (seq xs)
-    (every? #(and (map? %)
-                  (= 2 (count (keys %)))
-                  (some #{(:role %)} #{:system :user :assistant})
-                  (string? (:content %)))
-            xs)
+    (every? map? xs)
     true))
 
 (defn- tool-components-list? [xs]
