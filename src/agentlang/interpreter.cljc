@@ -993,6 +993,7 @@
                            (do (exg/add-pattern pat r) (recur (rest df-patterns) pat-count env1 r))))
                        (do (when with-event-inst? (exg/exit-node result)) (make-result env result))))
                    (catch #?(:clj Exception :cljs :default) ex
+                     (log/error ex)
                      (when with-event-inst? (exg/exit-node {:error #?(:clj (.getMessage ex) :cljs ex)}))
                      (throw ex))
                    (finally
