@@ -1,5 +1,6 @@
 (ns agentlang.exec-graph
-  (:require [agentlang.util :as u]
+  (:require [clojure.string :as s]
+            [agentlang.util :as u]
             [agentlang.util.http :as uh]
             [agentlang.lang :as ln]
             [agentlang.global-state :as gs]
@@ -255,6 +256,9 @@
       (assoc g graph-nodes (mapv #(if (agent-graph? %) (maybe-trim-agent-graph %) %) final-nodes)))
     g))
 
+(defn- graph-as-string [g]
+  (s/replace (pr-str g) "#object" ""))
+
 (defn save-current-graph []
   (when (exec-graph-enabled?)
     (let [g (maybe-trim-agent-graph
@@ -265,7 +269,7 @@
               (call-disabled
                #(:result (gs/evaluate-dataflow-atomic
                           {:Agentlang.Kernel.Eval/CreateExecutionGraph
-                           {:Name (u/keyword-as-string (:name g)) :Graph (pr-str g)}})))
+                           {:Name (u/keyword-as-string (:name g)) :Graph (graph-as-string g)}})))
               (make-empty-exec-graph g))]
       (when-not (cn/instance-of? :Agentlang.Kernel.Eval/ExecutionGraph r)
         (log/error (str "Failed to save graph for " (:name g))))
