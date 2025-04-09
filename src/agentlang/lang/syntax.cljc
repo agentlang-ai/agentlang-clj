@@ -484,12 +484,13 @@
 
 (defn- collect-match-clauses [clauses]
   (loop [cls clauses, result []]
-    (if-let [c (first cls)]
-      (recur
-       (rest cls)
-       (if (vector? c)
-         (conj result (first c) (second c))
-         (conj result c)))
+    (if (seq cls)
+      (let [c (first cls)]
+        (recur
+         (rest cls)
+         (if (vector? c)
+           (conj result (first c) (second c))
+           (conj result c))))
       result)))
 
 (defn raw-match-body [body]
@@ -514,8 +515,31 @@
   ([body] (match nil body))
   ([] (empty-pattern :match)))
 
+(def filter-predicate :predicate)
+(def filter-value :value)
+
 (defn- introspect-filter [pat]
-  )
+  (let [p (introspect (first pat))
+        v (extract-body-patterns #{:as} (rest pat))
+        alias (alias-from-pattern pat)]
+    (when (> (count v) 1)
+      (u/throw-ex (str "Only one source can be specified for filter: " v)))
+    {syntax-type :filter
+     filter-predicate p
+     filter-value (introspect (first v))
+     :as (introspect-alias alias)
+     li/except-tag (introspect-case (case-from-pattern pat))}))
+
+(defn- raw-filter [r]
+  (let [p (raw (filter-predicate r))
+        v (raw (filter-value r))
+        pat `[:filter ~p ~v]]
+    (maybe-add-optional-raw-tags r pat)))
+
+(defn _filter [p v]
+  {syntax-type :filter
+   filter-predicate p
+   filter-value v})
 
 (def block-body :body)
 
@@ -579,6 +603,7 @@
                  :query-object raw-query-object
                  :for-each raw-for-each
                  :match raw-match
+                 :filter raw-filter
                  :delete raw-delete
                  :try raw-try
                  :call raw-call
@@ -596,6 +621,7 @@
 (def query-upsert? (partial syntax-type? :query-upsert))
 (def query-object? (partial syntax-type? :query-object))
 (def for-each? (partial syntax-type? :for-each))
+(def filter? (partial syntax-type? :filter))
 (def match? (partial syntax-type? :match))
 (def delete? (partial syntax-type? :delete))
 (def try? (partial syntax-type? :try))
