@@ -663,7 +663,11 @@
                   (u/throw-ex (str "Unexpected entry " (first ps0) " in " args))))
         fname (first pat)
         args (mapv #(:result (evaluate-pattern env %)) (rest pat))
-        result (li/evaluate `(~fname ~@args))]
+        expr `(fn [env#]
+                (let [args# (mapv (fn [x#] (:result (evaluate-pattern env# x#))) ~(vec (rest pat)))]
+                  (apply ~fname args#)))
+        result ((li/evaluate expr) env)]
+    ;;`(~fname ~@args))]
     (when check
       (cond
         (keyword? check)
