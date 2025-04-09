@@ -1271,3 +1271,37 @@
                        [li/call-fn `(~'agentlang.lang/standalone-pattern-error [:q# ~(cleanup-standalone-pattern raw-pat)])])]]
     (gs/install-init-pattern! final-pat)
     (raw/pattern raw-pat)))
+
+(defn- validate-schedule-expiry [{expiry :duration expiry-unit :unit}]
+  (when-not (int? expiry)
+    (u/throw-ex (str expiry " expiry must be an integer")))
+  (when-not (some #{expiry-unit} #{:seconds :minutes :hours :days})
+    (u/throw-ex (str "Invalid expiry-unit " expiry-unit)))
+  [expiry (s/capitalize (name expiry-unit))])
+
+(defn schedule [n {evry :every aftr :after evnt :event :as spec}]
+  (when-not (map? evnt)
+    (u/throw-ex (str "Must be an event-instance - " evnt)))
+  (let [[[expiry expiry-unit] restart?]
+        (cond
+          evry
+          [(validate-schedule-expiry evry) true]
+          aftr
+          [(validate-schedule-expiry aftr) false]
+          :else (u/throw-ex (str "schedule must have one of :every or :after specification")))
+        tname (u/keyword-as-string n)]
+    (raw/schedule n spec)
+    (u/set-on-init!
+     #(try
+        (gs/evaluate-dataflow-internal
+         [[:delete {:Agentlang.Kernel.Lang/Timer {:Name? tname}}]
+          [:delete :Agentlang.Kernel.Lang/Timer :purge]
+          {:Agentlang.Kernel.Lang/Timer
+           {:Name tname
+            :Expiry expiry
+            :ExpiryUnit expiry-unit
+            :ExpiryEvent [:q# evnt]
+            :Restart restart?}}])
+        (catch #?(:clj Exception :cljs :default) ex
+          (log/error (str "schedule " n " failed: "
+                          #?(:clj (.getMessage ex) :cljs ex))))))))

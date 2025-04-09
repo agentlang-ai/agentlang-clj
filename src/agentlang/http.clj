@@ -200,7 +200,7 @@
 
 (defn- wrap-result
   ([on-no-perm r data-fmt]
-   (ok (if (seq r) (cleanup-results r) r) data-fmt))
+   (ok (if (seqable? r) (cleanup-results r) r) data-fmt))
   ([r data-fmt]
    (wrap-result nil r data-fmt)))
 
