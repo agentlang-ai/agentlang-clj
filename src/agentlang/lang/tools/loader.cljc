@@ -71,7 +71,9 @@
       (let [i0 (s/last-index-of url "/")
             i1 (s/last-index-of url ".git")]
         (when (and i0 i1)
-          (subs url (inc i0) i1))))
+          (if (> i1 i0)
+            (subs url (inc i0) i1)
+            (subs url (inc i0))))))
     :fs
     (when-let [i0 (s/last-index-of url "/")]
       (subs url (inc i0)))
