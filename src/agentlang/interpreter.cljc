@@ -667,7 +667,6 @@
                 (let [args# (mapv (fn [x#] (:result (evaluate-pattern env# x#))) ~(vec (rest pat)))]
                   (apply ~fname args#)))
         result ((li/evaluate expr) env)]
-    ;;`(~fname ~@args))]
     (when check
       (cond
         (keyword? check)
