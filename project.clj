@@ -13,6 +13,7 @@
                  [clojure.java-time "1.4.2"]
                  [org.clojure/test.check "1.1.1"]
                  [ch.qos.logback/logback-classic "1.5.3"]
+                 [io.swagger.parser.v3/swagger-parser "2.1.26"]
                  [environ "1.2.0"]
                  [commons-io/commons-io "2.11.0"]
                  [org.apache.commons/commons-exec "1.3"]
