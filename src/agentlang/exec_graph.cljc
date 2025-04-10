@@ -94,8 +94,10 @@
     (when oldg (push-graph! oldg))
     (set-current-graph! newg)))
 
+(declare cleanup-result)
+
 (defn- update-node-result [result]
-  (let [g0 (assoc (get-current-graph) :result result :pop-ts (dt/unix-timestamp))
+  (let [g0 (assoc (get-current-graph) :result (cleanup-result result) :pop-ts (dt/unix-timestamp))
         currg (if (map? result)
                 (cond
                   (:suspension-id result) (assoc g0 :suspended? true)
@@ -108,11 +110,35 @@
       (set-current-graph! currg))
     result))
 
+(defn- cast-to [xs ys]
+  (cond
+    (vector? xs) (vec (concat ys [{:... (- (count xs) (count ys))}]))
+    (string? xs) (str (s/join ys) " ..." (- (count xs) (count ys)))
+    :else ys))
+
+(defn- trim-seq [maxx xs]
+  (let [c (count xs)]
+    (if (> c maxx)
+      (cast-to xs (take maxx xs))
+      xs)))
+
+(defn- cleanup-instance [inst]
+  (let [tp (cn/instance-type-kw inst)
+        inst (cn/cleanup-inst inst)]
+    {tp (into {} (mapv (fn [[k v]] [k (cleanup-result v)]) inst))}))
+
+(defn- cleanup-result [xs]
+  (cond
+    (cn/an-instance? xs) (cleanup-instance xs)
+    (vector? xs) (mapv cleanup-result (trim-seq 1 xs))
+    (string? xs) (trim-seq 20 xs)
+    :else xs))
+
 (defn add-pattern [pat result]
   (when (exec-graph-enabled?)
     (let [g (get-current-graph)]
       (if-let [pats (:patterns g)]
-        (set-current-graph! (assoc g :patterns (vec (conj pats {:pattern pat :result result}))))
+        (set-current-graph! (assoc g :patterns (vec (conj pats {:pattern pat :result (cleanup-result result)}))))
         (log/warn "Cannot add patterns - no active execution graph."))))
   true)
 
@@ -219,6 +245,7 @@
 (defn pattern? [x] (and (map? x) (:pattern x)))
 (def pattern :pattern)
 (def pattern-result :result)
+(def pattern-sub-graphs :sub-graphs)
 
 (defn graph-walk! [g on-sub-graph! on-pattern!]
   (doseq [n (graph-nodes g)]
@@ -259,11 +286,20 @@
 (defn- graph-as-string [g]
   (s/replace (pr-str g) "#object" ""))
 
+(defn- fold-subgraphs [g]
+  (loop [pats (graph-nodes g), subgraphs [], folded-pats []]
+    (if-let [p (first pats)]
+      (if (graph? p)
+        (recur (rest pats) (conj subgraphs (fold-subgraphs p)) folded-pats)
+        (recur (rest pats) [] (conj folded-pats (if (seq subgraphs) (assoc p :sub-graphs (vec subgraphs)) p))))
+      (assoc g :patterns (vec folded-pats)))))
+
 (defn save-current-graph []
   (when (exec-graph-enabled?)
-    (let [g (maybe-trim-agent-graph
-             (extract-core-agent-graph
-              (get-current-graph)))
+    (let [g (fold-subgraphs
+             (maybe-trim-agent-graph
+              (extract-core-agent-graph
+               (get-current-graph))))
           save? (user-graph? g)
           r (if save?
               (call-disabled
