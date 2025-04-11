@@ -90,7 +90,7 @@
 (defn- push-node [tag n event-instance]
   (let [oldg (get-current-graph)
         newg (merge {:graph tag :name n :patterns [] :push-ts (dt/unix-timestamp)}
-                    (when event-instance {:trigger event-instance}))]
+                    (when event-instance {:trigger (cn/unmake-instance event-instance)}))]
     (when oldg (push-graph! oldg))
     (set-current-graph! newg)))
 
@@ -111,10 +111,9 @@
     result))
 
 (defn- cast-to [xs ys]
-  (cond
-    (vector? xs) (vec (concat ys [{:... (- (count xs) (count ys))}]))
-    (string? xs) (str (s/join ys) " ..." (- (count xs) (count ys)))
-    :else ys))
+  (if (string? xs)
+    (str (s/join ys) " ...")
+    ys))
 
 (defn- trim-seq [maxx xs]
   (let [c (count xs)]
@@ -130,8 +129,8 @@
 (defn- cleanup-result [xs]
   (cond
     (cn/an-instance? xs) (cleanup-instance xs)
-    (vector? xs) (mapv cleanup-result (trim-seq 1 xs))
-    (string? xs) (trim-seq 20 xs)
+    (vector? xs) (mapv cleanup-result (trim-seq 3 xs))
+    (string? xs) (trim-seq 100 xs)
     :else xs))
 
 (defn add-pattern [pat result]
