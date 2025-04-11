@@ -90,7 +90,7 @@
 (defn- push-node [tag n event-instance]
   (let [oldg (get-current-graph)
         newg (merge {:graph tag :name n :patterns [] :push-ts (dt/unix-timestamp)}
-                    (when event-instance {:trigger event-instance}))]
+                    (when event-instance {:trigger (cn/unmake-instance event-instance)}))]
     (when oldg (push-graph! oldg))
     (set-current-graph! newg)))
 
