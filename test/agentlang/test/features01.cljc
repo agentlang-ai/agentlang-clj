@@ -79,9 +79,46 @@
          (is (= (exg/graph-name g) :Exg01/Create))
          (let [[n1 n2] (exg/graph-nodes g)]
            (is (exg/pattern? n1))
-           (is (cn/instance-of? :Exg01/A (exg/pattern-result n1)))
-           (is (and (exg/graph? n2) (exg/event-graph? n2)))
-           (is (cn/instance-of? :Exg01/B (:result n2)))))))))
+           (is (cn/instance-of? :Exg01/A (cn/make-instance (exg/pattern-result n1))))
+           (is (exg/event-graph? (first (exg/pattern-sub-graphs n2))))
+           (is (cn/instance-of? :Exg01/B (cn/make-instance (:result n2))))))))))
+
+(deftest exec-graph-02
+  (defcomponent :Exg02
+    (entity
+     :Exg02/A
+     {:Id {:type :Int :id true}
+      :X :Int})
+    (dataflow
+     :Exg02/Evt01
+     {:Exg02/A {:Id? :Exg02/Evt01.A} :as [:A]}
+     {:Exg02/Evt02 {} :as :As}
+     [:for-each :As
+      {:Exg02/Evt03 {:Id :%.X :X :A.X}}])
+    (dataflow
+     :Exg02/Evt02
+     {:Exg02/A? {}})
+    (dataflow
+     :Exg02/Evt03
+     {:Exg02/A {:Id :Exg02/Evt03.Id :X :Exg02/Evt03.X}}))
+  (let [[cra a?] (tu/make-create :Exg02/A)
+        as (mapv cra [{:Id 1 :X 10} {:Id 2 :X 20}])]
+    (is (= 2 (count as)))
+    (is (every? a? as))
+    (exg/call-with-exec-graph
+     (fn []
+       (let [as (tu/invoke {:Exg02/Evt01 {:A 1}})]
+         (is (pos? (count as)))
+         (is (every? a? as))
+         (let [g (exg/load-graph)]
+           (is (exg/event-graph? g))
+           (let [nodes (exg/graph-nodes g)
+                 xs (exg/pattern-sub-graphs (second nodes))
+                 ys (exg/pattern-sub-graphs (last nodes))]
+             (is (= 1 (count xs)))
+             (is (exg/event-graph? (first xs)))
+             (is (> (count ys) 1))
+             (is (every? exg/event-graph? ys)))))))))
 
 (deftest issue-1726
   (defcomponent :UqIn
