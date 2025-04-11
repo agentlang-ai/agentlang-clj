@@ -1,8 +1,12 @@
 (ns agentlang.lang.tools.openapi
   (:require [clojure.string :as s]
+            [clojure.set :as set]
             [agentlang.util :as u]
             [agentlang.lang :as ln]
+            [agentlang.component :as cn]
+            [agentlang.util.http :as http]
             [agentlang.lang.internal :as li]
+            [agentlang.datafmt.json :as json]
             [agentlang.util.logger :as log])
   (:import [io.swagger.parser OpenAPIParser]
            [io.swagger.v3.parser OpenAPIV3Parser]
@@ -74,6 +78,11 @@
             attrs-meta (into {} (mapv (fn [{n :name in :in}]
                                         [n {:in in}])
                                       params))]
+        #_(doseq [[n resp] (.getResponses opr)]
+          (println n)
+          (doseq [[mn mt] (.getContent resp)]
+            (println mn)
+            (println (.getSchema mt))))
         {:method method
          :attributes attrs
          :attributes-meta attrs-meta}))))
@@ -90,17 +99,92 @@
                 events)))
           [] (.getPaths open-api)))
 
+(def ^:private cn-meta (u/make-cell {}))
+
+(defn- register-meta [cn ^OpenAPI open-api]
+  (let [servers (mapv #(.getUrl %) (.getServers open-api))]
+    (u/safe-set cn-meta (assoc @cn-meta cn {:servers servers}))))
+
 (def ^:private sec-schemes (u/make-cell {}))
 
 (defn- register-security-schemes [component-name security-schemes]
   (u/safe-set sec-schemes (assoc @sec-schemes component-name security-schemes)))
 
-(defn- get-component-security-schemes [component-name]
+(defn get-component-security-schemes [component-name]
   (get @sec-schemes component-name))
 
+(def ^:private sec-scheme-values (u/make-cell {}))
+
+(defn set-security [component-name security-scheme-name security-object]
+  (if-let [scm (get (get-component-security-schemes component-name) security-scheme-name)]
+    (let [obj {:value security-object :scheme scm}
+          sc-vals (assoc (get @sec-scheme-values component-name {}) security-scheme-name obj)]
+      (u/safe-set sec-scheme-values (assoc @sec-scheme-values component-name sc-vals)))
+    (u/throw-ex (str "Security scheme not found - " [component-name security-scheme-name]))))
+
+(defn get-security [cn]
+  (get @sec-scheme-values cn))
+
+(defn get-server [cn]
+  (let [srvs (:servers (get @cn-meta cn))]
+    (or (first (filter #(s/starts-with? % "https") srvs))
+        (first srvs))))
+
+(defn- build-http-request-from-attributes [api-info attrs]
+  (let [attrs-meta (:attributes-meta api-info)
+        query-attrs (set/union
+                     (set (mapv first (filter #(= :query (:in %)) attrs-meta)))
+                     (set (keys attrs)))
+        q (mapv (fn [a] (str (name a) "=" (get attrs a))) query-attrs)
+        ;; TODO: build request-body from attributes
+        ;; TODO: add required headers
+        ]
+    {:url (s/join "&" q)
+     :headers nil
+     :body nil}))
+
+(defn- build-http-request-from-securities [sec]
+  (let [in-q (mapv (fn [s] [(get-in s [:scheme :name]) (:value s)])
+                   (filter #(= :query (:in (:scheme %))) (mapv second sec)))
+        q (mapv (fn [[k v]] (str k "=" v)) in-q)
+        ;; TODO: handle security objects in headers
+        ]
+    {:url (s/join "&" q)
+     :headers nil}))
+
+(defn- handle-get [api-info server securities attrs]
+  (let [req0 (build-http-request-from-attributes api-info attrs)
+        req1 (build-http-request-from-securities securities)
+        q0 (:url req0), q1 (:url req1)
+        q0? (seq q0), q1? (seq q1)
+        q (str (if q0? q0 "")
+               (if (and q0? q1?)
+                 "&"
+                 "")
+               (if q1? q1 ""))
+        url (str server (:endpoint api-info) (if (seq q) (str "?" q) ""))
+        headers (merge (:headers req0) (:headers req1))
+        resp (http/do-get url (when (seq headers) {:headers headers}))
+        status (:status resp)]
+    (if (= 200 status)
+      (let [opts (:opts resp)
+            ctype (get-in opts [:headers "Content-Type"])]
+        (if (= ctype "application/json")
+          (json/decode (:body resp))
+          (:body resp)))
+      (do (log/warn (str "GET request to " url " failed with status - " status))
+          (log/warn (:body resp))
+          nil))))
+
 (defn- handle-openai-event [event-instance]
-  (u/pprint event-instance)
-  event-instance)
+  (let [event-name (cn/instance-type-kw event-instance)
+        [cn _] (li/split-path event-name)
+        sec (get-security cn)
+        server (get-server cn)
+        api-info (:api-info (cn/fetch-meta event-name))]
+    (case (:method api-info)
+      :get (handle-get api-info server sec (cn/instance-user-attributes event-instance))
+      (u/throw-ex (str "method " (:method api-info) "not yet supported")))))
 
 (defn- register-resolver [component-name events]
   (ln/resolver
@@ -143,7 +227,9 @@
                                      (.getProperties v)))})
                    (.getSchemas comps)))
             events (mapv ln/event (paths-to-events cn open-api))
-            sec-schemes (register-security-schemes cn security-schemes)]
+            sec-schemes (register-security-schemes cn security-schemes)
+            cn-meta (register-meta cn open-api)]
+        (when cn-meta (log/info (str "Meta - " cn-meta)))
         (when (seq entities) (log/info (str "Entities - " (s/join ", " entities))))
         (when (seq events)
           (log/info (str "Events - " (s/join ", " events)))
