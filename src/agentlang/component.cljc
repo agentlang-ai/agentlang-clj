@@ -1225,6 +1225,12 @@
 
 (def event-names (partial record-names-by-type :event))
 
+(defn api-event-names [component]
+  (let [names (event-names component)
+        api-evts (filter #(:api-info (fetch-meta %)) names)]
+    (when (seq api-evts)
+      (vec api-evts))))
+
 (defn relationship-names [component]
   (set (concat (filter #(:contains (fetch-meta %)) (record-names component false))
                (filter #(:relationship (fetch-meta %)) (entity-names component false)))))

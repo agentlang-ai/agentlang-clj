@@ -82,9 +82,10 @@
   (reduce (fn [events [^String path-n ^PathItem path-item]]
             (let [evt-name (li/make-path component-name (path-to-event-name path-n))]
               (if-let [operation (path-to-operation path-item)]
-                (conj events {evt-name (merge {:meta {:path-info {:endpoint path-n
-                                                                  :attributes-meta (:attributes-meta operation)
-                                                                  :method (:method operation)}}}
+                (conj events {evt-name (merge {:meta {:api-info {:type :openapi
+                                                                 :endpoint path-n
+                                                                 :attributes-meta (:attributes-meta operation)
+                                                                 :method (:method operation)}}}
                                               (:attributes operation))})
                 events)))
           [] (.getPaths open-api)))
@@ -107,6 +108,18 @@
    {:paths events
     :with-methods
     {:eval handle-openai-event}}))
+
+(defn invocation-event [en]
+  (let [[c n] (li/split-path en)]
+    (li/make-path c (keyword (str "Invoke" (name n))))))
+
+(defn- register-invocation-dataflows [events]
+  (mapv
+   (fn [[event-name invocation-event-name]]
+     (ln/dataflow
+      invocation-event-name
+      {event-name {} :from (li/make-ref invocation-event-name :Parameters)}))
+   (mapv (fn [en] [en (invocation-event en)]) events)))
 
 (defn parse [spec-url]
   (let [^OpenAPIParser parser (OpenAPIParser.)
@@ -134,6 +147,7 @@
         (when (seq entities) (log/info (str "Entities - " (s/join ", " entities))))
         (when (seq events)
           (log/info (str "Events - " (s/join ", " events)))
+          (when-let [evts (register-invocation-dataflows events)] (log/info (str "Invocation events - " (s/join ", " evts))))
           (when-let [r (register-resolver cn events)] (log/info (str "Resolver - " r))))
         (when sec-schemes (log/info (str "Security-schemes - " sec-schemes)))
         cn)
