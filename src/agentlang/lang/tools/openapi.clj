@@ -135,22 +135,32 @@
         query-attrs (set/union
                      (set (mapv first (filter #(= :query (:in %)) attrs-meta)))
                      (set (keys attrs)))
-        q (mapv (fn [a] (str (name a) "=" (get attrs a))) query-attrs)
+        q (when (seq query-attrs) (mapv (fn [a] (str (name a) "=" (get attrs a))) query-attrs))
         ;; TODO: build request-body from attributes
         ;; TODO: add required headers
         ]
-    {:url (s/join "&" q)
+    {:url (if q (s/join "&" q) "")
      :headers nil
      :body nil}))
 
+(defn- filter-sec-in [tag sec-specs]
+  (mapv (fn [s] [(get-in s [:scheme :name]) (:value s)])
+        (filter #(= tag (:in (:scheme %))) sec-specs)))
+
+(defn- maybe-beader-token-header [sec-specs]
+  (when-let [s (first (filter #(= "bearer" (:scheme %)) sec-specs))]
+    (when-let [tok (:value s)]
+      {:Authorization (str "Bearer " tok)})))
+
 (defn- build-http-request-from-securities [sec]
-  (let [in-q (mapv (fn [s] [(get-in s [:scheme :name]) (:value s)])
-                   (filter #(= :query (:in (:scheme %))) (mapv second sec)))
-        q (mapv (fn [[k v]] (str k "=" v)) in-q)
-        ;; TODO: handle security objects in headers
-        ]
-    {:url (s/join "&" q)
-     :headers nil}))
+  (let [sec-specs (mapv second sec)
+        in-q (filter-sec-in :query sec-specs)
+        q (when (seq in-q) (mapv (fn [[k v]] (str k "=" v)) in-q))
+        in-hdr (filter-sec-in :header sec-specs)
+        hdrs0 (when (seq in-hdr) (into {} in-hdr))
+        hdrs (or hdrs0 (maybe-beader-token-header sec-specs))]
+    {:url (if q (s/join "&" q) "")
+     :headers hdrs}))
 
 (defn- handle-get [api-info server securities attrs]
   (let [req0 (build-http-request-from-attributes api-info attrs)
