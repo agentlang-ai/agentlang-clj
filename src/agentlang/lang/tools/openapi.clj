@@ -1,20 +1,14 @@
 (ns agentlang.lang.tools.openapi
   (:require [clojure.string :as s]
             [clojure.set :as set]
+            [clj-yaml.core :as yaml]
             [agentlang.util :as u]
             [agentlang.lang :as ln]
             [agentlang.component :as cn]
             [agentlang.util.http :as http]
             [agentlang.lang.internal :as li]
             [agentlang.datafmt.json :as json]
-            [agentlang.util.logger :as log])
-  (:import [io.swagger.parser OpenAPIParser]
-           [io.swagger.v3.parser OpenAPIV3Parser]
-           [io.swagger.v3.parser.core.models SwaggerParseResult]
-           [io.swagger.v3.oas.models.media ObjectSchema]
-           [io.swagger.v3.oas.models.security SecurityScheme]
-           [io.swagger.v3.oas.models.parameters Parameter]
-           [io.swagger.v3.oas.models OpenAPI PathItem Components Operation]))
+            [agentlang.util.logger :as log]))
 
 ;; Useful references and links:
 ;; 1. https://swagger.io/specification/
@@ -36,14 +30,16 @@
      (when-not (nil? default)
        {:default default}))))
 
+(defn- component-name-from-title [open-api]
+  (when-let [title (get-in open-api [:info :title])]
+    (let [s (apply str (filter #(or (Character/isLetter %) (Character/isDigit %)) s))]
+      (when (seq s)
+        (keyword s)))))
+
 (defn- create-component [open-api]
-  (let [extns (.getExtensions (.getInfo open-api))
-        provider-name (get extns "x-providerName")
-        service-name (get extns "x-serviceName")]
-    (if (and provider-name service-name)
-      (let [n (keyword (str provider-name "." service-name))]
-        (and (ln/component n) n))
-      (u/throw-ex (str "Cannot create component - x-providerName and x-serviceName are required in open-api specification")))))
+  (if-let [n (component-name-from-title open-api)]
+    (and (ln/component n) n)
+    (u/throw-ex (str "Cannot create component - failed to infer title from specification"))))
 
 (defn- fetch-security-schemes [^Components comps]
   (reduce (fn [scms [^String n ^SecurityScheme sec-scm]]
@@ -147,7 +143,7 @@
   (mapv (fn [s] [(get-in s [:scheme :name]) (:value s)])
         (filter #(= tag (:in (:scheme %))) sec-specs)))
 
-(defn- maybe-beader-token-header [sec-specs]
+(defn- maybe-bearer-token-header [sec-specs]
   (when-let [s (first (filter #(= "bearer" (:scheme %)) sec-specs))]
     (when-let [tok (:value s)]
       {:Authorization (str "Bearer " tok)})))
@@ -158,7 +154,7 @@
         q (when (seq in-q) (mapv (fn [[k v]] (str k "=" v)) in-q))
         in-hdr (filter-sec-in :header sec-specs)
         hdrs0 (when (seq in-hdr) (into {} in-hdr))
-        hdrs (or hdrs0 (maybe-beader-token-header sec-specs))]
+        hdrs (or hdrs0 (maybe-bearer-token-header sec-specs))]
     {:url (if q (s/join "&" q) "")
      :headers hdrs}))
 
@@ -186,7 +182,31 @@
           (log/warn (:body resp))
           nil))))
 
-(defn- handle-openai-event [event-instance]
+(defn- handle-post [api-info server securities attrs]
+  (let [req0 (build-http-request-from-attributes api-info attrs)
+        req1 (build-http-request-from-securities securities)
+        q0 (:url req0), q1 (:url req1)
+        q0? (seq q0), q1? (seq q1)
+        q (str (if q0? q0 "")
+               (if (and q0? q1?)
+                 "&"
+                 "")
+               (if q1? q1 ""))
+        url (str server (:endpoint api-info) (if (seq q) (str "?" q) ""))
+        headers (merge (:headers req0) (:headers req1))
+        resp (http/do-get url (when (seq headers) {:headers headers}))
+        status (:status resp)]
+    (if (= 200 status)
+      (let [opts (:opts resp)
+            ctype (get-in opts [:headers "Content-Type"])]
+        (if (= ctype "application/json")
+          (json/decode (:body resp))
+          (:body resp)))
+      (do (log/warn (str "GET request to " url " failed with status - " status))
+          (log/warn (:body resp))
+          nil))))
+
+(defn- handle-openapi-event [event-instance]
   (let [event-name (cn/instance-type-kw event-instance)
         [cn _] (li/split-path event-name)
         sec (get-security cn)
@@ -194,6 +214,7 @@
         api-info (:api-info (cn/fetch-meta event-name))]
     (case (:method api-info)
       :get (handle-get api-info server sec (cn/instance-user-attributes event-instance))
+      :post (handle-post api-info server sec (cn/instance-user-attributes event-instance))
       (u/throw-ex (str "method " (:method api-info) "not yet supported")))))
 
 (defn- register-resolver [component-name events]
@@ -201,7 +222,7 @@
    (li/make-path component-name :Resolver)
    {:paths events
     :with-methods
-    {:eval handle-openai-event}}))
+    {:eval handle-openapi-event}}))
 
 (defn invocation-event [en]
   (let [[c n] (li/split-path en)]
@@ -215,36 +236,36 @@
       {event-name {} :from (li/make-ref invocation-event-name :Parameters)}))
    (mapv (fn [en] [en (invocation-event en)]) events)))
 
+(defn- parse-openapi-spec [spec-url]
+  (let [result (http/do-get spec-url)]
+    (if (= 200 (:status result))
+      (yaml/parse-string (:body result))
+      (u/throw-ex (str "Failed to GET " spec-url ", status - " (:status result))))))
+
 (defn parse [spec-url]
-  (let [^OpenAPIParser parser (OpenAPIParser.)
-        ^SwaggerParseResult result  (.readLocation parser spec-url nil nil)
-        ^OpenAPI open-api (.getOpenAPI result)]
-    (when-let [msgs (.getMessages result)]
-      (log/warn (str "Errors or warnings in parsing " spec-url))      
-      (doseq [msg (seq msgs)]
-        (log/warn (str "Validation error: " msg))))
-    (if open-api
-      (let [cn (create-component open-api)
-            ^Components comps (.getComponents open-api)
-            security-schemes (fetch-security-schemes comps)
-            entities
-            (mapv
-             ln/entity
-             (mapv (fn [[^String k ^ObjectSchema v]]
-                     {(li/make-path cn (keyword k))
-                      (into {} (mapv (fn [[pk pv]]
-                                       [(keyword pk) (as-al-type (keyword (.getType pv)) (.getRequired pv) (.getDefault pv))])
-                                     (.getProperties v)))})
-                   (.getSchemas comps)))
-            events (mapv ln/event (paths-to-events cn open-api))
-            sec-schemes (register-security-schemes cn security-schemes)
-            cn-meta (register-meta cn open-api)]
-        (when cn-meta (log/info (str "Meta - " cn-meta)))
-        (when (seq entities) (log/info (str "Entities - " (s/join ", " entities))))
-        (when (seq events)
-          (log/info (str "Events - " (s/join ", " events)))
-          (when-let [evts (register-invocation-dataflows events)] (log/info (str "Invocation events - " (s/join ", " evts))))
-          (when-let [r (register-resolver cn events)] (log/info (str "Resolver - " r))))
-        (when sec-schemes (log/info (str "Security-schemes - " sec-schemes)))
-        cn)
-      (u/throw-ex (str "Failed to parse " spec-url)))))
+  (if-let [open-api (parse-openapi-spec spec-url)]
+    (let [cn (create-component open-api)
+          ;; TODO: replace Java calls with plain-clj parsing
+          ^Components comps (.getComponents open-api)
+          security-schemes (fetch-security-schemes comps)
+          entities
+          (mapv
+           ln/entity
+           (mapv (fn [[^String k ^ObjectSchema v]]
+                   {(li/make-path cn (keyword k))
+                    (into {} (mapv (fn [[pk pv]]
+                                     [(keyword pk) (as-al-type (keyword (.getType pv)) (.getRequired pv) (.getDefault pv))])
+                                   (.getProperties v)))})
+                 (.getSchemas comps)))
+          events (mapv ln/event (paths-to-events cn open-api))
+          sec-schemes (register-security-schemes cn security-schemes)
+          cn-meta (register-meta cn open-api)]
+      (when cn-meta (log/info (str "Meta - " cn-meta)))
+      (when (seq entities) (log/info (str "Entities - " (s/join ", " entities))))
+      (when (seq events)
+        (log/info (str "Events - " (s/join ", " events)))
+        (when-let [evts (register-invocation-dataflows events)] (log/info (str "Invocation events - " (s/join ", " evts))))
+        (when-let [r (register-resolver cn events)] (log/info (str "Resolver - " r))))
+      (when sec-schemes (log/info (str "Security-schemes - " sec-schemes)))
+      cn)
+    (u/throw-ex (str "Failed to parse " spec-url))))
