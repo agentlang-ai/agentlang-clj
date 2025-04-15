@@ -166,25 +166,26 @@
   (let [pat
         (if (seqable? expr)
           (if (or (string? expr) (vector? expr))
-            [:call (list* 'identity expr)]
-            [:call (list* (first expr) (mapv parse-ref-or-expr (rest expr)))])
-          [:call (list* 'identity expr)])]
+            [:call `(~'identity ~expr)]
+            [:call `(~(first expr) ~@(mapv parse-ref-or-expr (rest expr)))])
+          [:call `(~'identity ~expr)])]
     (if alias
       (vec (concat pat [:as alias]))
       pat)))
 
 (defn- parse-binding [expr alias]
-  ((case (first expr)
-     make parse-make
-     make-child parse-make-child
-     cond parse-cond
-     lookup-one parse-lookup-one
-     lookup-many parse-lookup-many
-     lookup-children parse-lookup-childern
-     update parse-update
-     delete parse-delete
-     parse-fn-call)
-   (rest expr) alias))
+  (if-let [f (case (first expr)
+               make parse-make
+               make-child parse-make-child
+               cond parse-cond
+               lookup-one parse-lookup-one
+               lookup-many parse-lookup-many
+               lookup-children parse-lookup-childern
+               update parse-update
+               delete parse-delete
+               nil)]
+    (f (rest expr) alias)
+    (parse-fn-call expr alias)))
 
 (declare expressions-to-patterns)
 
