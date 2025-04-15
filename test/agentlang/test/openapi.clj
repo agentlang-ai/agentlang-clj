@@ -18,14 +18,11 @@
     (let [cn (openapi/parse spec-url)]
       (u/run-init-fns)
       (is (cn/component-exists? cn))
-      (let [event-name (first (cn/api-event-names cn))
-            [sec-name _] (first (openapi/get-component-security-schemes cn))]
-        (is (= :nytimes.com.article_search/ArticlesearchJson event-name))
-        (openapi/set-security cn sec-name (u/getenv "NYT_API_KEY"))
+      (let [event-name (first (cn/api-event-names cn))]
         ;; TODO: automate handling of response (see L81 of agentlang.lang.tools.openapi)
         (is
          (seq
           (get-in
            (tu/invoke
-            {(openapi/invocation-event event-name) {:Parameters {:q "election"}}})
+            {(openapi/invocation-event event-name) {:Parameters {:q "election"} :EventContext {:security {:apikey {:api-key (u/getenv "NYT_API_KEY")}}}}})
            [:response :docs])))))))

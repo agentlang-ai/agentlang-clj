@@ -1227,7 +1227,7 @@
 
 (defn api-event-names [component]
   (let [names (event-names component)
-        api-evts (filter #(:api-info (fetch-meta %)) names)]
+        api-evts (filter #(:api (fetch-meta %)) names)]
     (when (seq api-evts)
       (vec api-evts))))
 
