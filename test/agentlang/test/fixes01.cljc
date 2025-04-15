@@ -3,11 +3,13 @@
                :cljs [cljs.test :refer-macros [deftest is]])
             [agentlang.util :as u]
             [agentlang.component :as cn]
+            [agentlang.global-state :as gs]
             [agentlang.lang.datetime :as dt]
             [agentlang.lang.internal :as li]
             [agentlang.lang
              :refer [component attribute event
                      entity record dataflow]]
+            [agentlang.inference.service.planner :as planner]
             #?(:clj  [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
 
@@ -168,3 +170,59 @@
     (is (e? e))
     (is (= "101-100" (:Id e)))
     (is (= [":I1703/E" "101-100"] (li/path-to-vec (li/path-attr e))))))
+
+(deftest planner-expressions
+  (defcomponent :PE
+    (entity :PE/Assignee {:IncidentCategory :String
+                          :ServiceNowUsername :String})
+    (entity
+     :PE/IncidentTriage
+     {:SysId :String
+      :Category :String
+      :AssignedTo :String
+      :Urgency :String
+      :Severity :String})
+    (entity :PE/ChatMessageRequest {:MessageText :String}))
+  (let [exprs '(do
+                 (def incident-category "Networking")
+                 (def
+                   assignee
+                   (lookup-one
+                    :PE/Assignee
+                    {:IncidentCategory incident-category}))
+                 (def
+                   triage
+                   (make
+                    :PE/IncidentTriage
+                    {:SysId "471bfbc7a9fe198101e77a3e10e5d47f",
+                     :Category incident-category,
+                     :AssignedTo (:ServiceNowUsername assignee),
+                     :Urgency "1",
+                     :Severity "1"}))
+                 (def
+                   teams-message
+                   (make
+                    :PE/ChatMessageRequest
+                    {:MessageText
+                     (str
+                      "\nSysId: 471bfbc7a9fe198101e77a3e10e5d47f\n\nDescription: Unable to access Oregon mail server. Is it down?\n\nCategory: "
+                      incident-category
+                      "\n\nUrgency: 1\n\nSeverity: 1\n\nAssigned to: "
+                      (:ServiceNowUsername assignee)
+                      "\n\n")}))
+                 triage)]
+    (is (cn/instance-of? :PE/Assignee (tu/invoke {:PE/Create_Assignee
+                                                  {:Instance
+                                                   {:PE/Assignee
+                                                    {:ServiceNowUsername "joe"
+                                                     :IncidentCategory "Networking"}}}})))
+    (is (cn/instance-of? :PE/IncidentTriage (:result (gs/evaluate-dataflow (planner/expressions-to-patterns exprs)))))
+    (let [msg (first (tu/invoke {:PE/LookupAll_ChatMessageRequest {}}))]
+      (is (cn/instance-of? :PE/ChatMessageRequest msg))
+      (is (= (:MessageText msg)
+             (str
+              "\nSysId: 471bfbc7a9fe198101e77a3e10e5d47f\n\nDescription: Unable to access Oregon mail server. Is it down?\n\nCategory: "
+              "Networking"
+              "\n\nUrgency: 1\n\nSeverity: 1\n\nAssigned to: "
+              "joe"
+              "\n\n"))))))
