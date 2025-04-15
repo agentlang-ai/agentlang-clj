@@ -13,8 +13,8 @@
 
 (def spec-url "https://raw.githubusercontent.com/APIs-guru/openapi-directory/refs/heads/main/APIs/nytimes.com/article_search/1.0.0/openapi.yaml")
 
-(deftest parse-to-model
-  (when (openapi-test-enabled?)
+(when (openapi-test-enabled?)
+  (deftest basic-api-call
     (let [cn (openapi/parse spec-url)]
       (u/run-init-fns)
       (is (cn/component-exists? cn))
@@ -25,4 +25,8 @@
           (get-in
            (tu/invoke
             {(openapi/invocation-event event-name) {:Parameters {:q "election"} :EventContext {:security {:apikey {:api-key (u/getenv "NYT_API_KEY")}}}}})
-           [:response :docs])))))))
+           [:response :docs]))))))
+
+  (deftest petstore
+    (let [cn (openapi/parse "test/sample/petstore.yaml")]
+      (is (= :SwaggerPetstoreOpenAPI30 cn)))))
