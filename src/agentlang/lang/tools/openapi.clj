@@ -89,6 +89,7 @@
                         (apply merge {:meta
                                       {:doc (:description spec)
                                        :api (name k)
+                                       :requestBody (:requestBody spec)
                                        :security (or (:security spec) sec)
                                        :method method}}
                                attr-spec)}))
@@ -172,10 +173,21 @@
      (dissoc event-attrs anames)]
     [api-endpoint event-attrs]))
 
-(defn- handle-post [open-api security event-name event-meta event-attrs]
-  )
+(defn- load-schema-from-ref [open-api ref-path]
+  (let [parts (mapv keyword (s/split (subs ref-path 2) #"/"))]
+    (:properties (get-in open-api parts))))
 
-(defn- handle-get [open-api security event-name event-meta event-attrs]
+(defn- fetch-schema-properties [open-api schema]
+  (let [props (or (:properties schema)
+                  (load-schema-from-ref open-api (:$ref schema)))]
+    (set (keys props))))
+
+(defn- make-request-body [open-api event-meta event-attrs]
+  (when-let [schema (get-in event-meta [:requestBody :content :application/json :schema])]
+    (let [props (fetch-schema-properties open-api schema)]
+      (first (set/project [event-attrs] props)))))
+
+(defn- make-request [open-api event-name event-meta event-attrs security]
   (let [schema (into
                 {}
                 (mapv
@@ -187,17 +199,32 @@
              (str (fetch-server event-name open-api) "/" api)
              schema security event-attrs)
         headers (security-headers security)
-        resp (http/do-get url (when (seq headers) {:headers headers}))
-        status (:status resp)]
+        request-body (make-request-body open-api event-meta event-attrs)]
+    {:url url :headers headers :requestBody request-body}))
+
+(defn- handle-response [method url resp]
+  (let [status (:status resp)]
     (if (= 200 status)
       (let [opts (:opts resp)
             ctype (get-in opts [:headers "Content-Type"])]
         (if (= ctype "application/json")
           (json/decode (:body resp))
           (:body resp)))
-      (do (log/warn (str "GET request to " url " failed with status - " status))
+      (do (log/warn (str (name method) " request to " url " failed with status - " status))
           (log/warn (:body resp))
           nil))))
+
+(defn- handle-post [open-api security event-name event-meta event-attrs]
+  (let [{url :url headers :headers reqbody :requestBody}
+        (make-request open-api event-name event-meta event-attrs security)
+        resp (http/POST url (when (seq headers) {:headers headers}) reqbody :json)]
+    (handle-response :POST url resp)))
+
+(defn- handle-get [open-api security event-name event-meta event-attrs]
+  (let [{url :url headers :headers}
+        (make-request open-api event-name event-meta event-attrs security)
+        resp (http/do-get url (when (seq headers) {:headers headers}))]
+    (handle-response :GET url resp)))
 
 (defn- normalize-sec-spec [spec]
   (into
