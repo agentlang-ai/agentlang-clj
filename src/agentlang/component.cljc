@@ -2095,6 +2095,11 @@
    #(apply prepost-event-name %)
    (li/prepost-event-heads recname)))
 
+(defn active-prepost-events [component-name]
+  (let [ents (entity-names component-name)
+        event-names (apply concat (mapv all-prepost-events ents))]
+    (vec (filter find-dataflows event-names))))
+
 (defn- only-internal-attrs [scm]
   (when-not (inferred-event-schema? scm)
     (mapv #(second (li/split-path %))
