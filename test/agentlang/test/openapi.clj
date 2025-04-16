@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [agentlang.util :as u]
             [agentlang.component :as cn]
+            [agentlang.lang.internal :as li]
             [agentlang.lang.tools.openapi :as openapi]
             [agentlang.lang
              :refer [component attribute event
@@ -14,10 +15,15 @@
 (def spec-url "https://raw.githubusercontent.com/APIs-guru/openapi-directory/refs/heads/main/APIs/nytimes.com/article_search/1.0.0/openapi.yaml")
 
 (when (openapi-test-enabled?)
-  (deftest basic-api-call
+
+  (defn- parse-spec [spec-url]
     (let [cn (openapi/parse spec-url)]
-      (u/run-init-fns)
       (is (cn/component-exists? cn))
+      (u/run-init-fns)
+      cn))
+
+  (deftest basic-api-call
+    (let [cn (parse-spec spec-url)]
       (let [event-name (first (cn/api-event-names cn))]
         ;; TODO: automate handling of response (see L81 of agentlang.lang.tools.openapi)
         (is
@@ -28,5 +34,18 @@
            [:response :docs]))))))
 
   (deftest petstore
-    (let [cn (openapi/parse "test/sample/petstore.yaml")]
-      (is (= :SwaggerPetstoreOpenAPI30 cn)))))
+    (let [cn (parse-spec "test/sample/petstore.yaml")]
+      (is (= :SwaggerPetstoreOpenAPI30 cn))
+      (let [recnames (cn/record-names cn)]
+        (is (> (count recnames) 1))
+        (is (some #{(li/make-path cn :Pet)} recnames)))
+      (u/pprint (tu/invoke {(openapi/invocation-event :SwaggerPetstoreOpenAPI30/addPet)
+                            {:Parameters
+                             {:id 102
+                              :category {:id 1 :name "my-pets"}
+                              :name "kittie"
+                              :photoUrls ["https://mypets.com/imgs/kittie.jpg"]
+                              :tags [{:id 1, :name "cats"}]
+                              :status "available"}}}))))
+
+  ) ; (when (openapi-test-enabled?)

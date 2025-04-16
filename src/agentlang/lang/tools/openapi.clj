@@ -26,6 +26,9 @@
 (defn- get-spec [component-name]
   (get @spec-registry component-name))
 
+(defn- config-entity-name [component-name]
+  (li/make-path component-name :ApiConfig))
+
 (defn invocation-event [event-name]
   (let [[c n] (li/split-path event-name)]
     (li/make-path c (keyword (str "Invoke" (name n))))))
@@ -76,6 +79,25 @@
             :optional (not (:required p))}})
         (:parameters spec)))
 
+(defn- parse-reqresp-spec [component-name schema]
+  (or
+   (when schema
+     (let [arr? (= "array" (:type schema))
+           ref-path (if arr?
+                      (get-in schema [:items :$ref])
+                      (:$ref schema))]
+       (when ref-path
+         (let [n (last (mapv keyword (s/split (subs ref-path 2) #"/")))
+               typ (li/make-ref component-name n)]
+           (if arr? {:listof typ} {:type typ})))))
+   {:type :Any}))
+
+(defn- parse-request-body-spec [component-name req-body-spec]
+  (parse-reqresp-spec component-name (get-in req-body-spec [:content :application/json :schema])))
+
+(defn- parse-responses-spec [component-name resp-spec]
+  (parse-reqresp-spec component-name (get-in resp-spec ["200" :content :application/json :schema])))
+
 (defn- paths-to-events [component-name open-api]
   (let [sec (:security open-api)]
     (apply
@@ -84,17 +106,42 @@
              (mapv (fn [[method spec]]
                      (let [event-name (or (:operationId spec)
                                           (path-to-event-name (str (s/capitalize (name method)) "_" (name k))))
-                           attr-spec (path-spec-to-attrs spec)]
+                           attr-spec cn/inferred-event-schema #_(path-spec-to-attrs spec)]
                        {(li/make-path component-name event-name)
                         (apply merge {:meta
                                       {:doc (:description spec)
                                        :api (name k)
-                                       :requestBody (:requestBody spec)
+                                       :requestBody (parse-request-body-spec component-name (:requestBody spec))
+                                       :responses (parse-responses-spec component-name (:responses spec))
                                        :security (or (:security spec) sec)
                                        :method method}}
                                attr-spec)}))
                    v))
            (:paths open-api)))))
+
+(defn- components-to-records [component-name open-api]
+  (reduce
+   (fn [recs [k v]]
+     (if (= "object" (:type v))
+       (let [required (mapv u/string-as-keyword (:required v))]
+         (conj
+          recs
+          {(li/make-path component-name k)
+           (reduce
+            (fn [attrs [k v]]
+              (let [req (or (some #{k} required)
+                            (:required v))
+                    props (merge
+                           {:optional (not req)}
+                           (when-let [d (:default v)]
+                             {:default d})
+                           (if-let [xs (:enum v)]
+                             {:oneof (vec xs)}
+                             {:type (as-al-type (u/string-as-keyword (:type v)))}))]
+                (assoc attrs k props)))
+            {} (:properties v))}))
+       recs))
+   [] (get-in open-api [:components :schemas])))
 
 (def ^:private invoke-event-meta (u/make-cell {}))
 
@@ -173,19 +220,18 @@
      (dissoc event-attrs anames)]
     [api-endpoint event-attrs]))
 
-(defn- load-schema-from-ref [open-api ref-path]
-  (let [parts (mapv keyword (s/split (subs ref-path 2) #"/"))]
-    (:properties (get-in open-api parts))))
-
-(defn- fetch-schema-properties [open-api schema]
-  (let [props (or (:properties schema)
-                  (load-schema-from-ref open-api (:$ref schema)))]
-    (set (keys props))))
-
 (defn- make-request-body [open-api event-meta event-attrs]
-  (when-let [schema (get-in event-meta [:requestBody :content :application/json :schema])]
-    (let [props (fetch-schema-properties open-api schema)]
-      (first (set/project [event-attrs] props)))))
+  (if-let [spec (:requestBody event-meta)]
+    (if-let [typ (:type spec)]
+      (if (= :Any typ)
+        event-attrs
+        (let [attr-names (set (cn/user-attribute-names (cn/find-record-schema typ)))]
+          (first (set/project [event-attrs] attr-names))))
+      (if-let [typ (:listof spec)]
+        (let [attr-names (set (cn/user-attribute-names (cn/find-record-schema typ)))]
+          (mapv #(first (set/project [%] attr-names)) event-attrs))
+        event-attrs))
+    event-attrs))
 
 (defn- make-request [open-api event-name event-meta event-attrs security]
   (let [schema (into
@@ -202,29 +248,43 @@
         request-body (make-request-body open-api event-meta event-attrs)]
     {:url url :headers headers :requestBody request-body}))
 
-(defn- handle-response [method url resp]
-  (let [status (:status resp)]
-    (if (= 200 status)
-      (let [opts (:opts resp)
-            ctype (get-in opts [:headers "Content-Type"])]
-        (if (= ctype "application/json")
-          (json/decode (:body resp))
-          (:body resp)))
-      (do (log/warn (str (name method) " request to " url " failed with status - " status))
-          (log/warn (:body resp))
-          nil))))
+(defn- process-response [event-meta resp]
+  (if-let [spec (:response event-meta)]
+    (if-let [typ (:type spec)]
+      (if (= :Any typ)
+        resp
+        (cn/make-instance typ resp false))
+      (if-let [typ (:listof spec)]
+        (mapv #(cn/make-instance typ % false) resp)
+        resp))
+    resp))
+
+(defn- handle-response [method event-meta url resp]
+  (if (map? resp)
+    (if-let [status (:status resp)]
+      (if (= 200 status)
+        (let [opts (:opts resp)
+              ctype (get-in opts [:headers "Content-Type"])]
+          (if (= ctype "application/json")
+            (process-response event-meta (json/decode (:body resp)))
+            (:body resp)))
+        (do (log/warn (str (name method) " request to " url " failed with status - " status))
+            (log/warn (:body resp))
+            nil))
+      (process-response event-meta resp))
+    resp))
 
 (defn- handle-post [open-api security event-name event-meta event-attrs]
   (let [{url :url headers :headers reqbody :requestBody}
         (make-request open-api event-name event-meta event-attrs security)
         resp (http/POST url (when (seq headers) {:headers headers}) reqbody :json)]
-    (handle-response :POST url resp)))
+    (handle-response :POST event-meta url resp)))
 
 (defn- handle-get [open-api security event-name event-meta event-attrs]
   (let [{url :url headers :headers}
         (make-request open-api event-name event-meta event-attrs security)
         resp (http/do-get url (when (seq headers) {:headers headers}))]
-    (handle-response :GET url resp)))
+    (handle-response :GET event-meta url resp)))
 
 (defn- normalize-sec-spec [spec]
   (into
@@ -261,6 +321,29 @@
     :with-methods
     {:eval handle-openapi-event}}))
 
+(defn- register-config-entity [cn open-api]
+  (let [attrs0 (reduce
+                (fn [attrs [k v]]
+                  (if-let [in (:in v)]
+                    (assoc attrs k {:meta (normalize-sec-spec v)
+                                    :type :String
+                                    :optional true})
+                    attrs))
+                {} (get-in open-api [:components :securitySchemes]))
+        attrs (assoc attrs0 :servers {:listof :String :default (vec (:servers open-api))})]
+    (if-let [n (ln/entity {(config-entity-name cn) attrs})]
+      n
+      (log/warn (str "Failed to register config-entity for " cn)))))
+
+(defn- register-model [cn open-api config-entity]
+  (cn/register-model
+   cn
+   {:name cn
+    :components [cn]
+    :version (:version open-api)
+    :agentlang-version "current"
+    :config-entity config-entity}))
+
 (defn- read-yml-file [spec-url]
   (if (s/starts-with? spec-url "http")
     (let [result (http/do-get spec-url)]
@@ -276,9 +359,15 @@
   (if-let [open-api (parse-openapi-spec spec-url)]
     (let [cn (create-component open-api)
           _ (put-spec! cn open-api)
-          events (mapv register-event (paths-to-events cn open-api))]
+          events (mapv register-event (paths-to-events cn open-api))
+          recs (mapv ln/record (components-to-records cn open-api))
+          config-entity (register-config-entity cn open-api)]
+      (when config-entity (log/info (str "Config entity - " config-entity)))
+      (when (seq recs) (log/info (str "Records - " recs)))
       (when (seq events)
         (log/info (str "Events - " (s/join ", " events)))
         (when-let [r (register-resolver cn events)] (log/info (str "Resolver - " r))))
+      (when-let [n (register-model cn open-api config-entity)]
+        (log/info (str "Model registered - " n)))
       cn)
     (u/throw-ex (str "Failed to parse " spec-url))))
