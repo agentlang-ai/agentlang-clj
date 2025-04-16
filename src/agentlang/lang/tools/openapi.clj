@@ -98,6 +98,11 @@
 (defn- parse-responses-spec [component-name resp-spec]
   (parse-reqresp-spec component-name (get-in resp-spec [:200 :content :application/json :schema])))
 
+(defn- request-body-parent-type [typ-spec]
+  (when-let [typ (:type typ-spec)]
+    (when (not= :Any typ)
+      typ)))
+
 (defn- paths-to-events [component-name open-api]
   (let [sec (:security open-api)]
     (apply
@@ -106,15 +111,19 @@
              (mapv (fn [[method spec]]
                      (let [event-name (or (:operationId spec)
                                           (path-to-event-name (str (s/capitalize (name method)) "_" (name k))))
-                           attr-spec cn/inferred-event-schema #_(path-spec-to-attrs spec)]
+                           req-type-spec (parse-request-body-spec component-name (:requestBody spec))
+                           attr-spec (path-spec-to-attrs spec)
+                           parent (request-body-parent-type req-type-spec)]
                        {(li/make-path component-name event-name)
                         (apply merge {:meta
-                                      {:doc (:description spec)
-                                       :api (name k)
-                                       :requestBody (parse-request-body-spec component-name (:requestBody spec))
-                                       :responses (parse-responses-spec component-name (:responses spec))
-                                       :security (or (:security spec) sec)
-                                       :method method}}
+                                      (merge
+                                       {:doc (:description spec)
+                                        :api (name k)
+                                        :requestBody req-type-spec
+                                        :responses (parse-responses-spec component-name (:responses spec))
+                                        :security (or (:security spec) sec)
+                                        :method method}
+                                       (when parent {:inherits parent}))}
                                attr-spec)}))
                    v))
            (:paths open-api)))))
@@ -214,9 +223,9 @@
 (defn- format-api-endpoint [api-endpoint event-schema event-attrs]
   (if-let [anames (seq (attribute-names-in :path event-schema))]
     [(reduce
-      (fn [s f a]
-        (s/replace s f (get event-attrs a)))
-      api-endpoint (mapv (fn [n] (str "{" (name n) "}")) anames) anames)
+      (fn [s [f a]]
+        (s/replace s f (str (get event-attrs a))))
+      api-endpoint (mapv (fn [n] [(str "{" (name n) "}") n]) anames))
      (dissoc event-attrs anames)]
     [api-endpoint event-attrs]))
 
@@ -373,8 +382,8 @@
   (if-let [open-api (parse-openapi-spec spec-url)]
     (let [cn (create-component open-api)
           _ (put-spec! cn open-api)
-          events (mapv register-event (paths-to-events cn open-api))
           recs (mapv ln/record (components-to-records cn open-api))
+          events (mapv register-event (paths-to-events cn open-api))
           config-entity (register-config-entity cn open-api)]
       (when config-entity (log/info (str "Config entity - " config-entity)))
       (when (seq recs) (log/info (str "Records - " recs)))

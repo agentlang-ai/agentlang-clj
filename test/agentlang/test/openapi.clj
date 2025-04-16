@@ -39,15 +39,27 @@
       (let [recnames (cn/record-names cn)]
         (is (> (count recnames) 1))
         (is (some #{(li/make-path cn :Pet)} recnames)))
-      (let [r (tu/invoke {(openapi/invocation-event :SwaggerPetstoreOpenAPI30/addPet)
-                          {:Parameters
-                           {:id 102
-                            :category {:id 1 :name "my-pets"}
-                            :name "kittie"
-                            :photoUrls ["https://mypets.com/imgs/kittie.jpg"]
-                            :tags [{:id 1, :name "cats"}]
-                            :status "available"}}})]
-        (is (cn/instance-of? :SwaggerPetstoreOpenAPI30/Pet r))
-        (is (= 102 (:id r))))))
+      (let [pet? (partial cn/instance-of? :SwaggerPetstoreOpenAPI30/Pet)
+            p? (fn [r]
+                 (is (pet? r))
+                 (is (= 102 (:id r))))]
+        (p? (tu/invoke {(openapi/invocation-event :SwaggerPetstoreOpenAPI30/addPet)
+                        {:Parameters
+                         {:id 102
+                          :category {:id 1 :name "my-pets"}
+                          :name "kittie"
+                          :photoUrls ["https://mypets.com/imgs/kittie.jpg"]
+                          :tags [{:id 1, :name "cats"}]
+                          :status "available"}}}))
+        (p? (tu/invoke {(openapi/invocation-event :SwaggerPetstoreOpenAPI30/getPetById)
+                        {:Parameters
+                         {:petId 102}}}))
+        (is (= "Pet deleted" (tu/invoke {(openapi/invocation-event :SwaggerPetstoreOpenAPI30/deletePet)
+                                         {:Parameters
+                                          {:petId 102}}})))
+        (let [rs (tu/invoke {(openapi/invocation-event :SwaggerPetstoreOpenAPI30/findPetsByStatus)
+                             {:Parameters
+                              {:status "available"}}})]
+          (is (every? pet? rs))))))
 
   ) ; (when (openapi-test-enabled?)
