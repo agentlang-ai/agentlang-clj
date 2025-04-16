@@ -88,7 +88,7 @@
                       (:$ref schema))]
        (when ref-path
          (let [n (last (mapv keyword (s/split (subs ref-path 2) #"/")))
-               typ (li/make-ref component-name n)]
+               typ (li/make-path component-name n)]
            (if arr? {:listof typ} {:type typ})))))
    {:type :Any}))
 
@@ -96,7 +96,7 @@
   (parse-reqresp-spec component-name (get-in req-body-spec [:content :application/json :schema])))
 
 (defn- parse-responses-spec [component-name resp-spec]
-  (parse-reqresp-spec component-name (get-in resp-spec ["200" :content :application/json :schema])))
+  (parse-reqresp-spec component-name (get-in resp-spec [:200 :content :application/json :schema])))
 
 (defn- paths-to-events [component-name open-api]
   (let [sec (:security open-api)]
@@ -249,7 +249,7 @@
     {:url url :headers headers :requestBody request-body}))
 
 (defn- process-response [event-meta resp]
-  (if-let [spec (:response event-meta)]
+  (if-let [spec (:responses event-meta)]
     (if-let [typ (:type spec)]
       (if (= :Any typ)
         resp
@@ -277,8 +277,20 @@
 (defn- handle-post [open-api security event-name event-meta event-attrs]
   (let [{url :url headers :headers reqbody :requestBody}
         (make-request open-api event-name event-meta event-attrs security)
-        resp (http/POST url (when (seq headers) {:headers headers}) reqbody :json)]
+        resp (http/do-post url (when (seq headers) {:headers headers}) reqbody)]
     (handle-response :POST event-meta url resp)))
+
+(defn- handle-put [open-api security event-name event-meta event-attrs]
+  (let [{url :url headers :headers reqbody :requestBody}
+        (make-request open-api event-name event-meta event-attrs security)
+        resp (http/do-request :put url headers reqbody)]
+    (handle-response :PUT event-meta url resp)))
+
+(defn- handle-delete [open-api security event-name event-meta event-attrs]
+  (let [{url :url headers :headers reqbody :requestBody}
+        (make-request open-api event-name event-meta event-attrs security)
+        resp (http/do-request :delete url headers reqbody)]
+    (handle-response :DELETE event-meta url resp)))
 
 (defn- handle-get [open-api security event-name event-meta event-attrs]
   (let [{url :url headers :headers}
@@ -311,6 +323,8 @@
                (case method
                  :get handle-get
                  :post handle-post
+                 :put handle-put
+                 :delete handle-delete
                  (u/throw-ex (str "Event " event-name ", method " method " not yet supported")))]
       (handler open-api security event-name event-meta (cn/instance-user-attributes event-instance)))))
 

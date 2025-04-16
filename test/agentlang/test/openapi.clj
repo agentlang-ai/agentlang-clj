@@ -39,13 +39,15 @@
       (let [recnames (cn/record-names cn)]
         (is (> (count recnames) 1))
         (is (some #{(li/make-path cn :Pet)} recnames)))
-      (u/pprint (tu/invoke {(openapi/invocation-event :SwaggerPetstoreOpenAPI30/addPet)
-                            {:Parameters
-                             {:id 102
-                              :category {:id 1 :name "my-pets"}
-                              :name "kittie"
-                              :photoUrls ["https://mypets.com/imgs/kittie.jpg"]
-                              :tags [{:id 1, :name "cats"}]
-                              :status "available"}}}))))
+      (let [r (tu/invoke {(openapi/invocation-event :SwaggerPetstoreOpenAPI30/addPet)
+                          {:Parameters
+                           {:id 102
+                            :category {:id 1 :name "my-pets"}
+                            :name "kittie"
+                            :photoUrls ["https://mypets.com/imgs/kittie.jpg"]
+                            :tags [{:id 1, :name "cats"}]
+                            :status "available"}}})]
+        (is (cn/instance-of? :SwaggerPetstoreOpenAPI30/Pet r))
+        (is (= 102 (:id r))))))
 
   ) ; (when (openapi-test-enabled?)
