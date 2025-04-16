@@ -10,6 +10,7 @@
             [agentlang.util.http :as http]
             [agentlang.lang.internal :as li]
             [agentlang.datafmt.json :as json]
+            [agentlang.connections.client :as cc]
             [agentlang.util.logger :as log]))
 
 ;; Useful references and links:
@@ -28,6 +29,16 @@
 
 (defn- config-entity-name [component-name]
   (li/make-path component-name :ApiConfig))
+
+(def fetch-config
+  (memoize
+   (fn [component-name]
+     (try
+       (let [conn (cc/open-connection (li/make-path component-name :Connection))]
+         (cc/connection-parameter conn))
+       (catch Exception ex
+         (log/error (str "fetch-config failed for " component-name " - " (.getMessage ex)))
+         nil)))))
 
 (defn invocation-event [event-name]
   (let [[c n] (li/split-path event-name)]
@@ -166,7 +177,8 @@
   (or (cached-invocation-meta event-name :server)
       (cache-invocation-meta
        event-name :server
-       (let [srvs (:servers open-api)]
+       (let [srvs (or (:servers (fetch-config (first (li/split-path event-name))))
+                      (:servers open-api))]
          (:url
           (if (= 1 (count srvs))
             (first srvs)
@@ -320,7 +332,8 @@
         open-api (get-spec cn)
         _ (when-not open-api
             (u/throw-ex (str "Event " event-name ", no OpenAPI specification found for component " cn)))
-        event-sec (:security (or (:EventContext event-instance) gs/active-event-context))
+        event-sec (or (dissoc (fetch-config cn) :servers)
+                      (:security (or (:EventContext event-instance) gs/active-event-context)))
         security (when event-sec
                    (let [sec-scms (get-in open-api [:components :securitySchemes])]
                      (mapv (fn [[k v]]
