@@ -116,27 +116,49 @@
    (jdbc/prepare conn [query-sql])))
 
 (defn transact-fn! [datasource f]
-  (with-open [conn (jdbc/get-connection datasource)]
-    (jdbc/with-transaction [txn conn]
-      (f txn))))
+  (let [start (System/nanoTime)]
+    (try
+      (with-open [conn (jdbc/get-connection datasource)]
+        (jdbc/with-transaction [txn conn]
+          (f txn)))
+      (finally
+        (let [elapsed (/ (- (System/nanoTime) start) 1e6)]
+          (try (u/throw-ex "abasdf")
+               
+               (catch Exception ex (.printStackTrace ex)))
+          (println f (str "transact-fn! took " elapsed " ms")))))))
 
 (defn execute-fn! [datasource f]
-  (if-let [txn (gs/get-active-txn)]
-    (f txn)
-    (with-open [conn (jdbc/get-connection datasource)]
-      (f conn))))
+  (let [start (System/nanoTime)]
+    (try
+      (if-let [txn (gs/get-active-txn)]
+        (f txn)
+        (with-open [conn (jdbc/get-connection datasource)]
+          (f conn)))
+      (finally
+        (let [elapsed (/ (- (System/nanoTime) start) 1e6)]
+          (println (str "execute-fn! took " elapsed " ms")))))))
 
 (defn execute-sql! [conn sql]
-  (jdbc/execute! conn sql))
+  (let [start (System/nanoTime)]
+    (try
+      (jdbc/execute! conn sql)
+      (finally
+        (let [elapsed (/ (- (System/nanoTime) start) 1e6)]
+          (println (str "execute-sql! took " elapsed " ms")))))))
 
 (defn- execute-prepared-stmt! [once _ stmt params]
-  (try
-    (if (and params (not= (first params) :*))
-      (jdbc/execute! (jdbcp/set-parameters stmt params))
-      (jdbc/execute! stmt))
-    (finally
-      (when once
-        (.close stmt)))))
+  (let [start (System/nanoTime)]
+    (try
+      (if (and params (not= (first params) :*))
+        (jdbc/execute! (jdbcp/set-parameters stmt params))
+        (jdbc/execute! stmt))
+      (finally
+        (when once
+          (.close stmt))
+        (let [elapsed (/ (- (System/nanoTime) start) 1e6)]
+          (println (str "execute-prepared-stmt! took " elapsed " ms")))))))
+
 
 (def execute-stmt-once! (partial execute-prepared-stmt! true))
 (def execute-stmt! (partial execute-prepared-stmt! false))

@@ -402,7 +402,8 @@
   (set (mapv first (filter #(false? (second %)) rd-perms))))
 
 (defn- handle-query-pattern [env recname [attrs sub-pats] alias]
-  (let [select-clause (:? attrs)
+  (let [
+        select-clause (:? attrs)
         [update-attrs query-attrs] (when-not select-clause (lift-attributes-for-update attrs))
         _ (when (and (li/query-pattern? recname) (seq query-attrs))
             (u/throw-ex (str "Cannot have attribute specific queries for " recname)))
@@ -434,18 +435,45 @@
                         :can-delete-all? can-delete-all
                         :can-read-all-path-entities? can-read-all-path-entities
                         :follow-up-operation (or (when qfordel? :delete)
-                                                 (when update-attrs :update))}}
+                                                 (when update-attrs :update))}} 
+        
+
+        startm1 (System/nanoTime)
+
         res (if (and resolver (not (rr/composed? resolver)))
               (:result (r/call-resolver-query resolver env qparams))
               (store/do-query (env/get-store env) nil qparams))
+        
+        elapsedm1 (/ (- (System/nanoTime) startm1) 1e6)
+        _ (println (str "result0 took " elapsedm1 " ms"))
+
+        start0 (System/nanoTime)
         result0 (if (seq res)
                   (binding [query-mode true]
                     (mapv (partial realize-instance-values env recname) res))
                   res)
+        elapsed0 (/ (- (System/nanoTime) start0) 1e6)
+        _ (println (str "result0 took " elapsed0 " ms"))
+        
+        start1 (System/nanoTime)
         env0 (if (seq result0) (env/bind-instances env recname result0) env)
+        elapsed1 (/ (- (System/nanoTime) start1) 1e6)
+        _ (println (str "env0 took " elapsed1 " ms"))
+        
+        start2 (System/nanoTime)
         result (if update-attrs (handle-upsert env0 resolver recname update-attrs result0) result0)
+        elapsed2 (/ (- (System/nanoTime) start2) 1e6)
+        _ (println (str "result (upsert) took " elapsed2 " ms"))
+        
+        start3 (System/nanoTime)
         env1 (if (seq result) (env/bind-instances env0 recname result) env0)
-        env2 (if alias (env/bind-instance-to-alias env1 alias result) env1)]
+        elapsed3 (/ (- (System/nanoTime) start3) 1e6)
+        _ (println (str "env1 took " elapsed3 " ms"))
+        
+        start4 (System/nanoTime)
+        env2 (if alias (env/bind-instance-to-alias env1 alias result) env1)
+        elapsed4 (/ (- (System/nanoTime) start4) 1e6)
+        _ (println (str "env2 (alias) took " elapsed4 " ms"))]
     (make-result env2 result)))
 
 (defn- extension-attribute-to-pattern [record-name inst-alias extn-attrs attr-name attr-val]
@@ -919,6 +947,18 @@
 (defn evaluate-pattern
   ([env pat]
    (gs/reset-error-code!)
+
+   (println "a"
+
+            (cond
+              (ls/literal? pat)
+              "aa"
+
+              (fncall-expr? pat)
+              "bb"
+
+              :else
+              "cc"))
    (cond
      (ls/literal? pat)
      (make-result env (follow-references-for-literal env pat))
@@ -933,7 +973,10 @@
            [pat sub-pats] (maybe-preprocecss-pattern env pat)]
        (if-let [handler (pattern-handler pat)]
          (try
-           (let [r (handler env pat sub-pats)
+           (let [start (System/nanoTime)
+                 r (handler env pat sub-pats)
+                 elapsed (/ (- (System/nanoTime) start) 1e6)
+                 _ (println "sdafadsfelapsed" elapsed "ms")
                  res (:result r)
                  no-data (or (nil? res) (and (seqable? res) (not (seq res))))]
              (if-let [on-not-found (and no-data (:not-found condition-handlers))]
@@ -985,7 +1028,10 @@
                      (if-let [pat (first df-patterns)]
                        (let [pat-count (inc pat-count)
                              env (env/bind-eval-state env pat pat-count)
-                             {env1 :env r :result :as er} (evaluate-pattern env pat)]
+                             start (System/nanoTime)
+                             {env1 :env r :result :as er} (evaluate-pattern env pat)
+                             elapsed (/ (- (System/nanoTime) start) 1e6)]
+                         (println "aab" pat " --- " (str "evaluate-pattern took " elapsed " ms"))
                          (if-let [susp-pats (and (sp/dataflow-suspended?) (seq (rest df-patterns)))]
                            (let [sid (sp/suspension-id)
                                  result {:suspension-id sid :suspended-with r}]
