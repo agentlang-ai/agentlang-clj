@@ -10,6 +10,7 @@
             [agentlang.global-state :as gs]
             [agentlang.meta :as mt]
             [agentlang.util :as u]
+            [agentlang.util.seq :as su]
             [agentlang.util.errors :refer [make-error raise-error throw-ex-info]]
             [agentlang.util.hash :as sh]
             #?(:clj [agentlang.util.logger :as log]
@@ -1457,9 +1458,11 @@
 (defn all-computed-attribute-fns
   ([record-name rec-version]
    (when-let [scm (find-object-schema record-name rec-version)]
-     [(or (get-expr-fns-from-cache record-name)
-          (order-exprs-by-deps record-name (expr-fns scm rec-version)))
-      (eval-attrs scm rec-version)]))
+     (vec
+      (su/nonils
+       [(or (get-expr-fns-from-cache record-name)
+            (order-exprs-by-deps record-name (expr-fns scm rec-version)))
+        (eval-attrs scm rec-version)]))))
   ([rec-name]
    (all-computed-attribute-fns rec-name nil)))
 
