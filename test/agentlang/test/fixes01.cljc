@@ -226,3 +226,18 @@
               "\n\nUrgency: 1\n\nSeverity: 1\n\nAssigned to: "
               "joe"
               "\n\n"))))))
+
+(deftest nested-fn-calls
+  (let [k (atom nil)
+        f (atom nil)]
+    (defn set-k! [s] (reset! k s))
+    (defn set-f! [s] (reset! f s))
+    (defcomponent :Nfc
+      (dataflow
+       :Nfc/Evt
+       [:call '(agentlang.test.fixes01/set-k! (str "Count = " (count :Nfc/Evt.Xs)))]
+       [:call '(agentlang.test.fixes01/set-f! :Nfc/Evt.Xs)]))
+    (tu/invoke
+     {:Nfc/Evt {:Xs [10 20 30]}})
+    (is (= "Count = 3" @k))
+    (is (= [10 20 30] @f))))
