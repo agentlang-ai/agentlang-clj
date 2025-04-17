@@ -32,6 +32,15 @@
 (entity :C {:meta {:actions {:update :UpdateC}} :Id {:type :Int :id true} :Z :Int})
 (relationship :AC {:meta {:between [:A :C]}})
 
+(defn init-as []
+  (mapv (fn [id] {:Id id :X (* id 10)}) (range 10000)))
+
+(dataflow
+ :InitAs
+ [:call '(sample.simple/init-as) :as :As]
+ [:for-each :As
+  {:A {} :from :%}])
+
 (dataflow
  :FindAC
  {:C? {}
