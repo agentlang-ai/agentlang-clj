@@ -478,7 +478,12 @@
     (dataflow
      [:after :delete :PPE/E]
      [:delete {:PPE/F {:Id? :Instance.Id}}]))
-  (is (= 4 (count (cn/active-prepost-events :PPE))))
+  (let [prepost-events (cn/active-prepost-events :PPE)
+        parts (cn/normalize-prepost-event-name (first prepost-events))]
+    (is (= 4 (count prepost-events)))
+    (is (some #{(first parts)} #{:before :after}))
+    (is (some #{(second parts)} #{:create :update :delete}))
+    (is (= :PPE/E (last parts))))
   (let [cre (fn [id x]
               (tu/invoke
                {:PPE/Create_E

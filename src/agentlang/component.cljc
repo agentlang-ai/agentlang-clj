@@ -2095,6 +2095,11 @@
    #(apply prepost-event-name %)
    (li/prepost-event-heads recname)))
 
+(defn normalize-prepost-event-name [n]
+  (let [[c n] (li/split-path n)
+        [tag event entity] (s/split (name n) #"_")]
+    [(keyword (s/lower-case tag)) (keyword (s/lower-case event)) (li/make-path c (keyword entity))]))
+
 (defn active-prepost-events [component-name]
   (let [ents (entity-names component-name)
         event-names (apply concat (mapv all-prepost-events ents))]
