@@ -410,6 +410,11 @@
 (def validate-name-relaxed (partial validate valid-name? "reserved keyword"))
 (def validate-clj-imports (partial validate clj-import-list? "not a valid clj-import list"))
 
+(defn validate-attribute-name [n]
+  (if (= n :?)
+    (u/throw-ex (str n " cannot be used as an attribute name"))
+    (validate-name n)))
+
 (defn validate-bool [attrname v]
   (validate boolean? (str attrname " must be either true or false") v))
 

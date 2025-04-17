@@ -329,7 +329,7 @@
 
 (defn- validate-attributes [attrs]
   (doseq [[k v] attrs]
-    (li/validate-name k)
+    (li/validate-attribute-name k)
     (cond
       (keyword? v) (when-not (attribute-type? v)
                      (u/throw-ex (str "type not defined - " v)))
