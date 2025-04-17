@@ -390,7 +390,7 @@
 
 (defn validate [predic errmsg x]
   (when-not (predic x)
-    (#?(:clj u/throw-ex :cljs log/error) (str errmsg " - " x)))
+    (log/warn (str errmsg " - " x)))
   x)
 
 (defn auto-generated-name? [n]
@@ -406,9 +406,14 @@
          (name? n))))
   ([n] (valid-name? nil n)))
 
-(def validate-name (partial validate (partial valid-name? no-restricted-chars?) "not a valid name"))
-(def validate-name-relaxed (partial validate valid-name? "not a valid name"))
+(def validate-name (partial validate (partial valid-name? no-restricted-chars?) "reserved keyword"))
+(def validate-name-relaxed (partial validate valid-name? "reserved keyword"))
 (def validate-clj-imports (partial validate clj-import-list? "not a valid clj-import list"))
+
+(defn validate-attribute-name [n]
+  (if (= n :?)
+    (u/throw-ex (str n " cannot be used as an attribute name"))
+    (validate-name n)))
 
 (defn validate-bool [attrname v]
   (validate boolean? (str attrname " must be either true or false") v))
