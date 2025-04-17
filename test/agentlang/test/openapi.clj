@@ -17,23 +17,34 @@
 (when (openapi-test-enabled?)
 
   (defn- parse-spec [spec-url]
-    (let [cn (first (:components (openapi/parse spec-url)))]
+    (let [model (openapi/parse spec-url)
+          cn (first (:components model))]
       (is (cn/component-exists? cn))
       (u/run-init-fns)
-      cn))
+      [cn model]))
 
   (deftest basic-api-call
-    (let [cn (parse-spec spec-url)]
-      (let [event-name (first (cn/api-event-names cn))]
+    (let [[cn model] (parse-spec spec-url)
+          config-entity (:config-entity model)]
+      (let [event-name (first (cn/api-event-names cn))
+            cfg (tu/invoke
+                 {(cn/crud-event-name config-entity :Create)
+                  {:Instance
+                   {config-entity
+                    {:apikey {:api-key (u/getenv "NYT_API_KEY")}}}}})]
+        (is (cn/instance-of? config-entity cfg))
         (is
          (seq
           (get-in
            (tu/invoke
-            {(openapi/invocation-event event-name) {:Parameters {:q "election"} :EventContext {:security {:apikey {:api-key (u/getenv "NYT_API_KEY")}}}}})
+            {(openapi/invocation-event event-name)
+             {:Parameters {:q "election"}}})
+           ;;; If the config-entity is not set, add security to the event as,
+           ;; {:EventContext {:security {:apikey {:api-key (u/getenv "NYT_API_KEY")}}}}
            [:response :docs]))))))
 
   (deftest petstore
-    (let [cn (parse-spec "test/sample/petstore.yaml")]
+    (let [[cn _] (parse-spec "test/sample/petstore.yaml")]
       (is (= :SwaggerPetstoreOpenAPI30 cn))
       (let [recnames (cn/record-names cn)]
         (is (> (count recnames) 1))

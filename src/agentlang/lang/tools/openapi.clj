@@ -11,6 +11,7 @@
             [agentlang.lang.internal :as li]
             [agentlang.datafmt.json :as json]
             [agentlang.connections.client :as cc]
+            [agentlang.store :as store]
             [agentlang.util.logger :as log]))
 
 ;; Useful references and links:
@@ -33,12 +34,19 @@
 (def fetch-config
   (memoize
    (fn [component-name]
-     (try
-       (let [conn (cc/open-connection (li/make-path component-name :Connection))]
-         (cc/connection-parameter conn))
-       (catch Exception ex
-         (log/error (str "fetch-config failed for " component-name " - " (.getMessage ex)))
-         nil)))))
+     (or (try
+           (let [conn (cc/open-connection (li/make-path component-name :Connection))]
+             (cc/connection-parameter conn))
+           (catch Exception ex
+             (log/error (str "fetch-config failed for " component-name " - " (.getMessage ex)))
+             nil))
+         (when-let [config (first
+                            (:result
+                             (gs/evaluate-dataflow-internal
+                              {(cn/crud-event-name (config-entity-name component-name) :LookupAll) {}})))]
+           (dissoc
+            (cn/instance-user-attributes config)
+            li/path-attr li/parent-attr))))))
 
 (defn invocation-event [event-name]
   (let [[c n] (li/split-path event-name)]
@@ -357,16 +365,20 @@
     :with-methods
     {:eval handle-openapi-event}}))
 
+(defn- servers? [xs]
+  (and (vector? xs)
+       (every? #(string? (:url %)) xs)))
+
 (defn- register-config-entity [cn open-api]
   (let [attrs0 (reduce
                 (fn [attrs [k v]]
                   (if-let [in (:in v)]
                     (assoc attrs k {:meta (normalize-sec-spec v)
-                                    :type :String
+                                    :type :Any
                                     :optional true})
                     attrs))
                 {} (get-in open-api [:components :securitySchemes]))
-        attrs (assoc attrs0 :servers {:listof :String :default (vec (:servers open-api))})]
+        attrs (assoc attrs0 :servers {:check servers? :default (vec (:servers open-api))})]
     (if-let [n (ln/entity {(config-entity-name cn) attrs})]
       n
       (log/warn (str "Failed to register config-entity for " cn)))))
@@ -406,5 +418,7 @@
         (when-let [r (register-resolver cn events)] (log/info (str "Resolver - " r))))
       (when-let [n (register-model cn open-api config-entity)]
         (log/info (str "Model registered - " n))
-        (cn/fetch-model n)))
+        (let [model (cn/fetch-model n)]
+          (u/set-on-init! (fn [] (every? identity (mapv #(store/maybe-init-schema %) (:components model)))))
+          model)))
     (u/throw-ex (str "Failed to parse " spec-url))))
