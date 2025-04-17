@@ -12,6 +12,7 @@
             [agentlang.lang.raw :as raw]
             [agentlang.lang.name-util :as nu]
             [agentlang.lang.internal :as li]
+            [agentlang.lang.tools.openapi :as openapi]
             [agentlang.lang.tools.util :as tu]
             [agentlang.lang.tools.schema.model :as sm])
   #?(:clj
@@ -61,6 +62,9 @@
 (defn- model-dep? [[tag url model-info]]
   (or (= tag :git) (= tag :fs)))
 
+(defn- openapi-dep? [dep]
+  (= :openapi (first dep)))
+
 (defn extract-model-name-from-url [tag url]
   (case tag
     :git
@@ -87,6 +91,10 @@
   (cond
     (or (string? dep) (keyword? dep)) dep
     (model-dep? dep) (extract-model-name-from-dep dep)
+    (openapi-dep? dep)
+    (do (println (str "Resolving OpenApi dependency: " (second dep)))
+        (log/info (u/pretty-str (openapi/parse (second dep))))
+        nil)
     :else nil))
 
 (defn dependency-model-version [dep]

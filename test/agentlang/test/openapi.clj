@@ -17,7 +17,7 @@
 (when (openapi-test-enabled?)
 
   (defn- parse-spec [spec-url]
-    (let [cn (openapi/parse spec-url)]
+    (let [cn (first (:components (openapi/parse spec-url)))]
       (is (cn/component-exists? cn))
       (u/run-init-fns)
       cn))
@@ -25,7 +25,6 @@
   (deftest basic-api-call
     (let [cn (parse-spec spec-url)]
       (let [event-name (first (cn/api-event-names cn))]
-        ;; TODO: automate handling of response (see L81 of agentlang.lang.tools.openapi)
         (is
          (seq
           (get-in

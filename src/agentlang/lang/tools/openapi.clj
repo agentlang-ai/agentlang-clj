@@ -378,7 +378,8 @@
     :components [cn]
     :version (:version open-api)
     :agentlang-version "current"
-    :config-entity config-entity}))
+    :config-entity config-entity
+    :info (:info open-api)}))
 
 (defn- read-yml-file [spec-url]
   (if (s/starts-with? spec-url "http")
@@ -404,6 +405,6 @@
         (log/info (str "Events - " (s/join ", " events)))
         (when-let [r (register-resolver cn events)] (log/info (str "Resolver - " r))))
       (when-let [n (register-model cn open-api config-entity)]
-        (log/info (str "Model registered - " n)))
-      cn)
+        (log/info (str "Model registered - " n))
+        (cn/fetch-model n)))
     (u/throw-ex (str "Failed to parse " spec-url))))
