@@ -1893,3 +1893,33 @@
          (json/decode (cn/instance-as-string (cn/make-instance :Lbls/Person {:Id 1 :Name "Jake" :Email "jake@acme.com" :Age 20})))))
   (is (= #:Lbls{:Place {:Name "Blr", :Zip 101}}
          (json/decode (cn/instance-as-string (cn/make-instance :Lbls/Place {:Zip 101 :Name "Blr"}))))))
+
+(deftest reserved-words
+  (defcomponent :Rw
+    (entity
+     :Rw/E
+     {:Id {:type :Int :id true}
+      :query :String
+      :event :String
+      :match :Int})
+    (dataflow
+     :Rw/FindE
+     {:Rw/E
+      {:query? :Rw/FindE.query
+       :event? :Rw/FindE.event
+       :match? :Rw/FindE.match}}))
+  (let [[cre e?] (tu/make-create :Rw/E)
+        e (cre {:Id 1
+                :query "abc"
+                :event "<RK1>"
+                :match 1})
+        finde (fn [q e m]
+                (first
+                 (tu/invoke
+                  {:Rw/FindE
+                   {:query q :event e :match m}})))]
+    (is (e? e))
+    (let [e1 (finde "abc" "<RK1>" 1)
+          e2 (finde "abc" "<RK2>" 1)]
+      (is (cn/same-instance? e1 e))
+      (is (not e2)))))
