@@ -667,9 +667,8 @@
                   (or (second ps0) (u/throw-ex (str "Missing :check argument in " args)))
                   (u/throw-ex (str "Unexpected entry " (first ps0) " in " args))))
         fname (first pat)
-        args (mapv #(:result (evaluate-pattern env %)) (rest pat))
         expr `(fn [env#]
-                (let [args# (mapv (fn [x#] (:result (evaluate-pattern env# x#))) ~(vec (rest pat)))]
+                (let [args# (mapv (fn [x#] (:result (evaluate-pattern env# x#))) '~(vec (rest pat)))]
                   (apply ~fname args#)))
         result ((li/evaluate expr) env)]
     (when check
@@ -929,7 +928,7 @@
      (make-result env (follow-references-for-literal env pat))
 
      (fncall-expr? pat)
-     (make-result env (evaluate-expr env pat))
+     (evaluate-pattern env [:call pat])
 
      :else
      (let [env (or env (env/make (store/get-default-store) nil))
