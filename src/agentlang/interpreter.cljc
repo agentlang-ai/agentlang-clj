@@ -401,6 +401,11 @@
 (defn- non-readable-entities [rd-perms]
   (set (mapv first (filter #(false? (second %)) rd-perms))))
 
+(defn- has-computed-fns? [recname]
+  (if (seq (cn/all-computed-attribute-fns recname nil))
+    true
+    false))
+
 (defn- handle-query-pattern [env recname [attrs sub-pats] alias]
   (let [select-clause (:? attrs)
         [update-attrs query-attrs] (when-not select-clause (lift-attributes-for-update attrs))
@@ -438,7 +443,7 @@
         res (if (and resolver (not (rr/composed? resolver)))
               (:result (r/call-resolver-query resolver env qparams))
               (store/do-query (env/get-store env) nil qparams))
-        result0 (if (seq res)
+        result0 (if (and (seq res) (has-computed-fns? recname))
                   (binding [query-mode true]
                     (mapv (partial realize-instance-values env recname) res))
                   res)
