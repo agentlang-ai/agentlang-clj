@@ -133,9 +133,11 @@
    (do-get url options :json identity))
   ([url] (do-get url nil)))
 
-(defn do-raw-request [args-map]
-  #?(:clj @(http/request args-map)
-     :cljs (go (callback (<! (http/request args-map))))))
+(defn do-raw-request
+  ([args-map callback]
+   #?(:clj @(http/request args-map)
+      :cljs (go (callback (<! (http/request args-map))))))
+  ([args-map] (do-raw-request args-map identity)))
 
 (defn do-request
   ([method callback url headers body]
