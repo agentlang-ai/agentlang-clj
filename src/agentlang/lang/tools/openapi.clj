@@ -135,9 +135,11 @@
 
 (defn- parse-request-body-spec [component-name req-body-spec]
   (when-let [content (:content req-body-spec)]
-    (when-let [content-type (first (keys content))]
-      [(parse-reqresp-spec component-name (get-in content [content-type :schema]))
-       content-type])))
+    (let [ctypes (keys content)]
+      (when-let [content-type (or (some #{:application/json} ctypes)
+                                  (first ctypes))]
+        [(parse-reqresp-spec component-name (get-in content [content-type :schema]))
+         content-type]))))
 
 (defn- parse-responses-spec [component-name resp-spec]
   (parse-reqresp-spec component-name (get-in resp-spec [:200 :content :application/json :schema])))
@@ -229,13 +231,14 @@
        {} hsecs))))
 
 (defn- security-query-params [security]
-  (let [qsecs (mapv (fn [[spec v]]
-                      (when (= :query (:in spec))
-                        (let [n (:name spec)]
-                          (if-let [secv (get v n)]
-                            [n secv]
-                            (u/throw-ex (str "Required parameter " n " not found in security-object"))))))
-                    security)]
+  (let [qsecs (su/nonils
+               (mapv (fn [[spec v]]
+                       (when (= :query (:in spec))
+                         (let [n (:name spec)]
+                           (if-let [secv (get v n)]
+                             [n secv]
+                             (u/throw-ex (str "Required parameter " n " not found in security-object"))))))
+                     security))]
     (when (seq qsecs)
       (s/join "&" (mapv (fn [[n v]] (str (name n) "=" v)) qsecs)))))
 
@@ -248,7 +251,15 @@
         has-params (seq anames)]
     (str
      (if has-params
-       (let [params (s/join "&" (mapv (fn [a] (str (name a) "=" (get event-attrs a))) anames))]
+       (let [params (s/join "&"
+                            (su/nonils
+                             (mapv (fn [a]
+                                     (let [v (get event-attrs a)]
+                                       (when-let [av (if (string? v)
+                                                       (and (seq v) v)
+                                                       v)]
+                                         (str (name a) "=" av))))
+                                   anames)))]
          (str url "?" params))
        url)
      (if sec-params (str (if has-params "&" "?") sec-params) ""))))
@@ -301,7 +312,7 @@
         headers (merge hdrs (security-headers security))
         request-body (make-request-body open-api event-meta event-attrs)]
     (merge {:url url :headers headers}
-           (if (= :application/x-www-form-urlencoded)
+           (if (= (:request-content-type event-meta) :application/x-www-form-urlencoded)
              {:form-params (normalize-form-params request-body)}
              {:requestBody request-body}))))
 
@@ -316,15 +327,22 @@
         resp))
     resp))
 
+(defn- try-parse-json [s]
+  (if (string? s)
+    (try
+      (json/decode s)
+      (catch Exception _
+        s))
+    s))
+
 (defn- handle-response [method event-meta url resp]
   (if (map? resp)
     (if-let [status (:status resp)]
       (if (= 200 status)
-        (let [opts (:opts resp)
-              ctype (get-in opts [:headers "Content-Type"])]
-          (if (= ctype "application/json")
-            (process-response event-meta (json/decode (:body resp)))
-            (:body resp)))
+        (let [ctype (get-in resp [:headers :content-type])]
+          (if (s/starts-with? ctype "application/json")
+            (process-response event-meta (try-parse-json (:body resp)))
+            (try-parse-json (:body resp))))
         (do (log/warn (str (name method) " request to " url " failed with status - " status))
             (log/warn (:body resp))
             nil))
@@ -409,11 +427,9 @@
 (defn- register-config-entity [cn open-api]
   (let [attrs0 (reduce
                 (fn [attrs [k v]]
-                  (if-let [in (:in v)]
-                    (assoc attrs k {:meta (normalize-sec-spec v)
-                                    :type :Any
-                                    :optional true})
-                    attrs))
+                  (assoc attrs k {:meta (normalize-sec-spec v)
+                                  :type :Any
+                                  :optional true}))
                 {} (get-in open-api [:components :securitySchemes]))
         attrs (assoc attrs0 :servers {:check servers? :default (vec (:servers open-api))})]
     (if-let [n (ln/entity {(config-entity-name cn) attrs})]
