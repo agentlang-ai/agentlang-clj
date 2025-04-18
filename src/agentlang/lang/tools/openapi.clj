@@ -12,6 +12,7 @@
             [agentlang.datafmt.json :as json]
             [agentlang.connections.client :as cc]
             [agentlang.store :as store]
+            [agentlang.lang.raw :as raw]
             [agentlang.util.logger :as log]))
 
 ;; Useful references and links:
@@ -98,6 +99,23 @@
             :optional (not (:required p))}})
         (:parameters spec)))
 
+(defn- attributes-from-properties [spec]
+  (let [required (mapv u/string-as-keyword (:required spec))
+        props (:properties spec)]
+    (reduce
+     (fn [attrs [k v]]
+       (let [req (or (some #{k} required)
+                     (:required v))
+             props (merge
+                    {:optional (not req)}
+                    (when-let [d (:default v)]
+                      {:default d})
+                    (if-let [xs (:enum v)]
+                      {:oneof (vec xs)}
+                      {:type (as-al-type (u/string-as-keyword (:type v)))}))]
+         (assoc attrs k props)))
+     {} props)))
+
 (defn- parse-reqresp-spec [component-name schema]
   (or
    (when schema
@@ -105,14 +123,21 @@
            ref-path (if arr?
                       (get-in schema [:items :$ref])
                       (:$ref schema))]
-       (when ref-path
+       (if ref-path
          (let [n (last (mapv keyword (s/split (subs ref-path 2) #"/")))
                typ (li/make-path component-name n)]
-           (if arr? {:listof typ} {:type typ})))))
+           (if arr? {:listof typ} {:type typ}))
+         (let [rec {(li/make-path component-name (gensym))
+                    (attributes-from-properties schema)}
+               n (ln/record rec)]
+           {:type n}))))
    {:type :Any}))
 
 (defn- parse-request-body-spec [component-name req-body-spec]
-  (parse-reqresp-spec component-name (get-in req-body-spec [:content :application/json :schema])))
+  (when-let [content (:content req-body-spec)]
+    (when-let [content-type (first (keys content))]
+      [(parse-reqresp-spec component-name (get-in content [content-type :schema]))
+       content-type])))
 
 (defn- parse-responses-spec [component-name resp-spec]
   (parse-reqresp-spec component-name (get-in resp-spec [:200 :content :application/json :schema])))
@@ -130,7 +155,7 @@
              (mapv (fn [[method spec]]
                      (let [event-name (or (:operationId spec)
                                           (path-to-event-name (str (s/capitalize (name method)) "_" (name k))))
-                           req-type-spec (parse-request-body-spec component-name (:requestBody spec))
+                           [req-type-spec req-content-type] (parse-request-body-spec component-name (:requestBody spec))
                            attr-spec (path-spec-to-attrs spec)
                            parent (request-body-parent-type req-type-spec)]
                        {(li/make-path component-name event-name)
@@ -139,6 +164,7 @@
                                        {:doc (:description spec)
                                         :api (name k)
                                         :requestBody req-type-spec
+                                        :request-content-type req-content-type
                                         :responses (parse-responses-spec component-name (:responses spec))
                                         :security (or (:security spec) sec)
                                         :method method}
@@ -151,23 +177,10 @@
   (reduce
    (fn [recs [k v]]
      (if (= "object" (:type v))
-       (let [required (mapv u/string-as-keyword (:required v))]
-         (conj
-          recs
-          {(li/make-path component-name k)
-           (reduce
-            (fn [attrs [k v]]
-              (let [req (or (some #{k} required)
-                            (:required v))
-                    props (merge
-                           {:optional (not req)}
-                           (when-let [d (:default v)]
-                             {:default d})
-                           (if-let [xs (:enum v)]
-                             {:oneof (vec xs)}
-                             {:type (as-al-type (u/string-as-keyword (:type v)))}))]
-                (assoc attrs k props)))
-            {} (:properties v))}))
+       (conj
+        recs
+        {(li/make-path component-name k)
+         (attributes-from-properties v)})
        recs))
    [] (get-in open-api [:components :schemas])))
 
@@ -249,6 +262,14 @@
      (dissoc event-attrs anames)]
     [api-endpoint event-attrs]))
 
+(defn- header-params [event-schema event-attrs]
+  (if-let [anames (seq (attribute-names-in :header event-schema))]
+    (let [ks (select-keys event-attrs anames)]
+      (if (seq ks)
+        [(into {} (mapv (fn [[k v]] [(u/keyword-as-string k) v]) ks)) (dissoc event-attrs anames)]
+        [nil event-attrs]))
+    [nil event-attrs]))
+
 (defn- make-request-body [open-api event-meta event-attrs]
   (if-let [spec (:requestBody event-meta)]
     (if-let [typ (:type spec)]
@@ -262,6 +283,9 @@
         event-attrs))
     event-attrs))
 
+(defn- normalize-form-params [params]
+  (into {} (mapv (fn [[k v]] [(name k) v]) params)))
+
 (defn- make-request [open-api event-name event-meta event-attrs security]
   (let [schema (into
                 {}
@@ -269,13 +293,17 @@
                  (fn [[k v]]
                    [k (cn/fetch-attribute-meta v)])
                  (filter (fn [[k _]] (some #{k} (keys event-attrs))) (cn/fetch-event-schema event-name))))
+        [hdrs event-attrs] (header-params schema event-attrs)
         [api event-attrs] (format-api-endpoint (:api event-meta) schema event-attrs)
         url (attach-query-params
              (str (fetch-server event-name open-api) "/" api)
              schema security event-attrs)
-        headers (security-headers security)
+        headers (merge hdrs (security-headers security))
         request-body (make-request-body open-api event-meta event-attrs)]
-    {:url url :headers headers :requestBody request-body}))
+    (merge {:url url :headers headers}
+           (if (= :application/x-www-form-urlencoded)
+             {:form-params (normalize-form-params request-body)}
+             {:requestBody request-body}))))
 
 (defn- process-response [event-meta resp]
   (if-let [spec (:responses event-meta)]
@@ -304,21 +332,30 @@
     resp))
 
 (defn- handle-post [open-api security event-name event-meta event-attrs]
-  (let [{url :url headers :headers reqbody :requestBody}
+  (let [{url :url headers :headers reqbody :requestBody form-params :form-params}
         (make-request open-api event-name event-meta event-attrs security)
-        resp (http/do-post url (when (seq headers) {:headers headers}) reqbody)]
+        resp
+        (if form-params
+          (http/do-raw-request {:url url :method :post :headers headers :form-params form-params})
+          (http/do-post url (when (seq headers) {:headers headers}) reqbody))]
     (handle-response :POST event-meta url resp)))
 
 (defn- handle-put [open-api security event-name event-meta event-attrs]
-  (let [{url :url headers :headers reqbody :requestBody}
+  (let [{url :url headers :headers reqbody :requestBody form-params :form-params}
         (make-request open-api event-name event-meta event-attrs security)
-        resp (http/do-request :put url headers reqbody)]
+        resp
+        (if form-params
+          (http/do-raw-request {:url url :method :put :headers headers :form-params form-params})
+          (http/do-request :put url headers reqbody))]
     (handle-response :PUT event-meta url resp)))
 
 (defn- handle-delete [open-api security event-name event-meta event-attrs]
-  (let [{url :url headers :headers reqbody :requestBody}
+  (let [{url :url headers :headers reqbody :requestBody form-params :form-params}
         (make-request open-api event-name event-meta event-attrs security)
-        resp (http/do-request :delete url headers reqbody)]
+        resp
+        (if form-params
+          (http/do-raw-request {:url url :method :delete :headers headers :form-params form-params})
+          (http/do-request :delete url headers reqbody))]
     (handle-response :DELETE event-meta url resp)))
 
 (defn- handle-get [open-api security event-name event-meta event-attrs]
@@ -403,6 +440,12 @@
 
 (defn- parse-openapi-spec [spec-url]
   (yaml/parse-string (read-yml-file spec-url)))
+
+(defn- spit-component [component-name]
+  (let [file-name (str (name component-name) ".al")]
+    (u/pretty-spit file-name (raw/as-edn component-name))
+    (println "out:" file-name)
+    file-name))
 
 (defn parse [spec-url]
   (if-let [open-api (parse-openapi-spec spec-url)]

@@ -133,6 +133,10 @@
    (do-get url options :json identity))
   ([url] (do-get url nil)))
 
+(defn do-raw-request [args-map]
+  #?(:clj @(http/request args-map)
+     :cljs (go (callback (<! (http/request args-map))))))
+
 (defn do-request
   ([method callback url headers body]
    (let [req (merge {:url url :method method :headers headers} (when body {:body body}))]
