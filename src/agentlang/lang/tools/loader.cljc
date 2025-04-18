@@ -12,7 +12,7 @@
             [agentlang.lang.raw :as raw]
             [agentlang.lang.name-util :as nu]
             [agentlang.lang.internal :as li]
-            #?(:clj [agentlang.lang.tools.openapi :as openapi])
+            [agentlang.lang.tools.openapi :as openapi]
             [agentlang.lang.tools.util :as tu]
             [agentlang.lang.tools.schema.model :as sm])
   #?(:clj
