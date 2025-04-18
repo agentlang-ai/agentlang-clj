@@ -1,7 +1,7 @@
 (ns agentlang.lang.tools.openapi
   (:require [clojure.string :as s]
             [clojure.set :as set]
-            [clj-yaml.core :as yaml]
+            #?(:clj [clj-yaml.core :as yaml])
             [agentlang.util :as u]
             [agentlang.util.seq :as su]
             [agentlang.lang :as ln]
@@ -11,9 +11,10 @@
             [agentlang.lang.internal :as li]
             [agentlang.datafmt.json :as json]
             [agentlang.connections.client :as cc]
-            [agentlang.store :as store]
+            #?(:clj [agentlang.store :as store])
             [agentlang.lang.raw :as raw]
-            [agentlang.util.logger :as log]))
+            #?(:clj [agentlang.util.logger :as log]
+               :cljs [agentlang.util.jslogger :as log])))
 
 ;; Useful references and links:
 ;; 1. https://swagger.io/specification/
@@ -38,8 +39,8 @@
      (or (try
            (let [conn (cc/open-connection (li/make-path component-name :Connection))]
              (cc/connection-parameter conn))
-           (catch Exception ex
-             (log/error (str "fetch-config failed for " component-name " - " (.getMessage ex)))
+           (catch #?(:clj Exception :cljs :default) ex
+             (log/error (str "fetch-config failed for " component-name " - " #?(:clj (.getMessage ex) :cljs ex)))
              nil))
          (when-let [config (first
                             (:result
@@ -331,7 +332,7 @@
   (if (string? s)
     (try
       (json/decode s)
-      (catch Exception _
+      (catch #?(:clj Exception :cljs :default) _
         s))
     s))
 
@@ -454,8 +455,9 @@
         (u/throw-ex (str "Failed to GET " spec-url ", status - " (:status result)))))
     (slurp spec-url)))
 
-(defn- parse-openapi-spec [spec-url]
-  (yaml/parse-string (read-yml-file spec-url)))
+#?(:clj
+   (defn- parse-openapi-spec [spec-url]
+     (yaml/parse-string (read-yml-file spec-url))))
 
 (defn- spit-component [component-name]
   (let [file-name (str (name component-name) ".al")]
@@ -463,8 +465,8 @@
     (println "out:" file-name)
     file-name))
 
-(defn parse [spec-url]
-  (if-let [open-api (parse-openapi-spec spec-url)]
+(defn parse [spec]
+  (if-let [open-api (if (string? spec) (parse-openapi-spec spec) spec)]
     (let [cn (create-component open-api)
           _ (put-spec! cn open-api)
           recs (mapv ln/record (components-to-records cn open-api))
@@ -478,6 +480,6 @@
       (when-let [n (register-model cn open-api config-entity)]
         (log/info (str "Model registered - " n))
         (let [model (cn/fetch-model n)]
-          (u/set-on-init! (fn [] (every? identity (mapv #(store/maybe-init-schema %) (:components model)))))
+          #?(:clj (u/set-on-init! (fn [] (every? identity (mapv #(store/maybe-init-schema %) (:components model))))))
           model)))
-    (u/throw-ex (str "Failed to parse " spec-url))))
+    (u/throw-ex (str "Failed to parse " spec))))
