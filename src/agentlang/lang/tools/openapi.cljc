@@ -10,7 +10,7 @@
             [agentlang.util.http :as http]
             [agentlang.lang.internal :as li]
             [agentlang.datafmt.json :as json]
-            [agentlang.connections.client :as cc]
+            #?(:clj [agentlang.connections.client :as cc])
             #?(:clj [agentlang.store :as store])
             [agentlang.lang.raw :as raw]
             #?(:clj [agentlang.util.logger :as log]
@@ -36,12 +36,12 @@
 (def fetch-config
   (memoize
    (fn [component-name]
-     (or (try
-           (let [conn (cc/open-connection (li/make-path component-name :Connection))]
-             (cc/connection-parameter conn))
-           (catch #?(:clj Exception :cljs :default) ex
-             (log/error (str "fetch-config failed for " component-name " - " #?(:clj (.getMessage ex) :cljs ex)))
-             nil))
+     (or #?(:clj (try
+                   (let [conn (cc/open-connection (li/make-path component-name :Connection))]
+                     (cc/connection-parameter conn))
+                   (catch Exception ex
+                     (log/error (str "fetch-config failed for " component-name " - " (.getMessage ex)))
+                     nil)))
          (when-let [config (first
                             (:result
                              (gs/evaluate-dataflow-internal
@@ -75,7 +75,7 @@
 
 (defn- component-name-from-title [open-api]
   (when-let [title (get-in open-api [:info :title])]
-    (let [s (apply str (filter #(or (Character/isLetter %) (Character/isDigit %)) title))]
+    (let [s (apply str (re-seq #"[a-zA-Z0-9]" title))]
       (when (seq s)
         (keyword s)))))
 
