@@ -160,7 +160,7 @@
 
 (defn- create-component-meta-table-sql [table-name]
   (str "CREATE TABLE IF NOT EXISTS " table-name
-       " (KEY VARCHAR(100) PRIMARY KEY, VALUE VARCHAR("
+       " (META_KEY VARCHAR(100) PRIMARY KEY, META_VALUE VARCHAR("
        sql/default-max-varchar-length "))"))
 
 (defn- insert-entity-meta-sql [comp-meta-table entity-table meta-data]

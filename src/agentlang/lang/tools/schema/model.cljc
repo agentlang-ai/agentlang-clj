@@ -51,7 +51,7 @@
     true))
 
 (defn- dep-tag? [t]
-  (and (keyword? t) (or (= t :git) (= t :fs))))
+  (and (keyword? t) (some #{t} #{:git :fs :openapi})))
 
 (defn- dep-spec? [d]
   (and (vector? d)
