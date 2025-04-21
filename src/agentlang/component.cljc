@@ -341,6 +341,7 @@
 
 (def intern-entity (partial intern-record :entity))
 (def intern-event (partial intern-record :event))
+(def intern-ui (partial intern-record :ui))
 (def intern-relationship intern-entity)
 
 (defn- find-attribute-schema-internal
@@ -393,6 +394,15 @@
    (let [[component aref] (li/split-path path)]
      (find-record-schema component aref))))
 
+(defn find-ui-schema
+  ([component version aref]
+   (component-find [component (or version (get-model-version component)) :records aref]))
+  ([component aref]
+   (find-ui-schema component nil aref))
+  ([path]
+   (let [[component aref] (li/split-path path)]
+     (find-ui-schema component aref))))
+
 (defn find-record-schema-version
   [version path]
   (let [[component aref] (li/split-path path)]
@@ -411,17 +421,20 @@
   ([path] (find-entity-schema path nil)))
 
 (def find-event-schema (partial find-record-schema-by-type :event))
+(def find-ui-schema (partial find-record-schema-by-type :ui))
 
 (defn find-schema
   ([path version]
    (let [fn-find-entity-schema (partial find-record-schema-by-type-version :entity version)
          fn-find-event-schema (partial find-record-schema-by-type-version :event version)
+         fn-find-ui-schema (partial find-record-schema-by-type-version :ui version)
          fn-find-record-schema (partial find-record-schema-version version)
          fn-find-attribute-schema (partial find-attribute-schema-version version)]
      (u/first-applied [fn-find-entity-schema :entity
                        fn-find-event-schema :event
                        fn-find-record-schema :record
-                       fn-find-attribute-schema :attribute]
+                       fn-find-attribute-schema :attribute
+                       fn-find-ui-schema :ui]
                       [path])))
   ([path]
    (find-schema path nil)))
@@ -441,6 +454,11 @@
 (defn fetch-event-schema [event-name]
   (dissoc
    (:schema (find-event-schema event-name))
+   li/event-context))
+
+(defn fetch-ui-schema [record-name]
+  (dissoc
+   (:schema (find-ui-schema record-name))
    li/event-context))
 
 (defn fetch-spec [tag n]
@@ -1387,6 +1405,7 @@
 (defn get-schema [getter recname]
   (:schema (getter recname)))
 
+(def ui-schema (partial get-schema find-ui-schema))
 (def event-schema (partial get-schema find-event-schema))
 (def record-schema (partial get-schema find-record-schema))
 (def entity-schema (partial get-schema find-entity-schema))
@@ -2180,6 +2199,18 @@
 
     :else (u/throw-ex (str "failed to remove event, invalid event name - " event-name))))
 
+(defn remove-ui [record-name]
+  (cond
+    (keyword? record-name)
+    (when (remove-record record-name)
+      (raw/remove-ui record-name))
+
+    (vector? record-name)
+    (when (remove-record (apply prepost-event-name record-name))
+      (raw/remove-ui record-name))
+
+    :else (u/throw-ex (str "failed to remove ui record, invalid event name - " record-name))))
+
 (defn remove-relationship [relname]
   (let [isbet (between-relationship? relname)
         iscont (when-not isbet (contains-relationship? relname))]
@@ -2204,7 +2235,8 @@
    (or (raw/find-entity recname)
        (raw/find-relationship recname)
        (raw/find-event recname)
-       (raw/find-record recname))))
+       (raw/find-record recname)
+       (raw/find-ui recname))))
 
 (defn fetch-user-meta [recname]
   (:meta (fetch-user-schema recname)))
@@ -2506,7 +2538,8 @@
 (defn schema-info [component]
   {:records (find-schema-info #(record-names component) raw/find-record)
    :entities (find-schema-info #(entity-names component) raw/find-entity)
-   :relationships (find-schema-info #(relationship-names component) raw/find-relationship)})
+   :relationships (find-schema-info #(relationship-names component) raw/find-relationship)
+   :ui (find-schema-info #(entity-names component) raw/find-ui)})
 
 (defn register-resolver [res-name res-spec]
   (component-intern res-name res-spec :resolvers))
