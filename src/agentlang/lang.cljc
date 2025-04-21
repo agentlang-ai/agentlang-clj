@@ -1162,6 +1162,14 @@
       rn
       (u/throw-ex (str "Invalid resolver name - " rn ", valid form is :Component/ResolverName")))))
 
+(def ^:private listener-exec (u/make-cell nil))
+
+(defn- fetch-listener-exec []
+  (or @listener-exec
+      (let [exec (u/cached-executor)]
+        (u/safe-set listener-exec exec)
+        exec)))
+
 (defn- source-as-fn [src]
   (cond
     (fn? src) src
@@ -1171,21 +1179,14 @@
 (defn- sink-as-fn [sink]
   (fn [arg]
     (try
-      (let [ins (if (string? arg) arg (pr-str arg))]
-        (:result (gs/evaluate-dataflow {sink {:UserInstruction ins}})))
+      (let [ins (if (string? arg) arg (pr-str arg))
+            exec (fetch-listener-exec)]
+        (u/executor-submit exec #(:result (gs/evaluate-dataflow {sink {:UserInstruction ins}}))))
       (catch #?(:clj Exception :cljs :default) ex
         (log/warn #?(:clj (.getMessage ex) :cljs ex))))))
 
-(def ^:private listener-exec (u/make-cell nil))
-
-(defn- fetch-listener-exec []
-  (or @listener-exec
-      (let [exec (u/cached-executor)]
-        (u/safe-set listener-exec exec)
-        exec)))
-
 (defn- start-resolver-listener! [resolver-spec]
-  (let [listener (:listener resolver-spec)
+  (let [listener (:listener (:with-methods resolver-spec))
         src (:source listener)
         sink (:sink listener)]
     (if (and src sink)
