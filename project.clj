@@ -7,6 +7,7 @@
                  [org.clojure/tools.cli "1.0.206"]
                  [org.clojure/data.xml "0.2.0-alpha9"]
                  [org.clojure/data.csv "1.0.0"]
+                 [clj-commons/clj-yaml "1.0.29"]
                  [org.clojure/tools.logging "1.2.4"]
                  [org.slf4j/slf4j-api "2.0.12"]
                  [org.clojure/core.async "1.6.681"]

@@ -200,16 +200,18 @@
 (defn remove-inited-component [component]
   (u/safe-set inited-components (disj @inited-components component)))
 
-(defn maybe-init-schema [store component-name]
-  (when (not (some #{component-name} @inited-components))
-    (#?(:clj locking :cljs do)
-     store-schema-lock
-     (when-not (some #{component-name} @inited-components)
-       (u/safe-set
-        inited-components
-        (do (create-schema store component-name)
-            (conj @inited-components component-name))))))
-  component-name)
+(defn maybe-init-schema
+  ([store component-name]
+   (when (not (some #{component-name} @inited-components))
+     (#?(:clj locking :cljs do)
+      store-schema-lock
+      (when-not (some #{component-name} @inited-components)
+        (u/safe-set
+         inited-components
+         (do (create-schema store component-name)
+             (conj @inited-components component-name))))))
+   component-name)
+  ([component-name] (maybe-init-schema (get-default-store) component-name)))
 
 (defn init-all-schema [store]
   (let [cnames (cn/component-names)]
