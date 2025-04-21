@@ -1161,6 +1161,48 @@
     (if (and (li/name? c) (li/name? n))
       rn
       (u/throw-ex (str "Invalid resolver name - " rn ", valid form is :Component/ResolverName")))))
+
+(defn- source-as-fn [src]
+  (cond
+    (fn? src) src
+    (map? src) (fn [] (:result (gs/evaluate-pattern src)))
+    :else (u/throw-ex (str "Invalid :source - " src " - must be a fn or a pattern."))))
+
+(defn- sink-as-fn [sink]
+  (fn [arg]
+    (try
+      (let [ins (if (string? arg) arg (pr-str arg))]
+        (:result (gs/evaluate-dataflow {sink {:UserInstruction ins}})))
+      (catch #?(:clj Exception :cljs :default) ex
+        (log/warn #?(:clj (.getMessage ex) :cljs ex))))))
+
+(def ^:private listener-exec (u/make-cell nil))
+
+(defn- fetch-listener-exec []
+  (or @listener-exec
+      (let [exec (u/cached-executor)]
+        (u/safe-set listener-exec exec)
+        exec)))
+
+(defn- start-resolver-listener! [resolver-spec]
+  (let [listener (:listener resolver-spec)
+        src (:source listener)
+        sink (:sink listener)]
+    (if (and src sink)
+      (let [src (source-as-fn src)]
+        (when-not (keyword? sink)
+          (u/throw-ex (str "Invalid :sink - " sink " - must be an agent-name.")))
+        (let [sink (sink-as-fn sink)
+              exec (fetch-listener-exec)]
+          (u/executor-submit
+           exec
+           (fn []
+             (loop [r (src)]
+               (when r
+                 (sink r)
+                 (recur (src))))))))
+      (log/warn (str "Both :source and :sink are required to start the listener: " resolver-spec)))))
+
 ;;
 ;; The resolver construct has the following syntax:
 ;; (resolver <name> <specification-map>)
@@ -1208,9 +1250,12 @@
                                  (subs/open-connection subs))))
                 rf #(do (if-let [methods (:with-methods spec)]
                           (if-let [paths (:paths spec)]
-                            ((if (:compose? spec) rr/compose-resolver rr/override-resolver)
-                             paths
-                             (rc/make-resolver n methods))
+                            (let [r ((if (:compose? spec) rr/compose-resolver rr/override-resolver)
+                                     paths
+                                     (rc/make-resolver n methods))]
+                              (when (:listener methods)
+                                (start-resolver-listener! spec))
+                              r)
                             (rr/register-resolver-type n (fn [_ _] (rc/make-resolver n methods))))
                           (rr/register-resolver res-spec))
                         (maybe-subs))]
