@@ -1181,7 +1181,10 @@
     (try
       (let [ins (if (string? arg) arg (pr-str arg))
             exec (fetch-listener-exec)]
-        (u/executor-submit exec #(:result (gs/evaluate-dataflow {sink {:UserInstruction ins}}))))
+        (u/executor-submit
+         exec
+         #(binding [gs/exec-graph-source arg]
+            (:result (gs/evaluate-dataflow {sink {:UserInstruction ins}})))))
       (catch #?(:clj Exception :cljs :default) ex
         (log/warn #?(:clj (.getMessage ex) :cljs ex))))))
 

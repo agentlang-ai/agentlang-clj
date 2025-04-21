@@ -6,15 +6,16 @@
   :Title :String
   :Amount :Double})
 
-(def expenses-queue (atom [{:Title "rent" :Amount 456.0}
-                           {:Title "salary" :Amount 2300.0}
-                           {:Title "water bill" :Amount 884.33}]))
+(def n-expenses (atom (inc (rand-int 5))))
 
 (defn poll-expenses []
   (Thread/sleep (+ 1000 (rand-int 2500)))
-  (when-let [exp (first @expenses-queue)]
-    (reset! expenses-queue (rest @expenses-queue))
-    (agentlang.component/make-instance :Expense.Workflow/Expense exp)))
+  (if (pos? @n-expenses)
+    (let [exp {:Title (rand-nth ["rent" "salary" "water bill" "electricity"])
+               :Amount (* 1.0 (inc (rand-int 1500)))}]
+      (swap! n-expenses dec)
+      (agentlang.component/make-instance :Expense.Workflow/Expense exp))
+    (println "poll-expenses: done")))
 
 (resolver
  :ExpenseListenerResolver
