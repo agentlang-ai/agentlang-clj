@@ -89,7 +89,7 @@
     (if-let [c (first p)]
       (case c
         (\/ \. \_ \-) (recur (rest p) true r)
-        (recur (rest p) false (conj r (if cap-mode? (Character/toUpperCase c) c))))
+        (recur (rest p) false (conj r (if cap-mode? #?(:clj (Character/toUpperCase c) :cljs (.toUpperCase c)) c))))
       (keyword (apply str r)))))
 
 (defn- path-spec-to-attrs [spec]
@@ -447,17 +447,20 @@
     :config-entity config-entity
     :info (:info open-api)}))
 
-(defn- read-yml-file [spec-url]
-  (if (s/starts-with? spec-url "http")
-    (let [result (http/do-get spec-url)]
-      (if (= 200 (:status result))
-        (:body result)
-        (u/throw-ex (str "Failed to GET " spec-url ", status - " (:status result)))))
-    (slurp spec-url)))
-
 #?(:clj
-   (defn- parse-openapi-spec [spec-url]
-     (yaml/parse-string (read-yml-file spec-url))))
+   (defn- read-yml-file [spec-url]
+     (if (s/starts-with? spec-url "http")
+       (let [result (http/do-get spec-url)]
+         (if (= 200 (:status result))
+           (:body result)
+           (u/throw-ex (str "Failed to GET " spec-url ", status - " (:status result)))))
+       (slurp spec-url))))
+
+(defn- parse-openapi-spec [spec-url]
+  #?(:clj
+     (yaml/parse-string (read-yml-file spec-url))
+     :cljs
+     (u/throw-ex (str "Cannot parse " spec-url " in ClojureScript"))))
 
 (defn- spit-component [component-name]
   (let [file-name (str (name component-name) ".al")]
