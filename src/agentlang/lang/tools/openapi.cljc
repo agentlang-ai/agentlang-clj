@@ -197,12 +197,19 @@
 (defn- cached-invocation-meta [event-name tag]
   (get-in @invoke-event-meta [event-name tag]))
 
+(defn- extract-servers [open-api]
+  (or (when-let [srvs (seq (:servers open-api))]
+        (vec srvs))
+      (let [scms (:schemes open-api)
+            host (:host open-api)]
+        (mapv (fn [s] {:url (str s "://" host)}) scms))))
+
 (defn- fetch-server [event-name open-api]
   (or (cached-invocation-meta event-name :server)
       (cache-invocation-meta
        event-name :server
        (let [srvs (or (:servers (fetch-config (first (li/split-path event-name))))
-                      (:servers open-api))]
+                      (extract-servers open-api))]
          (:url
           (if (= 1 (count srvs))
             (first srvs)
@@ -432,7 +439,7 @@
                                   :type :Any
                                   :optional true}))
                 {} (get-in open-api [:components :securitySchemes]))
-        attrs (assoc attrs0 :servers {:check servers? :default (vec (:servers open-api))})]
+        attrs (assoc attrs0 :servers {:check servers? :default (extract-servers open-api)})]
     (if-let [n (ln/entity {(config-entity-name cn) attrs})]
       n
       (log/warn (str "Failed to register config-entity for " cn)))))

@@ -3,13 +3,12 @@
 (dataflow :CreatePet {:SwaggerPetstoreOpenAPI30.Core/addPet {} :from :CreatePet})
 ;;; example:
 ;; {"Petstore.Core/CreatePet":
-;;  {"Parameters":
 ;;   {"id": 102,
 ;;    "category": {"id": 1, "name": "my-pets"},
 ;;    "name": "kittie",
 ;;    "photoUrls": ["https://mypets.com/imgs/kittie.jpg"],
 ;;    "tags": [{"id": 1, "name": "cats"}],
-;;    "status": "available"}}}
+;;    "status": "available"}}
 
 (dataflow :GetPetById {:SwaggerPetstoreOpenAPI30.Core/getPetById {:petId :GetPetById.id}})
 ;;; example:
