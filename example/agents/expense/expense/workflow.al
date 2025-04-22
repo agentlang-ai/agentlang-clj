@@ -21,8 +21,7 @@
  :ExpenseListenerResolver
  {:paths [:Expense.Workflow/Expense]
   :with-methods
-  {:listener {:source poll-expenses
-              :sink :Expense.Workflow/ClassifyExpense}}})
+  {:listener {:source poll-expenses}}})
 
 {:Agentlang.Core/LLM {:Type :openai :Name :llm01}}
 
@@ -41,6 +40,10 @@
   :UserInstruction (str "If the expense amount is above 1000.0, report it as major "
                         "otherwise report it as minor.")
   :Tools [:Expense.Workflow/Expense :Expense.Workflow/ReportExpense]}}
+
+(dataflow
+ [:after :listen :Expense]
+ {:Expense.Workflow/ClassifyExpense {:UserInstruction '(pr-str :Instance)}})
 
 (event
  :ReceiptImageToExpenseReport

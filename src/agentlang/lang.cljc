@@ -606,7 +606,7 @@
   (when (vector? pat)
     (let [p (first pat)]
       (when (or (= :after p) (= :before p))
-        (if (some #{(second pat)} #{:create :update :delete})
+        (if (some #{(second pat)} #{:create :update :delete :listen})
           (if (cn/entity? (nth pat 2))
             true
             (u/throw-ex (str "invalid entity name in " pat)))
@@ -1176,34 +1176,33 @@
     (map? src) (fn [] (:result (gs/evaluate-pattern src)))
     :else (u/throw-ex (str "Invalid :source - " src " - must be a fn or a pattern."))))
 
-(defn- sink-as-fn [sink]
-  (fn [arg]
-    (try
-      (let [ins (if (string? arg) arg (pr-str arg))
-            exec (fetch-listener-exec)]
+(defn- listener-callback [paths result]
+  (when-let [t (and (cn/an-instance? result)
+                    (some #{(cn/instance-type-kw result)} paths))]
+    (let [event (cn/prepost-event-name :after :listen t)]
+      (when (cn/find-dataflows event)
         (u/executor-submit
-         exec
-         #(binding [gs/exec-graph-source arg]
-            (:result (gs/evaluate-dataflow {sink {:UserInstruction ins}})))))
-      (catch #?(:clj Exception :cljs :default) ex
-        (log/warn #?(:clj (.getMessage ex) :cljs ex))))))
+         (fetch-listener-exec)
+         #(binding [gs/exec-graph-source result]
+            (try
+              (:result (gs/evaluate-dataflow {event {:Instance result}}))
+              (catch #?(:clj Exception :cljs :default) ex
+                (log/warn #?(:clj (.getMessage ex) :cljs ex)))))))))
+  result)
 
 (defn- start-resolver-listener! [resolver-spec]
   (let [listener (:listener (:with-methods resolver-spec))
-        src (:source listener)
-        sink (:sink listener)]
-    (if (and src sink)
+        paths (:paths resolver-spec)
+        src (:source listener)]
+    (if src
       (let [src (source-as-fn src)]
-        (when-not (keyword? sink)
-          (u/throw-ex (str "Invalid :sink - " sink " - must be an agent-name.")))
-        (let [sink (sink-as-fn sink)
-              exec (fetch-listener-exec)]
+        (let [exec (fetch-listener-exec)]
           (u/executor-submit
            exec
            (fn []
              (loop [r (src)]
                (when r
-                 (sink r)
+                 (listener-callback paths r)
                  (recur (src))))))))
       (log/warn (str "Both :source and :sink are required to start the listener: " resolver-spec)))))
 
