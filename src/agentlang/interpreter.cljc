@@ -780,6 +780,10 @@
         (recur (rest pats) (:env er) (:result er)))
       result)))
 
+(defn- upsert-instance [env pattern]
+  (binding [gs/upsert-mode true]
+    (:result (evaluate-pattern env pattern))))
+
 (defn- expr-handler [env pat _]
   (let [[pat alias] (ls/extract-alias-from-expression pat)
         tag (first pat)
@@ -787,6 +791,7 @@
         (case tag
           :call call-function
           :delete delete-instances
+          :upsert upsert-instance
           :q# handle-quote
           :s# handle-sealed
           :try handle-try

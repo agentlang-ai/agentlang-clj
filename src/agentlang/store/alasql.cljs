@@ -35,8 +35,8 @@
         nil)
       (update-instance [_ entity-name instance]
         (db/upsert-instance @datasource entity-name instance))
-      (upsert-instance [_ entity-name instance]
-        (db/upsert-instance @datasource entity-name instance))
+      (force-create-instance [_ entity-name instance]
+        (db/force-create-instance @datasource entity-name instance))
       (delete-by-id [_ entity-name id-attr-name id]
         (db/delete-by-id @datasource entity-name id-attr-name id))
       (delete-all [_ entity-name]

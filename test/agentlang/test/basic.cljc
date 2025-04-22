@@ -1929,3 +1929,26 @@
           e2 (finde "abc" "<RK2>" 1)]
       (is (cn/same-instance? e1 e))
       (is (not e2)))))
+
+(deftest upsert
+  (defcomponent :Ups
+    (entity
+     :Ups/E
+     {:Id {:type :Int :id true}
+      :X :Int})
+    (dataflow
+     :Ups/UpsertE
+     [:upsert
+      {:Ups/E {} :from :Ups/UpsertE}
+      :as :R]
+     :R))
+  (let [[cre e?] (tu/make-create :Ups/E)
+        e1 (cre {:Id 1 :X 20})]
+    (is (e? e1))
+    (is (= 1 (:Id e1)))
+    (is (= 20 (:X e1)))
+    (tu/is-error "duplicate :E.Id" #(cre {:Id 1 :X 30}))
+    (let [e2 (tu/invoke {:Ups/UpsertE {:Id 1 :X 30}})]
+      (is (e? e2))
+      (is (= 1 (:Id e2)))
+      (is (= 30 (:X e2))))))

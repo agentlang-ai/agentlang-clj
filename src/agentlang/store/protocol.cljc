@@ -28,8 +28,8 @@
     "Drop the schema for the component. Return component-name on success, nil if the
      schema does not exist. On failure, raise an exception.")
   (drop-entity [store entity-name] "Delete storage for the entity.")
-  (upsert-instance [store entity-name instance]
-    "Insert or update the instance in the store. On success, return instance.")
+  (force-create-instance [store entity-name instance]
+    "Insert or overwrite the instance in the store. On success, return instance.")
   (create-instance [store entity-name instance]
     "Insert the instance in the store. On success, return instance.
      On failure, raise an exception.")

@@ -158,3 +158,5 @@
 (defn run-inference [event agent-instance]
   (when-let [f @run-inference-fn]
     (f event agent-instance)))
+
+(def ^:dynamic upsert-mode false)
