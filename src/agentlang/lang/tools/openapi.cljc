@@ -77,7 +77,7 @@
   (when-let [title (get-in open-api [:info :title])]
     (let [s (apply str (re-seq #"[a-zA-Z0-9]" title))]
       (when (seq s)
-        (keyword s)))))
+        (keyword (str s ".Core"))))))
 
 (defn- create-component [open-api]
   (if-let [n (component-name-from-title open-api)]
@@ -444,15 +444,21 @@
       n
       (log/warn (str "Failed to register config-entity for " cn)))))
 
+(defn- model-name-from-component [component-name]
+  (let [s (name component-name)
+        i (s/last-index-of s ".Core")]
+    (keyword (subs s 0 i))))
+
 (defn- register-model [cn open-api config-entity]
-  (cn/register-model
-   cn
-   {:name cn
-    :components [cn]
-    :version (:version open-api)
-    :agentlang-version "current"
-    :config-entity config-entity
-    :info (:info open-api)}))
+  (let [n (model-name-from-component cn)]
+    (cn/register-model
+     n
+     {:name n
+      :components [cn]
+      :version (:version open-api)
+      :agentlang-version "current"
+      :config-entity config-entity
+      :info (:info open-api)})))
 
 #?(:clj
    (defn- read-yml-file [spec-url]

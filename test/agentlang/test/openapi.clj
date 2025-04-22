@@ -44,16 +44,18 @@
            [:response :docs]))))))
 
   (deftest petstore
-    (let [[cn _] (parse-spec "test/sample/petstore.yaml")]
-      (is (= :SwaggerPetstoreOpenAPI30 cn))
+    (let [[cn m] (parse-spec "test/sample/petstore.yaml")]
+      (is (= :SwaggerPetstoreOpenAPI30 (:name m)))
+      (is (= :SwaggerPetstoreOpenAPI30.Core cn))
       (let [recnames (cn/record-names cn)]
         (is (> (count recnames) 1))
         (is (some #{(li/make-path cn :Pet)} recnames)))
-      (let [pet? (partial cn/instance-of? :SwaggerPetstoreOpenAPI30/Pet)
+      (let [mk (partial li/make-path cn)
+            pet? (partial cn/instance-of? (mk :Pet))
             p? (fn [r]
                  (is (pet? r))
                  (is (= 102 (:id r))))]
-        (p? (tu/invoke {(openapi/invocation-event :SwaggerPetstoreOpenAPI30/addPet)
+        (p? (tu/invoke {(openapi/invocation-event (mk :addPet))
                         {:Parameters
                          {:id 102
                           :category {:id 1 :name "my-pets"}
@@ -61,13 +63,13 @@
                           :photoUrls ["https://mypets.com/imgs/kittie.jpg"]
                           :tags [{:id 1, :name "cats"}]
                           :status "available"}}}))
-        (p? (tu/invoke {(openapi/invocation-event :SwaggerPetstoreOpenAPI30/getPetById)
+        (p? (tu/invoke {(openapi/invocation-event (mk :getPetById))
                         {:Parameters
                          {:petId 102}}}))
-        (is (= "Pet deleted" (tu/invoke {(openapi/invocation-event :SwaggerPetstoreOpenAPI30/deletePet)
+        (is (= "Pet deleted" (tu/invoke {(openapi/invocation-event (mk :deletePet))
                                          {:Parameters
                                           {:petId 102}}})))
-        (let [rs (tu/invoke {(openapi/invocation-event :SwaggerPetstoreOpenAPI30/findPetsByStatus)
+        (let [rs (tu/invoke {(openapi/invocation-event (mk :findPetsByStatus))
                              {:Parameters
                               {:status "available"}}})]
           (is (every? pet? rs))))))

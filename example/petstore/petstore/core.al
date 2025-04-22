@@ -1,6 +1,6 @@
 (component :Petstore.Core)
 
-(dataflow :CreatePet {:SwaggerPetstoreOpenAPI30/addPet {} :from :CreatePet})
+(dataflow :CreatePet {:SwaggerPetstoreOpenAPI30.Core/addPet {} :from :CreatePet})
 ;;; example:
 ;; {"Petstore.Core/CreatePet":
 ;;   {"id": 102,
@@ -10,6 +10,6 @@
 ;;    "tags": [{"id": 1, "name": "cats"}],
 ;;    "status": "available"}}
 
-(dataflow :GetPetById {:SwaggerPetstoreOpenAPI30/getPetById {:petId :GetPetById.id}})
+(dataflow :GetPetById {:SwaggerPetstoreOpenAPI30.Core/getPetById {:petId :GetPetById.id}})
 ;;; example:
 ;; {"Petstore.Core/GetPetById": {"id": 102}}
