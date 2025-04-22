@@ -77,7 +77,7 @@
   (when-let [title (get-in open-api [:info :title])]
     (let [s (apply str (re-seq #"[a-zA-Z0-9]" title))]
       (when (seq s)
-        (keyword s)))))
+        (keyword (str s ".Core"))))))
 
 (defn- create-component [open-api]
   (if-let [n (component-name-from-title open-api)]
@@ -197,12 +197,19 @@
 (defn- cached-invocation-meta [event-name tag]
   (get-in @invoke-event-meta [event-name tag]))
 
+(defn- extract-servers [open-api]
+  (or (when-let [srvs (seq (:servers open-api))]
+        (vec srvs))
+      (let [scms (:schemes open-api)
+            host (:host open-api)]
+        (mapv (fn [s] {:url (str s "://" host)}) scms))))
+
 (defn- fetch-server [event-name open-api]
   (or (cached-invocation-meta event-name :server)
       (cache-invocation-meta
        event-name :server
        (let [srvs (or (:servers (fetch-config (first (li/split-path event-name))))
-                      (:servers open-api))]
+                      (extract-servers open-api))]
          (:url
           (if (= 1 (count srvs))
             (first srvs)
@@ -432,20 +439,26 @@
                                   :type :Any
                                   :optional true}))
                 {} (get-in open-api [:components :securitySchemes]))
-        attrs (assoc attrs0 :servers {:check servers? :default (vec (:servers open-api))})]
+        attrs (assoc attrs0 :servers {:check servers? :default (extract-servers open-api)})]
     (if-let [n (ln/entity {(config-entity-name cn) attrs})]
       n
       (log/warn (str "Failed to register config-entity for " cn)))))
 
+(defn- model-name-from-component [component-name]
+  (let [s (name component-name)
+        i (s/last-index-of s ".Core")]
+    (keyword (subs s 0 i))))
+
 (defn- register-model [cn open-api config-entity]
-  (cn/register-model
-   cn
-   {:name cn
-    :components [cn]
-    :version (:version open-api)
-    :agentlang-version "current"
-    :config-entity config-entity
-    :info (:info open-api)}))
+  (let [n (model-name-from-component cn)]
+    (cn/register-model
+     n
+     {:name n
+      :components [cn]
+      :version (:version open-api)
+      :agentlang-version "current"
+      :config-entity config-entity
+      :info (:info open-api)})))
 
 #?(:clj
    (defn- read-yml-file [spec-url]
