@@ -457,9 +457,7 @@
    li/event-context))
 
 (defn fetch-ui-schema [record-name]
-  (dissoc
-   (:schema (find-ui-schema record-name))
-   li/event-context))
+  (:schema (find-ui-schema record-name)))
 
 (defn fetch-spec [tag n]
   (when-let [meta (fetch-meta n)]
