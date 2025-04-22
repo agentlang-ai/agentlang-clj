@@ -1,0 +1,16 @@
+(component :Slack.Core)
+
+(dataflow
+ :ListUserGroups
+ {:SlackWebAPI.Core/usergroups_list
+  {:token ""
+   :EventContext {:security {:slackAuth {:bearer_token (agentlang.util/getenv "SLACK_API_KEY")}}}}})
+
+(dataflow
+ :SendMessage
+ {:SlackWebAPI.Core/chat_postMessage
+  {:token (agentlang.util/getenv "SLACK_API_KEY")
+   :channel (agentlang.util/getenv "SLACK_CHANNEL_ID")
+   :text :SendMessage.Text}})
+
+
