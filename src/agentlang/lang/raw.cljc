@@ -294,6 +294,7 @@
 (def find-inference (partial find-definition 'inference))
 (def find-resolver (partial find-definition 'resolver))
 (def find-schedule (partial find-definition 'schedule))
+(def find-ui (partial find-definition 'ui))
 
 (defn find-attribute [n]
   (when-not (li/internal-attribute-name? n)
@@ -326,6 +327,7 @@
 
 (def record (partial add-definition 'record))
 (def entity (partial add-definition 'entity))
+(def ui (partial add-definition 'ui))
 (def relationship (partial add-definition 'relationship))
 (def dataflow (partial add-definition 'dataflow))
 (def rule (partial add-definition 'rule))
@@ -366,6 +368,7 @@
 (def remove-inference (partial remove-definition 'inference))
 (def remove-resolver (partial remove-definition 'resolver))
 (def remove-schedule (partial remove-definition 'schedule))
+(def remove-ui (partial remove-definition 'ui))
 
 (defn remove-event [event-name]
   (if (vector? event-name) ; pre-post event - e.g: [:after :create :AnEntity]
