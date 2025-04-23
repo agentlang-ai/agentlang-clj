@@ -606,7 +606,7 @@
   (when (vector? pat)
     (let [p (first pat)]
       (when (or (= :after p) (= :before p))
-        (if (some #{(second pat)} #{:create :update :delete :listen})
+        (if (some #{(second pat)} #{:create :update :delete :create-source})
           (if (cn/entity? (nth pat 2))
             true
             (u/throw-ex (str "invalid entity name in " pat)))
@@ -1189,7 +1189,7 @@
 (defn- listener-callback [paths result]
   (when-let [t (and (cn/an-instance? result)
                     (some #{(cn/instance-type-kw result)} paths))]
-    (let [event (cn/prepost-event-name :after :listen t)]
+    (let [event (cn/prepost-event-name :after :create-source t)]
       (when (cn/find-dataflows event)
         (u/executor-submit
          (fetch-listener-exec)

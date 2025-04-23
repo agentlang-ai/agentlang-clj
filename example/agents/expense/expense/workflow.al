@@ -42,7 +42,7 @@
   :Tools [:Expense.Workflow/Expense :Expense.Workflow/ReportExpense]}}
 
 (dataflow
- [:after :listen :Expense]
+ [:after :create-source :Expense]
  {:Expense.Workflow/ClassifyExpense {:UserInstruction '(pr-str :Instance)}})
 
 (event
