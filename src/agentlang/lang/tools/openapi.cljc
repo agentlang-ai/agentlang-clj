@@ -407,11 +407,15 @@
                       (:security (or (:EventContext event-instance) gs/active-event-context)))
         security (when event-sec
                    (let [sec-scms (get-in open-api [:components :securitySchemes])]
-                     (mapv (fn [[k v]]
-                             (if-let [ss (get sec-scms k)]
-                               [(normalize-sec-spec ss) v]
-                               (u/throw-ex (str "Invalid security-scheme " k " for " event-name))))
-                           event-sec)))]
+                     (try
+                       (mapv (fn [[k v]]
+                               (if-let [ss (get sec-scms k)]
+                                 [(normalize-sec-spec ss) v]
+                                 (u/throw-ex (str "Invalid security-scheme " k " for " event-name))))
+                             event-sec)
+                       (catch #?(:clj Exception :cljs :default) ex
+                         (log/warn #?(:clj (.getMessage ex) :cljs ex))
+                         nil))))]
     (when-let [handler
                (case method
                  :get handle-get
