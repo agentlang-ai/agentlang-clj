@@ -1009,6 +1009,16 @@
      (entity n attrs raw-attrs)))
   ([schema] (parse-and-define entity schema)))
 
+(defn ui
+  "A UI record that persists in memory."
+  [n attrs]
+  (let [cn (validated-canonical-type-name n)
+        rec-name (validated-canonical-type-name
+                  (when (cn/system-defined? attrs) identity)
+                  n)]
+    (when (cn/intern-ui cn attrs)
+      (raw/ui rec-name attrs))))
+
 (defn- validate-view-attrs! [attrs]
   (doseq [[n k] attrs]
     (let [p1 (and (keyword? n) (= 1 (count (li/split-path n))))
