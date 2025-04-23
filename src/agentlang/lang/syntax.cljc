@@ -46,12 +46,13 @@
 
 (defn- normal-map? [x]
   (and (map? x)
-       (and (nil? (seq (select-keys x li/instance-meta-keys)))
-            (some #(or (literal? %)
-                       (if-let [n (and (keyword? %) (li/normalize-name %))]
-                         (not (maybe-lang-def-name? n))
-                         true))
-                  (keys x)))))
+       (or (nil? (seq x))
+           (and (nil? (seq (select-keys x li/instance-meta-keys)))
+                (some #(or (literal? %)
+                           (if-let [n (and (keyword? %) (li/normalize-name %))]
+                             (not (maybe-lang-def-name? n))
+                             true))
+                      (keys x))))))
 
 (defn literal? [x]
   (or (number? x) (string? x) (boolean? x)
