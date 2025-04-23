@@ -19,14 +19,14 @@
      (fn [s hdline]
        (str s "\n  - " hdline))
      "News feed: "
-     (mapv #(get-in % [:headline :main]) docs))))
+     (mapv (fn [d] (get-in d [:headline :main])) docs))))
 
 (dataflow
  :PushNews
  {:ArticleSearchAPI.Core/GetArticlesearchJson
   {:q :PushNews.q}
   :as :News}
- [:call '(slack.core/format-news :News) :as :Feed]
+ [:call (quote (slack.core/format-news :News)) :as :Feed]
  {:SendMessage {:Text :Feed}})
 
 (dataflow
