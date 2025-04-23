@@ -1,0 +1,10 @@
+{:service {:port 8000}
+ :store {:type :h2
+         :dbname "./db"}
+ :integration-manager
+ {:username "<integ-manager-user>"
+  :password "<integ-manager-password>"
+  :host "http://localhost:5000" 
+  :integrations
+  {:ArticleSearchAPI.Core "NYT"
+   :SlackWebAPI.Core "Slack"}}}
