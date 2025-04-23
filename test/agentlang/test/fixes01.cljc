@@ -241,3 +241,23 @@
      {:Nfc/Evt {:Xs [10 20 30]}})
     (is (= "Count = 3" @k))
     (is (= [10 20 30] @f))))
+
+(deftest empty-map-value
+  (defcomponent :Emv
+    (entity
+     :Emv/E
+     {:Id {:type :Int :id true}
+      :X :Map})
+    (dataflow
+     :Emv/CreateE
+     {:Emv/E
+      {:Id :Emv/CreateE.Id
+       :X :Emv/CreateE.X}}))
+  (let [e1 (tu/invoke {:Emv/CreateE {:Id 1 :X {"a" 1 "b" 2}}})
+        e2 (tu/invoke {:Emv/CreateE {:Id 2 :X {}}})
+        e? (fn [e id x]
+             (is (cn/instance-of? :Emv/E e))
+             (is (= (:Id e) id))
+             (is (= (:X e) x)))]
+    (e? e1 1 {"a" 1 "b" 2})
+    (e? e2 2 {})))
