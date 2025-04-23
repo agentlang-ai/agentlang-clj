@@ -1,16 +1,14 @@
 (component :Slack.Core)
 
-(dataflow
- :ListUserGroups
- {:SlackWebAPI.Core/usergroups_list
-  {:token ""
-   :EventContext {:security {:slackAuth {:bearer_token (agentlang.util/getenv "SLACK_API_KEY")}}}}})
+(def slack-config
+  (agentlang.connections.client/connection-parameter
+   (agentlang.connections.client/open-connection :SlackWebAPI.Core/Connection)))
 
 (dataflow
  :SendMessage
  {:SlackWebAPI.Core/chat_postMessage
-  {:token (agentlang.util/getenv "SLACK_API_KEY")
-   :channel (agentlang.util/getenv "SLACK_CHANNEL_ID")
+  {:token (:token slack-config)
+   :channel (:channel slack-config)
    :text :SendMessage.Text}})
 
 (defn format-news [news]
@@ -28,8 +26,3 @@
   :as :News}
  [:call (quote (slack.core/format-news :News)) :as :Feed]
  {:SendMessage {:Text :Feed}})
-
-(dataflow
- :Agentlang.Kernel.Lang/AppInit
- {:ArticleSearchAPI.Core/ApiConfig
-  {:apikey {:api-key (agentlang.util/getenv "NYT_API_KEY")}}})
