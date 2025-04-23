@@ -1938,9 +1938,9 @@
       :X :Int})
     (dataflow
      :Ups/UpsertE
-     [:upsert
-      {:Ups/E {} :from :Ups/UpsertE}
-      :as :R]
+     {:Ups/E {} :from :Ups/UpsertE
+      :as :R
+      :upsert true}
      :R))
   (let [[cre e?] (tu/make-create :Ups/E)
         e1 (cre {:Id 1 :X 20})]
