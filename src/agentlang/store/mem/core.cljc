@@ -27,7 +27,7 @@
       (update-instance [_ entity-name instance]
         ;; always over-write
         (i/upsert-instance entity-name instance))
-      (upsert-instance [_ entity-name instance]
+      (force-create-instance [_ entity-name instance]
         (i/upsert-instance entity-name instance))
       (delete-by-id [_ entity-name id-attr-name id]
         (i/delete-by-id entity-name id-attr-name id))

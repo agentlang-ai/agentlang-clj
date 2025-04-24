@@ -106,10 +106,9 @@
   ([f store record-name instance]
    (let [scm (stu/find-entity-schema record-name)
          instance (cn/secure-attributes record-name instance scm)]
-     (f store record-name
-        (cn/validate-instance instance))))
+     (f store record-name (cn/validate-instance instance))))
   ([store record-name instance]
-   (upsert-instance p/upsert-instance store record-name instance)))
+   (upsert-instance p/create-instance store record-name instance)))
 
 (def open-connection p/open-connection)
 (def close-connection p/close-connection)
@@ -172,12 +171,17 @@
 (defn create-instances [store record-name insts]
   (mapv
    #(upsert-instance
-     p/create-instance store record-name
-     %)
+     (if gs/upsert-mode p/force-create-instance p/create-instance)
+     store record-name %)
    insts))
 
 (defn create-instance [store inst]
-  (upsert-instance p/create-instance store (cn/instance-type-kw inst) inst))
+  (upsert-instance
+   (if gs/upsert-mode p/force-create-instance p/create-instance)
+   store (cn/instance-type-kw inst) inst))
+
+(defn force-create-instance [store inst]
+  (upsert-instance p/force-create-instance store (cn/instance-type-kw inst) inst))
 
 (defn upsert-instances [store record-name insts]
   (mapv

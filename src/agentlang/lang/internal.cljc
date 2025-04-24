@@ -78,7 +78,7 @@
 (def oprs (concat query-cmpr-oprs sql-keywords logical-oprs))
 
 (def macro-names #{:match :try :throws :rethrow-after :for-each :delete
-                   :query :await :entity call-fn :? :filter :suspend})
+                   :upsert :query :await :entity call-fn :? :filter :suspend})
 
 (def property-names #{:meta :ui :rbac})
 

@@ -23,6 +23,7 @@
 (def create-inst-statement #?(:clj ji/create-inst-statement :cljs aqi/upsert-inst-statement))
 (def update-inst-statement #?(:clj ji/update-inst-statement :cljs aqi/upsert-inst-statement))
 (def purge-by-id-statement #?(:clj ji/purge-by-id-statement :cljs aqi/delete-by-id-statement))
+(def force-purge-by-id-statement #?(:clj ji/force-purge-by-id-statement :cljs aqi/delete-by-id-statement))
 (def delete-by-id-statement #?(:clj ji/delete-by-id-statement :cljs aqi/delete-by-id-statement))
 (def delete-all-statement #?(:clj ji/delete-all-statement :cljs aqi/delete-all-statement))
 (def delete-children-statement #?(:clj ji/delete-children-statement :cljs aqi/delete-children-statement))
@@ -243,16 +244,18 @@
 (defn- upsert-relational-entity-instance [upsert-inst-statement create-mode
                                           datasource entity-name instance]
   (let [tabname (stu/entity-table-name entity-name)
-        inst (stu/serialize-objects instance)]
+        inst (stu/serialize-objects instance)
+        create? (or (= create-mode :create) (= create-mode :upsert))]
     (execute-fn!
      datasource
-     #(do (when create-mode
+     #(do (when create?
             (let [id-val (li/path-attr instance)
                   [id-attr-name id-val] (if id-val
                                           [li/path-attr id-val]
                                           (let [n (cn/identity-attribute-name entity-name)]
                                             [n (n instance)]))
-                  [pstmt params] (purge-by-id-statement % tabname id-attr-name id-val)]
+                  [pstmt params] ((if (= create-mode :upsert) force-purge-by-id-statement purge-by-id-statement)
+                                  % tabname id-attr-name id-val)]
               (execute-stmt-once! % pstmt params)))
           (let [[pstmt params] (upsert-inst-statement % tabname nil [entity-name inst])]
             (execute-stmt-once! % pstmt params))))
@@ -266,8 +269,9 @@
    upsert-inst-statement create-mode datasource entity-name
    (dissoc-dynamic entity-name instance)))
 
-(def create-instance (partial upsert-instance create-inst-statement true))
-(def update-instance (partial upsert-instance update-inst-statement false))
+(def create-instance (partial upsert-instance create-inst-statement :create))
+(def force-create-instance (partial upsert-instance create-inst-statement :upsert))
+(def update-instance (partial upsert-instance update-inst-statement :update))
 
 (defn- delete-inst!
   "Delete an entity instance."
