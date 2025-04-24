@@ -49,10 +49,8 @@
         (db/drop-schema @datasource component-name))
       (drop-entity [_ entity-name]
         (db/drop-entity @datasource entity-name))
-      (upsert-instance [_ entity-name instance]
-        (db/upsert-instance
-         h2i/upsert-inst-statement
-         @datasource entity-name instance))
+      (force-create-instance [_ entity-name instance]
+        (db/force-create-instance @datasource entity-name instance))
       (update-instance [_ entity-name instance]
         (db/update-instance @datasource entity-name instance))
       (create-instance [_ entity-name instance]
