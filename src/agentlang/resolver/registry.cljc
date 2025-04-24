@@ -39,8 +39,8 @@
           #(assoc
             @resolver-db
             (li/split-path path) resolver))
-         (r/call-resolver-on-set-path resolver nil [:override path])
-         path)))
+         (r/call-resolver-on-set-path resolver nil [:override path])))
+   path)
   ([path resolver]
    (override-resolver root-resolver-db path resolver)))
 

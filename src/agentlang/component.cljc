@@ -538,8 +538,8 @@
     x))
 
 (defn instance-user-attributes
-  "Returns only the user assigned attributes.
-   Excludes id-attr in its return"
+  "Return only the user assigned attributes.
+   Exclude id-attr in its return"
   [inst]
   (when (an-instance? inst)
     (apply dissoc inst non-instance-user-attr-keys)))

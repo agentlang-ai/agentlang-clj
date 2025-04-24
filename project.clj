@@ -62,6 +62,7 @@
                  [stringer "0.4.1"]
                  [nrepl/drawbridge "0.2.1"]
                  [clj-jgit "1.0.2"]
+                 [io.modelcontextprotocol.sdk/mcp "0.8.1"]
                  [org.xerial/sqlite-jdbc "3.47.1.0"]
                  [metabase/saml20-clj "2.2.7.173"]]
 
