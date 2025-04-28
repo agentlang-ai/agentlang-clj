@@ -16,7 +16,6 @@
    [agentlang.resolver.registry :as rr]
    [agentlang.component :as cn]
    [agentlang.interpreter :as ev]
-   [agentlang.exec-graph :as exg]
    [agentlang.global-state :as gs]
    [agentlang.lang :as ln]
    [agentlang.lang.rbac :as lr]
