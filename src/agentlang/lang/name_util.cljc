@@ -90,7 +90,7 @@
   (let [y (mapv (fn [[k v]]
                   (if (= k :into)
                     [k (into {} (mapv (fn [[k v]] [k (fq-generic v is-recdef)]) v))]
-                    [(fq-name k) (fq-generic v is-recdef)]))
+                    [(if (map? v) (fq-name k) k) (fq-generic v is-recdef)]))
                 x)]
     (into {} y)))
 
