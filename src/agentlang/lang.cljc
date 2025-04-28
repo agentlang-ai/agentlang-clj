@@ -1289,7 +1289,7 @@
     (u/throw-ex (str "Invalid expiry-unit " expiry-unit)))
   [expiry (s/capitalize (name expiry-unit))])
 
-(defn schedule [n {evry :every aftr :after evnt :event :as spec}]
+(defn schedule [n {evry :every aftr :after evnt :event run-once :run-once-on-init :as spec}]
   (when-not (map? evnt)
     (u/throw-ex (str "Must be an event-instance - " evnt)))
   (let [[[expiry expiry-unit] restart?]
@@ -1303,15 +1303,23 @@
     (raw/schedule n spec)
     (u/set-on-init!
      #(try
-        (gs/evaluate-dataflow-internal
-         [[:delete {:Agentlang.Kernel.Lang/Timer {:Name? tname}}]
-          [:delete :Agentlang.Kernel.Lang/Timer :purge]
-          {:Agentlang.Kernel.Lang/Timer
-           {:Name tname
-            :Expiry expiry
-            :ExpiryUnit expiry-unit
-            :ExpiryEvent [:q# evnt]
-            :Restart restart?}}])
+        (let [r (:result (gs/evaluate-dataflow-internal
+                          [[:delete {:Agentlang.Kernel.Lang/Timer {:Name? tname}}]
+                           [:delete :Agentlang.Kernel.Lang/Timer :purge]
+                           {:Agentlang.Kernel.Lang/Timer
+                            {:Name tname
+                             :Expiry expiry
+                             :ExpiryUnit expiry-unit
+                             :ExpiryEvent [:q# evnt]
+                             :Restart restart?}}]))]
+          (if (cn/instance-of? :Agentlang.Kernel.Lang/Timer r)
+            (do (when run-once
+                  (u/set-on-app-init!
+                   (fn []
+                     #?(:clj (.start (Thread. (fn [] (gs/evaluate-dataflow (cn/make-instance evnt)))))
+                        :cljs (gs/evaluate-dataflow (cn/make-instance evnt))))))
+                n)
+            (log/error (str "Failed to create timer for " n))))
         (catch #?(:clj Exception :cljs :default) ex
           (log/error (str "schedule " n " failed: "
                           #?(:clj (.getMessage ex) :cljs ex))))))))
