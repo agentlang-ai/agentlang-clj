@@ -887,10 +887,12 @@
             data0 (if (keyword? from) (follow-reference env from) from)
             data1 (if (map? data0) data0 (u/throw-ex (str "Failed to resolve " from " in " pat)))
             data (if (cn/an-instance? data1) (cn/instance-attributes data1) data1)
+            [cont-rel cont-pat] (first (filter (fn [[k _]] (cn/contains-relationship? k)) pat))
+            pat (dissoc pat cont-rel)
             k (first (keys pat))
             bet-create? (cn/between-relationship? k)
             attrs (merge (get pat k) data)
-            pat (merge {k attrs} (when alias {:as alias}))]
+            pat (merge {k attrs} (when alias {:as alias}) (when cont-rel {cont-rel cont-pat}))]
         (if bet-create?
           [pat]
           (maybe-lift-relationship-patterns env pat)))
