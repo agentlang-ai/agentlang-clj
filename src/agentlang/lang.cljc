@@ -1314,8 +1314,10 @@
                              :Restart restart?}}]))]
           (if (cn/instance-of? :Agentlang.Kernel.Lang/Timer r)
             (do (when run-once
-                  #?(:clj (.start (Thread. (fn [] (gs/evaluate-dataflow (cn/make-instance evnt)))))
-                     :cljs (gs/evaluate-dataflow (cn/make-instance evnt))))
+                  (u/set-on-app-init!
+                   (fn []
+                     #?(:clj (.start (Thread. (fn [] (gs/evaluate-dataflow (cn/make-instance evnt)))))
+                        :cljs (gs/evaluate-dataflow (cn/make-instance evnt))))))
                 n)
             (log/error (str "Failed to create timer for " n))))
         (catch #?(:clj Exception :cljs :default) ex

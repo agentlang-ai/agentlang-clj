@@ -258,6 +258,7 @@
            (run-appinit-tasks! ev (or (:init-data model)
                                       (:init-data config)))
            (when embeddings-config (isc/setup-agent-documents))
+           (u/run-app-init-fns)
            [ev store]))))))
 
 (defn finalize-config [model config]
