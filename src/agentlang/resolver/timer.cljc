@@ -93,11 +93,11 @@
 
 (defn- run-task [inst]
   (let [n (:Name inst)]
-    (log/info (str "running timer task - " n))
+    (log/debug (str "running timer task - " n))
     (try
       (let [result (:result (gs/evaluate-dataflow-atomic (cn/make-instance (:ExpiryEvent inst))))]
         (set-status-ok! n)
-        (log/info (str "timer " n " result: " result))
+        (log/debug (str "timer " n " result: " result))
         result)
       (catch #?(:clj Exception :cljs js/Error) ex
         (set-status-error! n)

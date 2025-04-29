@@ -186,6 +186,12 @@
                :Y :BC01/CreateB.Y}
       :BC01/AB {:BC01/A {:Id? :BC01/CreateB.A}}})
     (dataflow
+     :BC01/CreateB2
+     {:BC01/B
+      {} :from :BC01/CreateB2.B
+      :upsert true
+      :BC01/AB {:BC01/A {:Id? :BC01/CreateB2.A}}})
+    (dataflow
      :BC01/LookupEveryB
      {:BC01/B? {}})
     (dataflow
@@ -258,7 +264,13 @@
         update-c #(tu/invoke {:BC01/UpdateC {:C %1 :B %2 :A %3}})]
     (is (a? (tu/invoke {:BC01/Create_A {:Instance {:BC01/A {:Id 1 :X 100}}}})))
     (is (a? (tu/invoke {:BC01/Create_A {:Instance {:BC01/A {:Id 2 :X 300}}}})))
-    (is (b? (tu/invoke {:BC01/CreateB {:Id 101 :Y 10 :A 1}})))
+    (let [b1 (tu/invoke {:BC01/CreateB {:Id 101 :Y 10 :A 1}})
+          b2 (tu/invoke {:BC01/CreateB2 {:B {:Id 101 :Y 100} :A 1}})]
+      (is (b? b1))
+      (is (b? b2))
+      (is (= 10 (:Y b1)))
+      (is (= 100 (:Y b2)))
+      (is (= (dissoc b1 :Y) (dissoc b2 :Y))))
     (is (b? (tu/invoke {:BC01/CreateB {:Id 102 :Y 11 :A 1}})))
     (is (b? (tu/invoke {:BC01/CreateB {:Id 103 :Y 12 :A 2}})))
     (check-bs 1 (lookup-bs 1))

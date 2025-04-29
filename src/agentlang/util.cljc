@@ -33,6 +33,17 @@
     (reset! on-init-fns nil))
   true)
 
+(def ^:private on-app-init-fns (atom []))
+
+(defn set-on-app-init! [f] (swap! on-app-init-fns conj f))
+
+(defn run-app-init-fns []
+  (when-let [fns @on-app-init-fns]
+    (doseq [f fns]
+      (f))
+    (reset! on-app-init-fns nil))
+  true)
+
 (def host-runtime #?(:clj :jvm :cljs :js))
 
 (defn host-is-jvm? [] (= host-runtime :jvm))

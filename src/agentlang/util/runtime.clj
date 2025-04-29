@@ -16,7 +16,6 @@
    [agentlang.resolver.registry :as rr]
    [agentlang.component :as cn]
    [agentlang.interpreter :as ev]
-   [agentlang.exec-graph :as exg]
    [agentlang.global-state :as gs]
    [agentlang.lang :as ln]
    [agentlang.lang.rbac :as lr]
@@ -259,6 +258,7 @@
            (run-appinit-tasks! ev (or (:init-data model)
                                       (:init-data config)))
            (when embeddings-config (isc/setup-agent-documents))
+           (u/run-app-init-fns)
            [ev store]))))))
 
 (defn finalize-config [model config]
