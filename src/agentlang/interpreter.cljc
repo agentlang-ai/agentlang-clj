@@ -522,8 +522,8 @@
         final-result (if resolver
                        (r/call-resolver-eval resolver env inst)
                        (evaluate-dataflow-in-environment env inst))
-        env0 (:env final-result)
-        r (:result final-result)
+        env0 (or (:env final-result) env)
+        r (or (:result final-result) final-result)
         env1 (if alias (env/bind-variable env0 alias r) env0)]
     (make-result env1 r)))
 
