@@ -243,7 +243,7 @@
     attr-scm))
 
 (def timeout-ms-tag :timeout-ms)
-(def instance-meta-keys [:as :meta :meta? :into :distinct except-tag :from])
+(def instance-meta-keys [:as :meta :meta? :into :distinct except-tag :from :upsert])
 
 (defn normalize-instance-pattern [pat]
   (apply dissoc pat instance-meta-keys))
