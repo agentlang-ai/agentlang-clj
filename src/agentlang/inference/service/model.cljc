@@ -654,7 +654,7 @@
        identity true))))
 
 (defn maybe-init-agent-chat-session [agent-instance alt-instruction]
-  (or (when (:CacheChatSession agent-instance)
+  (or (when true #_(:CacheChatSession agent-instance)
         (when-not (lookup-agent-chat-session agent-instance)
           (create-agent-chat-session agent-instance alt-instruction)))
       agent-instance))
