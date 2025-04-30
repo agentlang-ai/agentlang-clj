@@ -12,14 +12,15 @@
   (Thread/sleep (+ 1000 (rand-int 2500)))
   (if (pos? @n-expenses)
     (let [exp {:Title (rand-nth ["rent" "salary" "water bill" "electricity"])
-               :Amount (* 1.0 (inc (rand-int 1500)))}]
+               :Amount (* 1.0 (inc (rand-int 1500)))}
+          ignore? (zero? (rand-int 2))]
       (swap! n-expenses dec)
-      (agentlang.component/make-instance :Expense.Workflow/Expense exp))
+      (agentlang.component/make-instance (if ignore? :Expense.Workflow/IgnoreExpense :Expense.Workflow/Expense) exp))
     (println "poll-expenses: done")))
 
 (resolver
  :ExpenseListenerResolver
- {:paths [:Expense.Workflow/Expense]
+ {:paths [:Expense.Workflow/Expense :Expense.Workflow/IgnoreExpense]
   :with-methods
   {:listener {:source poll-expenses}}})
 
@@ -40,6 +41,10 @@
   :UserInstruction (str "If the expense amount is above 1000.0, report it as major "
                         "otherwise report it as minor.")
   :Tools [:Expense.Workflow/Expense :Expense.Workflow/ReportExpense]}}
+
+(dataflow
+ :IgnoreExpense
+ [:call '(println (str "Ignoring expense " :IgnoreExpense.Title ", " :IgnoreExpense.Amount))])
 
 (dataflow
  [:after :create-source :Expense]

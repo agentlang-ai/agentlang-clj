@@ -1189,13 +1189,14 @@
 (defn- listener-callback [paths result]
   (when-let [t (and (cn/an-instance? result)
                     (some #{(cn/instance-type-kw result)} paths))]
-    (let [event (cn/prepost-event-name :after :create-source t)]
+    (let [evt? (cn/event? t)
+          event (if evt? t (cn/prepost-event-name :after :create-source t))]
       (when (cn/find-dataflows event)
         (u/executor-submit
          (fetch-listener-exec)
          #(binding [gs/exec-graph-source result]
             (try
-              (:result (gs/evaluate-dataflow {event {:Instance result}}))
+              (:result (gs/evaluate-dataflow (if evt? result {event {:Instance result}})))
               (catch #?(:clj Exception :cljs :default) ex
                 (log/warn #?(:clj (.getMessage ex) :cljs ex)))))))))
   result)
