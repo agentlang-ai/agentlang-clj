@@ -523,7 +523,7 @@
                        (r/call-resolver-eval resolver env inst)
                        (evaluate-dataflow-in-environment env inst))
         env0 (or (:env final-result) env)
-        r (or (:result final-result) final-result)
+        r (if (contains? final-result :result) (:result final-result) final-result)
         env1 (if alias (env/bind-variable env0 alias r) env0)]
     (make-result env1 r)))
 

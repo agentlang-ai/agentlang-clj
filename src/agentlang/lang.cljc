@@ -606,7 +606,7 @@
   (when (vector? pat)
     (let [p (first pat)]
       (when (or (= :after p) (= :before p))
-        (if (some #{(second pat)} #{:create :update :delete})
+        (if (some #{(second pat)} #{:create :update :delete :create-source})
           (if (cn/entity? (nth pat 2))
             true
             (u/throw-ex (str "invalid entity name in " pat)))
@@ -1171,6 +1171,52 @@
     (if (and (li/name? c) (li/name? n))
       rn
       (u/throw-ex (str "Invalid resolver name - " rn ", valid form is :Component/ResolverName")))))
+
+(def ^:private listener-exec (u/make-cell nil))
+
+(defn- fetch-listener-exec []
+  (or @listener-exec
+      (let [exec (u/cached-executor)]
+        (u/safe-set listener-exec exec)
+        exec)))
+
+(defn- source-as-fn [src]
+  (cond
+    (fn? src) src
+    (map? src) (fn [] (:result (gs/evaluate-pattern src)))
+    :else (u/throw-ex (str "Invalid :source - " src " - must be a fn or a pattern."))))
+
+(defn- listener-callback [paths result]
+  (when-let [t (and (cn/an-instance? result)
+                    (some #{(cn/instance-type-kw result)} paths))]
+    (let [evt? (cn/event? t)
+          event (if evt? t (cn/prepost-event-name :after :create-source t))]
+      (when (cn/find-dataflows event)
+        (u/executor-submit
+         (fetch-listener-exec)
+         #(binding [gs/exec-graph-source result]
+            (try
+              (:result (gs/evaluate-dataflow (if evt? result {event {:Instance result}})))
+              (catch #?(:clj Exception :cljs :default) ex
+                (log/warn #?(:clj (.getMessage ex) :cljs ex)))))))))
+  result)
+
+(defn- start-resolver-listener! [resolver-spec]
+  (let [listener (:listener (:with-methods resolver-spec))
+        paths (:paths resolver-spec)
+        src (:source listener)]
+    (if src
+      (let [src (source-as-fn src)]
+        (let [exec (fetch-listener-exec)]
+          (u/executor-submit
+           exec
+           (fn []
+             (loop [r (src)]
+               (when r
+                 (listener-callback paths r)
+                 (recur (src))))))))
+      (log/warn (str "Both :source and :sink are required to start the listener: " resolver-spec)))))
+
 ;;
 ;; The resolver construct has the following syntax:
 ;; (resolver <name> <specification-map>)
@@ -1218,9 +1264,12 @@
                                  (subs/open-connection subs))))
                 rf #(do (if-let [methods (:with-methods spec)]
                           (if-let [paths (:paths spec)]
-                            ((if (:compose? spec) rr/compose-resolver rr/override-resolver)
-                             paths
-                             (rc/make-resolver n methods))
+                            (let [r ((if (:compose? spec) rr/compose-resolver rr/override-resolver)
+                                     paths
+                                     (rc/make-resolver n methods))]
+                              (when (:listener methods)
+                                (start-resolver-listener! spec))
+                              r)
                             (rr/register-resolver-type n (fn [_ _] (rc/make-resolver n methods))))
                           (rr/register-resolver res-spec))
                         (maybe-subs))]

@@ -9,13 +9,15 @@
             [agentlang.lang.internal :as li]))
 
 (def ^:private valid-resolver-keys #{:update :create :delete :query :eval
-                                     :invoke :on-set-path :on-change-notification})
+                                     :listener :invoke :on-set-path :on-change-notification})
 
 (defn- preproc-fnmap [fnmap]
   (let [fns (mapv (fn [[k v]]
-                    [k (if (fn? v)
-                         {:handler v}
-                         v)])
+                    (if (= k :listener)
+                      [k v]
+                      [k (if (fn? v)
+                           {:handler v}
+                           v)]))
                   fnmap)]
     (into {} fns)))
 
@@ -25,8 +27,9 @@
      (when-not (su/all-true? (mapv #(some #{%} valid-resolver-keys) (keys fnmap)))
        (u/throw-ex (str "invalid resolver keys - " (keys fnmap))))
      (doseq [[k v] fnmap]
-       (when-not (fn? (:handler v))
-         (u/throw-ex (str "error in resolver " resolver-name ", " k " must be mapped to a function"))))
+       (when-not (= k :listener)
+         (when-not (fn? (:handler v))
+           (u/throw-ex (str "error in resolver " resolver-name ", " k " must be mapped to a function")))))
      (assoc fnmap
             :name resolver-name
             :evt-handler eval-dataflow)))

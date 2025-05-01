@@ -159,4 +159,5 @@
   (when-let [f @run-inference-fn]
     (f event agent-instance)))
 
+(def ^:dynamic exec-graph-source nil)
 (def ^:dynamic upsert-mode false)

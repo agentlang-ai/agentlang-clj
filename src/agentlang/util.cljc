@@ -17,6 +17,7 @@
   #?(:clj
      (:import [java.io File]
               [java.net MalformedURLException]
+              [java.util.concurrent Executors ThreadPoolExecutor Future TimeUnit]
               [org.apache.commons.io FilenameUtils]
               [org.apache.commons.exec CommandLine Executor DefaultExecutor]
               [java.net URLEncoder URLDecoder URI URL IDN])))
@@ -541,3 +542,46 @@
   #?(:clj
      (URLDecoder/decode s "UTF-8")
      :cljs s))
+
+(defn cached-executor []
+  #?(:clj (Executors/newCachedThreadPool)
+     :cljs #(atom {:result nil})))
+
+#?(:clj
+   (defn executor-submit [^ThreadPoolExecutor tp ^Runnable f]
+     (.submit tp f))
+   :cljs
+   (defn executor-submit [tp f] (reset! tp {:result (f)})))
+
+#?(:clj
+   (defn executor-submission-get
+     ([^Future f wait-millis]
+      (if wait-millis
+        (.get f wait-millis TimeUnit/MILLISECONDS)
+        (.get f)))
+     ([^Future f] (executor-submission-get f nil)))
+   :cljs
+   (defn executor-submission-get
+     ([f _] (:result @f))
+     ([f] (:result @f))))
+
+#?(:clj
+   (defn executor-submission-cancel [^Future f]
+     (.cancel f))
+   :cljs
+   (defn executor-submission-cancel [_] nil))
+
+#?(:cljs
+   (defn executor-submission-cancelled? [^Future f]
+     (.isCancelled f))
+   :cljs
+   (defn executor-submission-cancelled? [_] false))
+
+#?(:cljs
+   (defn executor-submission-done? [^Future f]
+     (.isDone f))
+   :cljs
+   (defn executor-submission-done? [f]
+     (if (executor-submission-get f)
+       true
+       false)))

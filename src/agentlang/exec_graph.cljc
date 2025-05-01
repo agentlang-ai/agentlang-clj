@@ -299,6 +299,9 @@
              (maybe-trim-agent-graph
               (extract-core-agent-graph
                (get-current-graph))))
+          g (if-let [src gs/exec-graph-source]
+              (assoc g :source src)
+              g)
           save? (user-graph? g)
           r (if save?
               (call-disabled

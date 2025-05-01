@@ -6,7 +6,49 @@
   :Title :String
   :Amount :Double})
 
+(def n-expenses (atom (inc (rand-int 5))))
+
+(defn poll-expenses []
+  (Thread/sleep (+ 1000 (rand-int 2500)))
+  (if (pos? @n-expenses)
+    (let [exp {:Title (rand-nth ["rent" "salary" "water bill" "electricity"])
+               :Amount (* 1.0 (inc (rand-int 1500)))}
+          ignore? (zero? (rand-int 2))]
+      (swap! n-expenses dec)
+      (agentlang.component/make-instance (if ignore? :Expense.Workflow/IgnoreExpense :Expense.Workflow/Expense) exp))
+    (println "poll-expenses: done")))
+
+(resolver
+ :ExpenseListenerResolver
+ {:paths [:Expense.Workflow/Expense :Expense.Workflow/IgnoreExpense]
+  :with-methods
+  {:listener {:source poll-expenses}}})
+
 {:Agentlang.Core/LLM {:Type :openai :Name :llm01}}
+
+(event
+ :ReportExpense
+ {:Type {:oneof ["major" "minor"]}
+  :Title :String
+  :Amount :Double})
+
+(dataflow
+ :ReportExpense
+ [:call '(println (str :ReportExpense.Type " expense of $" :ReportExpense.Amount " for " :ReportExpense.Title))])
+
+{:Agentlang.Core/Agent
+ {:Name :Expense.Workflow/ClassifyExpense
+  :UserInstruction (str "If the expense amount is above 1000.0, report it as major "
+                        "otherwise report it as minor.")
+  :Tools [:Expense.Workflow/Expense :Expense.Workflow/ReportExpense]}}
+
+(dataflow
+ :IgnoreExpense
+ [:call '(println (str "Ignoring expense " :IgnoreExpense.Title ", " :IgnoreExpense.Amount))])
+
+(dataflow
+ [:after :create-source :Expense]
+ {:Expense.Workflow/ClassifyExpense {:UserInstruction '(pr-str :Instance)}})
 
 (event
  :ReceiptImageToExpenseReport
