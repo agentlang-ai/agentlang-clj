@@ -4,9 +4,9 @@
 
 AgentLang is the **easiest way** to build AI Agents, Chatbots and Apps - build **teams of AI agents** that collaborate (with other AI agents and humans) to handle complex, time-consuming, monotonous tasks. AgentLang is a data-oriented, declarative abstraction for building agents and apps, similar to how Terraform is a declarative abstraction for infrastructure-as-code.
 
-[![AppCI](https://github.com/agentlang-ai/agentlang/actions/workflows/app.yml/badge.svg)](https://github.com/agentlang-ai/agentlang/actions/workflows/app.yml)
-[![AgentLang clj CI](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-clj.yml/badge.svg)](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-clj.yml)
-[![AgentLang cljs CI](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-cljs.yml/badge.svg)](https://github.com/agentlang-ai/agentlang/actions/workflows/agentlang-cljs.yml)
+[![AppCI](https://github.com/agentlang-ai/agentlang-clj/actions/workflows/app.yml/badge.svg)](https://github.com/agentlang-ai/agentlang-clj/actions/workflows/app.yml)
+[![AgentLang clj CI](https://github.com/agentlang-ai/agentlang-clj/actions/workflows/agentlang-clj.yml/badge.svg)](https://github.com/agentlang-ai/agentlang-clj/actions/workflows/agentlang-clj.yml)
+[![AgentLang cljs CI](https://github.com/agentlang-ai/agentlang-clj/actions/workflows/agentlang-cljs.yml/badge.svg)](https://github.com/agentlang-ai/agentlang-clj/actions/workflows/agentlang-cljs.yml)
 
 ### **Open | Enterprise-grade | Production-ready**
 
@@ -262,7 +262,7 @@ There are two main ways you can contribute:
 
 ### License
 
-Copyright 2024 Fractl Inc.
+Copyright © 2025 Fractl Inc.
 
 Licensed under the Apache License, Version 2.0:
 http://www.apache.org/licenses/LICENSE-2.0
