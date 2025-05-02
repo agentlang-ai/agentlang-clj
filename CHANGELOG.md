@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2025-05-02
+- Cache support for Anthropic LLM
+- `:unique-in` support for unique range attributes
+- Add Execution Graphs
+- Channels support
+- SAML implementation for Okta
+- Camel XML support for loader
+- Support upsert functionality
+- Add OpenAPI integration to load OpenAPI YAML in the runtime
+- Listener abstraction for resolvers
+
 ## [0.6.2] - 2025-03-14
 
 - Support for :filter construct
