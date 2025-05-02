@@ -100,7 +100,7 @@
             :optional (not (:required p))}})
         (:parameters spec)))
 
-(defn- attributes-from-properties [spec]
+(defn attributes-from-properties [spec]
   (let [required (mapv u/string-as-keyword (:required spec))
         props (:properties spec)]
     (reduce
