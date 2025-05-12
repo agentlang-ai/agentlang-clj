@@ -5,6 +5,7 @@
             [agentlang.component :as cn]
             [agentlang.util :as u]
             [agentlang.lang.internal :as li]
+            [agentlang.global-state :as gs]
             [agentlang.lang.raw :as raw]
             [agentlang.store.util :as stu]
             [agentlang.store.sql :as sql]
@@ -251,7 +252,13 @@
             (execute-stmt-once! % pstmt params))))
     instance))
 
+(def migration-insertcount (atom 0))
+
 (defn upsert-instance [upsert-inst-statement create-mode datasource entity-name instance]
+  (when gs/migration-mode
+    (when (zero? (mod @migration-insertcount 100))
+      (log/info (str "migration: upserting table count: " entity-name @migration-insertcount)))
+    (reset! migration-insertcount (+ @migration-insertcount 1))) 
   (upsert-relational-entity-instance
    upsert-inst-statement create-mode datasource entity-name instance))
 
