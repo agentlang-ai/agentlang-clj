@@ -388,7 +388,7 @@
 (defn invoke-migrations-event []
   (try
     (let
-     [r (e/eval-all-dataflows
+     [r (e/eval-internal
          (cn/make-instance
           {:Agentlang.Kernel.Lang/Migrations {}}))]
       (log/info (str "migrations result: " r))
@@ -403,7 +403,8 @@
      (gs/in-script-mode!)
      (try
        (try
-         (build/load-model-migration "agentlang" "local" "./agentlang" nil)
+         (let [kernel-path (if (= type "local") (str path "/agentlang") "./agentlang")]
+           (build/load-model-migration "agentlang" "local" kernel-path nil))
          (catch Exception _
            (log/info "No agentlang found, loading default")
            (ln/load-kernel-model)))

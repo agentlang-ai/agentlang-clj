@@ -257,7 +257,7 @@
 (defn upsert-instance [upsert-inst-statement create-mode datasource entity-name instance]
   (when gs/migration-mode
     (when (zero? (mod @migration-insertcount 100))
-      (log/info (str "migration: upserting table count: " entity-name @migration-insertcount)))
+      (log/info (str "migration: upserting table count: " entity-name " " @migration-insertcount)))
     (reset! migration-insertcount (+ @migration-insertcount 1))) 
   (upsert-relational-entity-instance
    upsert-inst-statement create-mode datasource entity-name instance))
