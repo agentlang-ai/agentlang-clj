@@ -654,6 +654,15 @@
       (keyword (subs n 1))
       n)))
 
+(defn all-routes-in-path [path]
+  (let [ps (path-to-vec path)]
+    (if (> (count ps) 2)
+      (loop [ps ps, result [path]]
+	(if-let [ps (seq (drop-last 3 ps))]
+          (recur ps (conj result (vec-to-path ps)))
+          result))
+      [path])))
+
 (def ^:private alias-db #?(:clj (ThreadLocal.) :cljs (atom nil)))
 
 (defn- get-alias-db [] #?(:clj (.get alias-db) :cljs @alias-db))

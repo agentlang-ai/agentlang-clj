@@ -637,3 +637,90 @@
          (is (not (seq rs))))
        (is (ip? (assign-inst-priv "u1@romas.com" "u2@romas.com" [:read] (as-path :Romas/A 1))))
        (chkb with-u2 91 30)))))
+
+(deftest priv-assignment-propagation
+  (with-rbac
+    #(defcomponent :Pap
+       (dataflow
+        :Pap/InitUsers
+        {:Agentlang.Kernel.Identity/User
+         {:Email "u1@pap.com"}}
+        {:Agentlang.Kernel.Identity/User
+         {:Email "u2@pap.com"}}
+        {:Agentlang.Kernel.Rbac/RoleAssignment
+         {:Role "pap-user" :Assignee "u1@pap.com"}})
+       (entity
+        :Pap/A
+        {:Id {:type :Int :id true} :X :Int
+         :rbac [{:roles ["pap-user"] :allow [:create]}]})
+       (entity :Pap/B {:Id {:type :Int :id true}})
+       (entity :Pap/C {:Id {:type :Int :id true}})
+       (relationship :Pap/AB {:meta {:contains [:Pap/A :Pap/B]}})
+       (relationship :Pap/BC {:meta {:contains [:Pap/B :Pap/C]}})
+       (dataflow
+        :Pap/CreateB
+        {:Pap/B {:Id :Pap/CreateB.Id}
+         :Pap/AB {:Pap/A {:Id? :Pap/CreateB.A}}})
+       (dataflow
+        :Pap/CreateC
+        {:Pap/C {:Id :Pap/CreateC.Id}
+         :Pap/BC {:Pap/B {:Id? :Pap/CreateC.B}
+                  :Pap/AB? {:Pap/A {:Id :Pap/CreateC.A}}}})
+       (dataflow
+        :Pap/FindA
+        {:Pap/A {:Id? :Pap/FindA.Id}})
+       (dataflow
+        :Pap/FindB
+        {:Pap/B {:Id? :Pap/FindB.Id}
+         :Pap/AB? {:Pap/A {:Id :Pap/FindB.A}}})
+       (dataflow
+        :Pap/FindC
+        {:Pap/C {:Id? :Pap/FindC.Id}
+         :Pap/BC? {:Pap/B {:Id :Pap/FindC.B}
+                   :Pap/AB {:Pap/A {:Id :Pap/FindC.A}}}})))
+  (call-with-rbac
+   (fn []
+     (let [with-u1 (partial with-user "u1@pap.com")
+           with-u2 (partial with-user "u2@pap.com")
+           cra (fn [wu id x]
+                 (tu/invoke
+                  (wu
+                   {:Pap/Create_A
+                    {:Instance {:Pap/A {:Id id :X x}}}})))
+           a? (partial cn/instance-of? :Pap/A)
+           fa (fn [wu id]
+                (tu/invoke
+                 (wu
+                  {:Pap/FindA {:Id id}})))
+           crb (fn [wu id a]
+                 (tu/invoke
+                  (wu
+                   {:Pap/CreateB
+                    {:Id id :A a}})))
+           b? (partial cn/instance-of? :Pap/B)
+           fb (fn [wu id a]
+                (tu/invoke
+                 (wu
+                  {:Pap/FindB {:Id id :A a}})))
+           crc (fn [wu id a b]
+                 (tu/invoke
+                  (wu
+                   {:Pap/CreateC {:Id id :A a :B b}})))
+           c? (partial cn/instance-of? :Pap/C)
+           fc (fn [wu id a b]
+                (tu/invoke
+                 (wu
+                  {:Pap/FindC {:Id id :A a :B b}})))
+           [a1 a2] (mapv (partial cra with-u1) [1 2] [10 20])
+           _ (is (every? a? [a1 a2]))
+           b1 (crb with-u1 100 1)
+           b2 (crb with-u1 200 2)
+           _ (is (b? b1)), _ (is (b? b2))
+           [c1 c2] (mapv (partial crc with-u1) [4 5] [1 1] [100 100])
+           _ (is (every? c? [c1 c2]))]
+       (is (cn/same-instance? a1 (first (fa with-u1 1))))
+       (is (cn/same-instance? b1 (first (fb with-u1 100 1))))
+       (is (cn/same-instance? c1 (first (fc with-u1 4 1 100))))
+       (is (not (seq (fa with-u2 1))))
+       (is (not (seq (fb with-u2 100 1))))
+       ))))

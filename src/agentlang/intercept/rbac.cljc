@@ -17,13 +17,21 @@
 (def can-update? (partial can-do? ri/can-update?))
 (def can-delete? (partial can-do? ri/can-delete?))
 
+(defn- as-multiple-path-query [routes]
+  (println ">>>>>>>>>>>>>>>>>>>>>>> " routes)
+  `[:or ~@(mapv (fn [r] [:= :ResourcePath r]) routes)])
+
 (defn find-owners [env inst-priv-entity respath]
-  (mapv :Assignee (:result
-                   (gs/kernel-call
-                    #(gs/evaluate-pattern
-                      env {inst-priv-entity
-                           {:IsOwner? true
-                            :ResourcePath? respath}})))))
+  (let [routes (li/all-routes-in-path respath)]
+    (mapv :Assignee (:result
+                     (gs/kernel-call
+                      #(gs/evaluate-pattern
+                        env {inst-priv-entity
+                             (merge
+                              {:IsOwner? true}
+                              (if (= (count routes) 1)
+                                {:ResourcePath? respath}
+                                {:ResourcePath? (as-multiple-path-query routes)}))}))))))
 
 (defn- fetch-inst-priv-info [env inst]
   (let [path0 (:ResourcePath inst)
