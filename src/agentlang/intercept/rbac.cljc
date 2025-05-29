@@ -34,22 +34,34 @@
     (if (or (ri/superuser-email? current-user)
             (ri/has-role? "admin" current-user)
             (some #{current-user} (find-owners env inst-priv-entity path)))
-      [path inst-priv-entity]
+      [path entity-name inst-priv-entity]
       (u/throw-ex (str "Only an owner can assign or remove instance-privileges on " path0) :forbidden))))
 
 (defn handle-instance-privilege-assignment [env inst]
-  (let [[path inst-priv-entity] (fetch-inst-priv-info env inst)
+  (let [[path entity-name inst-priv-entity] (fetch-inst-priv-info env inst)
         attrs0 (assoc (cn/instance-attributes inst) :ResourcePath path)
         attrs (if (:IsOwner attrs0)
                 (assoc attrs0 :CanRead true :CanUpdate true :CanDelete true)
-                attrs0)]
-    (gs/kernel-call #(gs/evaluate-pattern env {inst-priv-entity attrs}))))
+                attrs0)
+        r (:result (gs/kernel-call #(gs/evaluate-pattern env {inst-priv-entity attrs})))]
+    (when-not (cn/instance-of? inst-priv-entity r)
+      (u/throw-ex (str "Failed to assign instance privilege to " path)))
+    (doseq [child-entity-name (cn/all-contained-children-names entity-name)]
+      (let [inst-priv-entity (stu/inst-priv-entity child-entity-name)
+            r (:result (gs/kernel-call #(gs/evaluate-pattern env {inst-priv-entity attrs})))]
+        (when-not (cn/instance-of? inst-priv-entity r)
+          (u/throw-ex (str "Failed to assign instance privilege to " path " for " child-entity-name)))))
+    r))
 
 (defn delete-instance-privilege-assignment [env inst]
-  (let [[path inst-priv-entity] (fetch-inst-priv-info env inst)
+  (let [[path entity-name inst-priv-entity] (fetch-inst-priv-info env inst)
         attrs0 (cn/instance-attributes inst)
         attrs {:ResourcePath? path :Assignee? (:Assignee attrs0)}
         result (gs/kernel-call #(gs/evaluate-pattern env [:delete {inst-priv-entity attrs}]))]
     (when (seq (:result result))
       (gs/kernel-call #(gs/evaluate-pattern env [:delete inst-priv-entity :purge]))
+      (doseq [child-entity-name (cn/all-contained-children-names entity-name)]
+        (let [inst-priv-entity (stu/inst-priv-entity child-entity-name)]
+          (gs/kernel-call #(gs/evaluate-pattern env [:delete {inst-priv-entity attrs}]))
+          (gs/kernel-call #(gs/evaluate-pattern env [:delete inst-priv-entity :purge]))))
       result)))
