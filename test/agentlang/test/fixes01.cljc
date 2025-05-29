@@ -8,7 +8,7 @@
             [agentlang.lang.internal :as li]
             [agentlang.lang
              :refer [component attribute event
-                     entity record dataflow]]
+                     entity record relationship dataflow]]
             [agentlang.inference.service.planner :as planner]
             #?(:clj  [agentlang.test.util :as tu :refer [defcomponent]]
                :cljs [agentlang.test.util :as tu :refer-macros [defcomponent]])))
@@ -261,3 +261,57 @@
              (is (= (:X e) x)))]
     (e? e1 1 {"a" 1 "b" 2})
     (e? e2 2 {})))
+
+(deftest between-update-bug
+  (defcomponent :Bub
+    (entity
+     :Bub/Resource
+     {:Id :Identity
+      :FullName :String})
+    (entity
+     :Bub/Team
+     {:Id :Identity
+      :Name {:type :String
+             :unique true}})
+    (relationship
+     :Bub/TeamResource
+     {:meta {:between [:Bub/Team :Bub/Resource]
+             :one-many true}})
+    (dataflow
+     :Bub/FindTeamResource
+     {:Bub/TeamResource
+      {:Resource? :Bub/FindTeamResource.Resource}})
+    (dataflow
+     :Bub/ChangeTeamResource
+     {:Bub/TeamResource
+      {:Resource? :Bub/ChangeTeamResource.Resource
+       :Team :Bub/ChangeTeamResource.Team}}))
+  (let [[cr r?] (tu/make-create :Bub/Resource)
+        [ct t?] (tu/make-create :Bub/Team)
+        [ctr tr?] (tu/make-create :Bub/TeamResource)
+        r1 (cr {:FullName "Joe J"})
+        _ (is (r? r1))
+        t1 (ct {:Name "Abc"})
+        _ (is (t? t1))
+        t2 (ct {:Name "Xyz"})
+        _ (is (t? t2))
+        tr1 (ctr {:Resource (li/path-attr r1)
+                  :Team (li/path-attr t1)})
+        _ (is (tr? tr1))
+        tr2 (first (tu/invoke
+                    {:Bub/FindTeamResource
+                     {:Resource (li/path-attr r1)}}))]
+    (is (cn/same-instance? tr1 tr2))
+    (is (= (li/path-attr t1) (:Team tr2)))
+    (let [tr3 (first (tu/invoke
+                      {:Bub/ChangeTeamResource
+                       {:Resource (li/path-attr r1)
+                        :Team (li/path-attr t2)}}))]
+      (is (tr? tr3))
+      (is (= (li/path-attr t2) (:Team tr3)))
+      (is (= (li/path-attr r1) (:Resource tr3)))
+      (is (= (li/path-attr tr2) (li/path-attr tr3)))
+      (is (= (li/id-attr tr2) (li/id-attr tr3)))
+      (is (cn/same-instance? tr3 (first (tu/invoke
+                                         {:Bub/FindTeamResource
+                                          {:Resource (li/path-attr r1)}})))))))
