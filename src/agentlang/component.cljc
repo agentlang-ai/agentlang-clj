@@ -2011,6 +2011,17 @@
 (defn contained-children-names [parent]
   (mapv last (contained-children parent)))
 
+(defn all-contained-children-names-helper [parent]
+   (when-let [cns (seq (contained-children-names parent))]
+     (loop [cns cns, result cns]
+       (if-let [p (first cns)]
+         (recur (rest cns) (concat result (all-contained-children-names-helper p)))
+         result))))
+
+(defn all-contained-children-names [parent]
+  (when-let [cns (seq (all-contained-children-names-helper parent))]
+    (set cns)))
+
 (defn containing-parents
   ([recname]
    (contain-rels true recname))
