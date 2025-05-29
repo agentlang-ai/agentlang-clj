@@ -61,6 +61,14 @@
                  {:Agentlang.Kernel.Rbac/FindRoleAssignments
                   {:Assignee user-name}}))))))
 
+(defn has-role? [role user-name]
+  (if-let [rs (role-assignments user-name)]
+    (let [role-names (mapv :Role rs)]
+      (if (some #{role} role-names)
+        true
+        false))
+    false))
+
 (def ^:private admin-priv [{:Resource [:*] :Actions [:*]}])
 
 (def privileges

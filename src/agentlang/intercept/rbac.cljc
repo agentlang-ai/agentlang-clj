@@ -31,7 +31,9 @@
         entity-name (li/entity-name-from-path path)
         inst-priv-entity (stu/inst-priv-entity entity-name)
         current-user (gs/active-user)]
-    (if (or (ri/superuser-email? current-user) (some #{current-user} (find-owners env inst-priv-entity path)))
+    (if (or (ri/superuser-email? current-user)
+            (ri/has-role? "admin" current-user)
+            (some #{current-user} (find-owners env inst-priv-entity path)))
       [path inst-priv-entity]
       (u/throw-ex (str "Only an owner can assign or remove instance-privileges on " path0) :forbidden))))
 
