@@ -569,6 +569,7 @@
 
 (defn- query-from-abstract [abstract-query into-spec distinct?]
   (let [[entity-name attrs] (:select abstract-query)
+        betrel? (cn/between-relationship? entity-name)
         entity-alias (keyword (as-table-name entity-name))
         q0 (merge
             {(if distinct? :select-distinct :select)
@@ -579,11 +580,13 @@
                 (when (seq attrs)
                   {:where (vec (concat [:and] (fix-refs entity-alias (vals attrs))))})))
         cont-joins
-        (when-let [cjs (:contains-join abstract-query)]
-          (vec (first (handle-joins-for-contains entity-name cjs))))
+        (when-not betrel?
+          (when-let [cjs (:contains-join abstract-query)]
+            (vec (first (handle-joins-for-contains entity-name cjs)))))
         bet-joins
-        (when-let [bjs (:between-join abstract-query)]
-          (vec (first (handle-joins-for-between entity-name bjs))))
+        (when-not betrel?
+          (when-let [bjs (:between-join abstract-query)]
+            (vec (first (handle-joins-for-between entity-name bjs)))))
         q (if (or (seq cont-joins) (seq bet-joins))
             (assoc q0 :join (concat (seq cont-joins) (seq bet-joins)))
             q0)]

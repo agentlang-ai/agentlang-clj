@@ -576,9 +576,10 @@
 (defn- crud-handler [env pat sub-pats]
   (let [recname (li/record-name pat)
         recattrs (li/record-attributes pat)
-        alias (:as pat)]
+        alias (:as pat)
+        nn (li/normalize-name recname)]
     (cond
-      (cn/entity-schema (li/normalize-name recname))
+      (cn/entity-schema nn)
       (let [q? (li/query-instance-pattern? pat)
             f (if q? handle-query-pattern handle-entity-create-pattern)
             [cont-rels bet-rels]
@@ -879,6 +880,13 @@
                     distinct))
       :into into}]))
 
+(defn- make-abstract-query-for-between [env pat]
+  (let [alias (:as pat)
+        pat (li/normalize-instance-pattern pat)
+        _ (li/reset-alias-db!)
+        q (walk-query-pattern env pat false)]
+    [pat {:abstract-query q}]))
+
 (defn- maybe-preprocecss-pattern [env pat]
   (if (map? pat)
     (if-let [from (:from pat)]
@@ -896,8 +904,10 @@
         (if bet-create?
           [pat]
           (maybe-lift-relationship-patterns env pat)))
-      (if (cn/between-relationship? (li/record-name pat))
-        [pat]
+      (if (cn/between-relationship? (li/normalize-name (li/record-name pat)))
+        (if (li/query-instance-pattern? pat)
+          (make-abstract-query-for-between env pat)
+          [pat])
         (maybe-lift-relationship-patterns env pat)))
     [pat]))
 
